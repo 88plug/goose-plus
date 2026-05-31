@@ -1615,6 +1615,44 @@ impl ExtensionManager {
             }
         }
 
+        // If no prefix is present, try to match unprefixed tool names (e.g. "read_resource")
+        // to their prefixed equivalents (e.g. "extensionmanager__read_resource").
+        if !tool_name.contains("__") {
+            let matches: Vec<&rmcp::model::Tool> = tools
+                .iter()
+                .filter(|t| t.name.ends_with(&format!("__{}", tool_name)))
+                .collect();
+            if matches.len() == 1 {
+                let tool = matches[0];
+                let owner = get_tool_owner(tool).ok_or_else(|| {
+                    ErrorData::new(
+                        ErrorCode::RESOURCE_NOT_FOUND,
+                        format!("Tool '{}' has no owner", tool.name),
+                        None,
+                    )
+                })?;
+
+                let actual_tool_name = tool_name.to_string();
+
+                let client = self.get_server_client(&owner).await.ok_or_else(|| {
+                    ErrorData::new(
+                        ErrorCode::RESOURCE_NOT_FOUND,
+                        format!("Extension '{}' not found for tool '{}'", owner, tool_name),
+                        None,
+                    )
+                })?;
+
+                return Ok(ResolvedTool {
+                    tool_name: tool.name.to_string(),
+                    extension_name: owner,
+                    actual_tool_name,
+                    client,
+                    tool_meta: get_tool_meta_value(tool),
+                    resource_uri: get_tool_resource_uri(tool),
+                });
+            }
+        }
+
         let available = tools
             .iter()
             .map(|t| t.name.as_ref())
