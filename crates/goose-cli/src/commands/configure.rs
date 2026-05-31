@@ -365,7 +365,43 @@ async fn handle_oauth_configuration(provider_name: &str, key_name: &str) -> anyh
     }
 }
 
-fn interactive_model_search(models: &[String]) -> anyhow::Result<String> {
+fn model_display_name(
+    model_name: &str,
+    known_models: &[goose::providers::base::ModelInfo],
+) -> String {
+    if let Some(info) = known_models.iter().find(|m| m.name == model_name) {
+        let limit = info.context_limit;
+        let cost_str = match (info.input_token_cost, info.output_token_cost) {
+            (Some(0.0), Some(0.0)) => "free".to_string(),
+            (Some(inp), Some(out)) => format!("${:.2}i/${:.2}o", inp, out),
+            _ => String::new(),
+        };
+        if info.context_limit >= 1_000_000 {
+            format!(
+                "{} ({}M{})",
+                model_name,
+                limit / 1_000_000,
+                if cost_str.is_empty() { String::new() } else { format!(", {}", cost_str) }
+            )
+        } else if info.context_limit >= 1000 {
+            format!(
+                "{} ({}K{})",
+                model_name,
+                limit / 1000,
+                if cost_str.is_empty() { String::new() } else { format!(", {}", cost_str) }
+            )
+        } else {
+            model_name.to_string()
+        }
+    } else {
+        model_name.to_string()
+    }
+}
+
+fn interactive_model_search(
+    models: &[String],
+    known_models: &[goose::providers::base::ModelInfo],
+) -> anyhow::Result<String> {
     const MAX_VISIBLE: usize = 30;
     let mut query = String::new();
 
@@ -402,7 +438,10 @@ fn interactive_model_search(models: &[String]) -> anyhow::Result<String> {
         let mut items: Vec<(String, String, &str)> = filtered
             .iter()
             .take(MAX_VISIBLE)
-            .map(|m| (m.clone(), m.clone(), ""))
+            .map(|m| {
+                let display = model_display_name(m, known_models);
+                (m.clone(), display, "")
+            })
             .collect();
 
         if filtered.len() > MAX_VISIBLE {
@@ -465,7 +504,10 @@ fn select_model_from_list(
         if !recommended_models.is_empty() {
             let mut model_items: Vec<(String, String, &str)> = recommended_models
                 .iter()
-                .map(|m| (m.clone(), m.clone(), "Recommended"))
+                .map(|m| {
+                    let display = model_display_name(m, &provider_meta.known_models);
+                    (m.clone(), display, "Recommended")
+                })
                 .collect();
 
             model_items.insert(
@@ -488,18 +530,23 @@ fn select_model_from_list(
                 .interact()?;
 
             if selection == "search_all" {
-                Ok(interactive_model_search(models)?)
+                Ok(interactive_model_search(models, &provider_meta.known_models)?)
             } else if selection == UNLISTED_MODEL_KEY {
                 prompt_unlisted_model(provider_meta)
             } else {
                 Ok(selection)
             }
         } else {
-            Ok(interactive_model_search(models)?)
+            Ok(interactive_model_search(models, &provider_meta.known_models)?)
         }
     } else {
-        let mut model_items: Vec<(String, String, &str)> =
-            models.iter().map(|m| (m.clone(), m.clone(), "")).collect();
+        let mut model_items: Vec<(String, String, &str)> = models
+            .iter()
+            .map(|m| {
+                let display = model_display_name(m, &provider_meta.known_models);
+                (m.clone(), display, "")
+            })
+            .collect();
 
         model_items.push((
             UNLISTED_MODEL_KEY.to_string(),

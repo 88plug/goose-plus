@@ -570,6 +570,10 @@ impl OpenAiProvider {
             return normalized.replacen("responses", target, 1);
         }
 
+        if normalized.ends_with("/v1") || normalized == "v1" {
+            return format!("{}/{}", normalized, target);
+        }
+
         if normalized.starts_with('/') {
             format!("/{}", fallback.trim_start_matches('/'))
         } else {

@@ -29,6 +29,7 @@ use super::{
     google::GoogleProvider,
     kimicode::KimiCodeProvider,
     litellm::LiteLLMProvider,
+    models_dev::ModelsDevProvider,
     nanogpt::NanoGptProvider,
     ollama::OllamaProvider,
     openai::OpenAiProvider,
@@ -77,6 +78,7 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         registry.register::<GoogleProvider>(true);
         registry.register::<KimiCodeProvider>(true);
         registry.register::<LiteLLMProvider>(false);
+        registry.register::<ModelsDevProvider>(true);
         registry.register::<NanoGptProvider>(true);
         registry.register::<OllamaProvider>(true);
         registry.register::<OpenAiProvider>(true);
@@ -448,5 +450,84 @@ mod tests {
         assert_eq!(zero_provider.get_model_config().context_limit, None);
 
         std::env::remove_var("GOOSE_PATH_ROOT");
+    }
+
+    #[tokio::test]
+    async fn test_opencode_declarative_provider_registry_wiring() {
+        let providers_list = providers().await;
+        let opencode = providers_list
+            .iter()
+            .find(|(m, _)| m.name == "opencode")
+            .expect("opencode provider should be registered");
+        let (meta, provider_type) = opencode;
+
+        assert_eq!(*provider_type, ProviderType::Declarative);
+        assert_eq!(meta.display_name, "OpenCode");
+        assert_eq!(
+            meta.default_model,
+            "deepseek-v4-flash-free",
+            "default model should be the first free model"
+        );
+        assert_eq!(
+            meta.model_doc_link,
+            "https://opencode.ai/docs/zen"
+        );
+
+        // API key is optional (requires_auth: false)
+        let api_key = meta
+            .config_keys
+            .iter()
+            .find(|k| k.name == "OPENCODE_API_KEY")
+            .expect("OPENCODE_API_KEY config key should exist");
+        assert!(
+            !api_key.required,
+            "OPENCODE_API_KEY should NOT be required"
+        );
+        assert!(api_key.secret, "OPENCODE_API_KEY should be secret");
+        assert!(api_key.primary, "OPENCODE_API_KEY should be primary");
+
+        // Verify free models are included in known_models
+        let free = meta
+            .known_models
+            .iter()
+            .find(|m| m.name == "deepseek-v4-flash-free")
+            .expect("deepseek-v4-flash-free should be in known_models");
+        assert_eq!(free.context_limit, 200000);
+        assert_eq!(free.input_token_cost, Some(0.0));
+        assert_eq!(free.output_token_cost, Some(0.0));
+    }
+
+    #[test]
+    fn test_opencode_json_deserializes() {
+        let json = include_str!("declarative/opencode.json");
+        let config: crate::config::declarative_providers::DeclarativeProviderConfig =
+            serde_json::from_str(json).expect("opencode.json should parse");
+        assert_eq!(config.name, "opencode");
+        assert!(matches!(config.engine, crate::config::declarative_providers::ProviderEngine::OpenAI));
+        assert_eq!(config.base_url, "https://opencode.ai/zen/v1");
+        assert!(!config.requires_auth, "free tier should not require auth");
+        assert!(config.dynamic_models.unwrap_or(false));
+        assert_eq!(config.fast_model.as_deref(), Some("deepseek-v4-flash-free"));
+
+        // Verify all 42 models are present (4 free + 38 paid, matching /zen/v1/models)
+        assert_eq!(config.models.len(), 42);
+        assert!(config.models.iter().any(|m| m.name == "deepseek-v4-flash-free"));
+        assert!(config.models.iter().any(|m| m.name == "gpt-5-nano"));
+        // Free models have cost 0; paid models have non-zero costs
+        let free: Vec<_> = config.models.iter().filter(|m| m.input_token_cost == Some(0.0)).collect();
+        assert_eq!(free.len(), 4, "expected 4 free models");
+    }
+
+    #[tokio::test]
+    async fn test_models_dev_provider_registry_wiring() {
+        let models_dev = get_from_registry("models_dev")
+            .await
+            .expect("models_dev provider should be registered");
+        let meta = models_dev.metadata();
+
+        assert_eq!(models_dev.provider_type(), ProviderType::Preferred);
+        assert_eq!(meta.display_name, "Models.dev");
+        assert!(meta.config_keys.iter().any(|k| k.name == "MODELS_DEV_API_KEY"));
+        assert!(meta.config_keys.iter().any(|k| k.name == "MODELS_DEV_ENDPOINT"));
     }
 }
