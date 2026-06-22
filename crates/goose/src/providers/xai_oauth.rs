@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use goose_providers::errors::ProviderError;
 use goose_providers::model::ModelConfig;
+use goose_providers::xai::shared::{xai_base_url_for_model, xai_context_window};
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -608,7 +609,7 @@ impl XaiOAuthAuthProvider {
         }
     }
 
-    async fn get_valid_token(&self) -> Result<TokenData> {
+    pub(crate) async fn get_valid_token(&self) -> Result<TokenData> {
         if let Some(mut token_data) = self.cache.load() {
             if token_data.expires_at
                 > Utc::now() + chrono::Duration::seconds(ACCESS_TOKEN_REFRESH_SKEW_SECS)
@@ -715,9 +716,32 @@ impl Provider for XaiOAuthProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        self.inner
-            .stream(model_config, session_id, system, messages, tools)
+        // Use xAI Responses API path with payload rewriting (matches pi spec)
+        use goose_providers::xai::responses::{stream_xai_responses, XaiResponsesStreamOptions};
+
+        // Obtain a fresh Bearer token
+        let token_data = self
+            .auth_provider
+            .get_valid_token()
             .await
+            .map_err(|e| ProviderError::Authentication(e.to_string()))?;
+
+        let auth_header = format!("Bearer {}", token_data.access_token);
+
+        let options = XaiResponsesStreamOptions {
+            session_id: Some(session_id.to_string()),
+            reasoning_effort: None,
+            extra_headers: None,
+            authorization: Some(auth_header),
+        };
+
+        // Convert the slice to owned Vec for the Responses adapter
+        let owned_messages = messages.to_vec();
+        let owned_tools = tools.to_vec();
+        let owned_model = model_config.clone();
+
+        // stream_xai_responses returns a MessageStream directly
+        stream_xai_responses(owned_model, system, owned_messages, owned_tools, options).await
     }
 
     async fn fetch_supported_models(&self) -> Result<Vec<String>, ProviderError> {
@@ -787,9 +811,11 @@ impl ProviderDef for XaiOAuthProvider {
     ) -> BoxFuture<'static, Result<Self::Provider>> {
         Box::pin(async move {
             let config = crate::config::Config::global();
+            // Use model-aware base URL when possible (CLI proxy models need the special endpoint)
+            let model_aware_host = xai_base_url_for_model(&model.model_name);
             let host: String = config
                 .get_param("XAI_HOST")
-                .unwrap_or_else(|_| XAI_API_HOST.to_string());
+                .unwrap_or_else(|_| model_aware_host.to_string());
 
             let auth_provider = Arc::new(XaiOAuthAuthProvider::new(XaiAuthState::instance()));
             let auth_for_client = Arc::clone(&auth_provider);
@@ -798,6 +824,14 @@ impl ProviderDef for XaiOAuthProvider {
                 AuthMethod::Custom(Box::new(SharedAuthProvider(auth_for_client))),
                 tls_config,
             )?;
+
+            // Apply authoritative xAI context windows (source of truth)
+            let mut model = model;
+            if let Some(ctx) = xai_context_window(&model.model_name) {
+                if model.context_limit.is_none() {
+                    model.context_limit = Some(ctx);
+                }
+            }
 
             let inner = OpenAiCompatibleProvider::new(
                 XAI_OAUTH_PROVIDER_NAME.to_string(),

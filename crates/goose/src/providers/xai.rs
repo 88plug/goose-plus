@@ -4,6 +4,7 @@ use super::openai_compatible::OpenAiCompatibleProvider;
 use anyhow::Result;
 use futures::future::BoxFuture;
 use goose_providers::model::ModelConfig;
+use goose_providers::xai::shared::xai_context_window;
 
 const XAI_PROVIDER_NAME: &str = "xai";
 pub const XAI_API_HOST: &str = "https://api.x.ai/v1";
@@ -67,6 +68,14 @@ impl ProviderDef for XaiProvider {
 
             let api_client =
                 ApiClient::new_with_tls(host, AuthMethod::BearerToken(api_key), tls_config)?;
+
+            // Apply authoritative xAI context windows (source of truth)
+            let mut model = model;
+            if let Some(ctx) = xai_context_window(&model.model_name) {
+                if model.context_limit.is_none() {
+                    model.context_limit = Some(ctx);
+                }
+            }
 
             Ok(OpenAiCompatibleProvider::new(
                 XAI_PROVIDER_NAME.to_string(),
