@@ -550,8 +550,9 @@ impl CliSession {
     fn create_editor(
         &self,
     ) -> Result<rustyline::Editor<GooseCompleter, rustyline::history::DefaultHistory>> {
-        let builder =
-            rustyline::Config::builder().completion_type(rustyline::CompletionType::Circular);
+        let builder = rustyline::Config::builder()
+            .completion_type(rustyline::CompletionType::Circular)
+            .bracketed_paste(true);
         let builder = match self.edit_mode {
             Some(mode) => builder.edit_mode(mode),
             None => builder.edit_mode(EditMode::Emacs),

@@ -19,7 +19,7 @@ use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tokio_stream::{wrappers::SplitStream, StreamExt};
 
-use crate::subprocess::SubprocessExt;
+use crate::subprocess::configure_subprocess;
 
 /// Check if the current process is running inside a Flatpak sandbox.
 ///
@@ -572,8 +572,8 @@ async fn run_command(
         }
         Err(_) => {
             tracing::debug!(
-                    "output drain timed out after {OUTPUT_DRAIN_TIMEOUT_MILLIS}ms (backgrounded process?)"
-                );
+                "output drain timed out after {OUTPUT_DRAIN_TIMEOUT_MILLIS}ms (backgrounded process?)"
+            );
             abort_handle.abort();
             true
         }
@@ -654,7 +654,7 @@ fn build_shell_command(
         }
     };
 
-    command.set_no_window();
+    configure_subprocess(&mut command);
     command
 }
 
@@ -852,6 +852,31 @@ mod tests {
         let observed = std::fs::canonicalize(extract_text(&result)).unwrap();
         let expected = std::fs::canonicalize(dir.path()).unwrap();
         assert_eq!(observed, expected);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shell_runs_in_separate_process_group() {
+        let own_pgid = unsafe { libc::getpgrp() };
+
+        let tool = ShellTool::new_for_test().unwrap();
+        let result = tool
+            .shell(ShellParams {
+                command: "ps -o pgid= -p $$".to_string(),
+                timeout_secs: None,
+            })
+            .await;
+
+        assert_eq!(result.is_error, Some(false));
+        let child_pgid: i32 = extract_text(&result)
+            .trim()
+            .parse()
+            .expect("expected numeric pgid from child shell");
+
+        assert_ne!(
+            child_pgid, own_pgid,
+            "child shell must run in its own process group so terminal signals do not reach goose"
+        );
     }
 
     #[cfg(not(windows))]

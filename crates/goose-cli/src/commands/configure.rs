@@ -381,14 +381,22 @@ fn model_display_name(
                 "{} ({}M{})",
                 model_name,
                 limit / 1_000_000,
-                if cost_str.is_empty() { String::new() } else { format!(", {}", cost_str) }
+                if cost_str.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {}", cost_str)
+                }
             )
         } else if info.context_limit >= 1000 {
             format!(
                 "{} ({}K{})",
                 model_name,
                 limit / 1000,
-                if cost_str.is_empty() { String::new() } else { format!(", {}", cost_str) }
+                if cost_str.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {}", cost_str)
+                }
             )
         } else {
             model_name.to_string()

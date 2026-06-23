@@ -692,14 +692,57 @@ impl Provider for OpenAiProvider {
 }
 
 pub fn parse_custom_headers(s: String) -> HashMap<String, String> {
-    s.split(',')
+    split_header_entries(&s)
+        .into_iter()
         .filter_map(|header| {
             let mut parts = header.splitn(2, '=');
             let key = parts.next().map(|s| s.trim().to_string())?;
-            let value = parts.next().map(|s| s.trim().to_string())?;
+            let value = parts.next().map(|s| strip_quotes(s.trim()))?;
             Some((key, value))
         })
         .collect()
+}
+
+/// Split on commas that are not inside single or double quotes, so that quoted
+/// header values (e.g. `x-litellm-tags="tag1,tag2"`) are preserved intact.
+fn split_header_entries(s: &str) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    for c in s.chars() {
+        match quote {
+            Some(q) => {
+                if c == q {
+                    quote = None;
+                }
+                current.push(c);
+            }
+            None => match c {
+                '"' | '\'' => {
+                    quote = Some(c);
+                    current.push(c);
+                }
+                ',' => {
+                    entries.push(std::mem::take(&mut current));
+                }
+                _ => current.push(c),
+            },
+        }
+    }
+    entries.push(current);
+    entries
+}
+
+fn strip_quotes(s: &str) -> String {
+    let bytes = s.as_bytes();
+    if s.len() >= 2 {
+        let first = bytes[0];
+        let last = bytes[bytes.len() - 1];
+        if (first == b'"' || first == b'\'') && first == last {
+            return s[1..s.len() - 1].to_string();
+        }
+    }
+    s.to_string()
 }
 
 #[cfg(test)]
@@ -973,5 +1016,38 @@ mod tests {
             ]
         });
         assert_eq!(parse_n_ctx_from_models(&body, "model-c"), None);
+    }
+
+    #[test]
+    fn parse_custom_headers_splits_on_entry_delimiter() {
+        let headers = parse_custom_headers("X-Foo=bar,X-Baz=qux".to_string());
+        assert_eq!(headers.get("X-Foo"), Some(&"bar".to_string()));
+        assert_eq!(headers.get("X-Baz"), Some(&"qux".to_string()));
+    }
+
+    #[test]
+    fn parse_custom_headers_preserves_commas_in_quoted_values() {
+        let headers = parse_custom_headers(
+            r#"x-litellm-tags="tag1,tag2",x-litellm-spend-logs-metadata="{\"a\":\"b\",\"c\":\"d\"}""#
+                .to_string(),
+        );
+        assert_eq!(
+            headers.get("x-litellm-tags"),
+            Some(&"tag1,tag2".to_string())
+        );
+        assert_eq!(
+            headers.get("x-litellm-spend-logs-metadata"),
+            Some(&r#"{\"a\":\"b\",\"c\":\"d\"}"#.to_string())
+        );
+    }
+
+    #[test]
+    fn parse_custom_headers_preserves_commas_in_single_quoted_values() {
+        let headers = parse_custom_headers("x-litellm-tags='tag1,tag2',x-other=plain".to_string());
+        assert_eq!(
+            headers.get("x-litellm-tags"),
+            Some(&"tag1,tag2".to_string())
+        );
+        assert_eq!(headers.get("x-other"), Some(&"plain".to_string()));
     }
 }

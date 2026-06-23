@@ -1731,11 +1731,24 @@ impl ExtensionManager {
             .collect::<Vec<&str>>()
             .join(", ");
 
+        tracing::warn!(
+            monotonic_counter.goose.unknown_tool_calls = 1,
+            tool_name = %tool_name,
+            "Model called unknown tool '{}' that is not in the available tools list",
+            tool_name,
+        );
+
+        let suggestion = if available.is_empty() {
+            String::new()
+        } else {
+            " Please use one of these tools instead.".to_string()
+        };
+
         Err(ErrorData::new(
             ErrorCode::RESOURCE_NOT_FOUND,
             format!(
-                "Tool '{}' not found. Available tools: [{}]",
-                tool_name, available
+                "Tool '{}' not found. Available tools: [{}].{}",
+                tool_name, available, suggestion
             ),
             None,
         ))
@@ -2254,6 +2267,45 @@ mod tests {
         } else {
             panic!("Expected ErrorData with ErrorCode::RESOURCE_NOT_FOUND");
         }
+    }
+
+    #[tokio::test]
+    async fn test_unknown_tool_call_suggests_available_tools() {
+        use super::super::tool_execution::ToolCallContext;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let extension_manager =
+            ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
+
+        extension_manager
+            .add_mock_extension_with_tools(
+                "test_client".to_string(),
+                Arc::new(MockClient {}),
+                vec!["real_tool".to_string()],
+            )
+            .await;
+
+        let ctx = ToolCallContext::new(
+            "test-session-id".to_string(),
+            None,
+            Some("test-req-id".to_string()),
+        );
+
+        let unknown_tool_call =
+            CallToolRequestParams::new("read_file".to_string()).with_arguments(object!({}));
+
+        let result = extension_manager
+            .dispatch_tool_call(&ctx, unknown_tool_call, CancellationToken::default())
+            .await;
+
+        let err = result.expect_err("Expected unknown tool to error");
+        let tool_err = err.downcast_ref::<ErrorData>().expect("Expected ErrorData");
+        assert_eq!(tool_err.code, ErrorCode::RESOURCE_NOT_FOUND);
+        assert!(tool_err.message.contains("Tool 'read_file' not found"));
+        assert!(tool_err.message.contains("Available tools:"));
+        assert!(tool_err
+            .message
+            .contains("Please use one of these tools instead."));
     }
 
     #[tokio::test]

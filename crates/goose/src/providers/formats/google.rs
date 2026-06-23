@@ -9,6 +9,7 @@ use rmcp::model::{
 };
 use serde::Serialize;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::conversation::message::{Message, MessageContent, ProviderMetadata};
@@ -84,6 +85,21 @@ pub fn format_messages(messages: &[Message]) -> Vec<Value> {
         .find(|(_, m)| is_user_loop_boundary(m))
         .map(|(i, _)| i);
 
+    // Gemini requires functionResponse.name to match the originating
+    // functionCall.name (the function name, not our internal tracking id).
+    let function_names_by_id: HashMap<&str, String> = filtered
+        .iter()
+        .flat_map(|message| message.content.iter())
+        .filter_map(|content| match content {
+            MessageContent::ToolRequest(request) => request
+                .tool_call
+                .as_ref()
+                .ok()
+                .map(|tool_call| (request.id.as_str(), sanitize_function_name(&tool_call.name))),
+            _ => None,
+        })
+        .collect();
+
     filtered
         .iter()
         .enumerate()
@@ -142,54 +158,71 @@ pub fn format_messages(messages: &[Message]) -> Vec<Value> {
                             parts.push(json!({"text":format!("Error: {}", e)}));
                         }
                     },
-                    MessageContent::ToolResponse(response) => match &response.tool_result {
-                        Ok(result) => {
-                            let mut tool_content = Vec::new();
-                            for content in result.content.iter().map(|c| c.raw.clone()) {
-                                match content {
-                                    RawContent::Image(image) => {
-                                        parts.push(json!({
-                                            "inline_data": {
-                                                "mime_type": image.mime_type,
-                                                "data": image.data,
-                                            }
-                                        }));
-                                    }
-                                    _ => {
-                                        tool_content.push(content.no_annotation());
+                    MessageContent::ToolResponse(response) => {
+                        let function_name = function_names_by_id
+                            .get(response.id.as_str())
+                            .map(String::as_str)
+                            .unwrap_or(response.id.as_str());
+                        match &response.tool_result {
+                            Ok(result) => {
+                                let mut tool_content = Vec::new();
+                                for content in result.content.iter().map(|c| c.raw.clone()) {
+                                    match content {
+                                        RawContent::Image(image) => {
+                                            parts.push(json!({
+                                                "inline_data": {
+                                                    "mime_type": image.mime_type,
+                                                    "data": image.data,
+                                                }
+                                            }));
+                                        }
+                                        _ => {
+                                            tool_content.push(content.no_annotation());
+                                        }
                                     }
                                 }
-                            }
-                            let mut text = tool_content
-                                .iter()
-                                .filter_map(|c| match c.deref() {
-                                    RawContent::Text(t) => Some(t.text.clone()),
-                                    RawContent::Resource(raw_embedded_resource) => Some(
-                                        raw_embedded_resource.clone().no_annotation().get_text(),
-                                    ),
-                                    _ => None,
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\n");
+                                let mut text = tool_content
+                                    .iter()
+                                    .filter_map(|c| match c.deref() {
+                                        RawContent::Text(t) => Some(t.text.clone()),
+                                        RawContent::Resource(raw_embedded_resource) => Some(
+                                            raw_embedded_resource
+                                                .clone()
+                                                .no_annotation()
+                                                .get_text(),
+                                        ),
+                                        _ => None,
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
 
-                            if text.is_empty() {
-                                text = "Tool call is done.".to_string();
+                                if text.is_empty() {
+                                    text = "Tool call is done.".to_string();
+                                }
+                                let mut part = build_function_response_part(function_name, text);
+                                if include_signature {
+                                    maybe_insert_signature_from_metadata(
+                                        &mut part,
+                                        &response.metadata,
+                                    );
+                                }
+                                parts.push(json!(part));
                             }
-                            let mut part = build_function_response_part(&response.id, text);
-                            if include_signature {
-                                maybe_insert_signature_from_metadata(&mut part, &response.metadata);
+                            Err(e) => {
+                                let mut part = build_function_response_part(
+                                    function_name,
+                                    format!("Error: {}", e),
+                                );
+                                if include_signature {
+                                    maybe_insert_signature_from_metadata(
+                                        &mut part,
+                                        &response.metadata,
+                                    );
+                                }
+                                parts.push(json!(part));
                             }
-                            parts.push(json!(part));
                         }
-                        Err(e) => {
-                            let mut part =
-                                build_function_response_part(&response.id, format!("Error: {}", e));
-                            if include_signature {
-                                maybe_insert_signature_from_metadata(&mut part, &response.metadata);
-                            }
-                            parts.push(json!(part));
-                        }
-                    },
+                    }
                     MessageContent::Thinking(_) => {}
                     MessageContent::Image(image) => {
                         parts.push(json!({
@@ -787,6 +820,28 @@ mod tests {
         assert_eq!(
             payload[0]["parts"][0]["functionResponse"]["response"]["content"]["text"],
             "Hello"
+        );
+    }
+
+    #[test]
+    fn test_function_response_name_matches_originating_call() {
+        let messages = vec![
+            set_up_text_message("List files", Role::User),
+            set_up_tool_request_message(
+                "tool_use_xyz",
+                CallToolRequestParams::new("developer__text_editor"),
+            ),
+            set_up_tool_response_message("tool_use_xyz", vec![Content::text("done")]),
+        ];
+        let payload = format_messages(&messages);
+
+        assert_eq!(
+            payload[1]["parts"][0]["functionCall"]["name"],
+            "developer__text_editor"
+        );
+        assert_eq!(
+            payload[2]["parts"][0]["functionResponse"]["name"], "developer__text_editor",
+            "functionResponse.name must match the originating functionCall.name"
         );
     }
 
