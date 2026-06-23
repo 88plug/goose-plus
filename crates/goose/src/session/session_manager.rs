@@ -1344,10 +1344,10 @@ impl SessionStorage {
         WHERE id = ?
     "#
         ))
-            .bind(id)
-            .fetch_optional(pool)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
 
         if include_messages {
             let conv = self.get_conversation(&session.id).await?;

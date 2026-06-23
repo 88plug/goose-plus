@@ -39,7 +39,7 @@ impl goose_providers::base::ProviderDescriptor for XaiProvider {
         ProviderMetadata::new(
             XAI_PROVIDER_NAME,
             "xAI",
-            "Grok models from xAI, including reasoning and multimodal capabilities",
+            "Grok models from xAI using an API key (use 'xAI (SuperGrok Subscription)' for OAuth/SuperGrok)",
             XAI_DEFAULT_MODEL,
             XAI_KNOWN_MODELS.to_vec(),
             XAI_DOC_URL,

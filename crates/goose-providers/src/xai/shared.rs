@@ -28,11 +28,11 @@ pub static XAI_CONTEXT_WINDOWS: LazyLock<std::collections::HashMap<&'static str,
         // Standard models
         m.insert("grok-3", 131072);
         m.insert("grok-3-fast", 131072);
-        // Grok 4 lineage – 1M tier per live /v1/models
-        m.insert("grok-4.20-0309-non-reasoning", 1_000_000);
-        m.insert("grok-4.20-0309-reasoning", 1_000_000);
-        m.insert("grok-4.20-multi-agent-0309", 1_000_000);
-        m.insert("grok-4.3", 1_000_000);
+        // Grok 4 Fast lineage – 2M tier (published, matches pi spec)
+        m.insert("grok-4.20-0309-non-reasoning", 2_000_000);
+        m.insert("grok-4.20-0309-reasoning", 2_000_000);
+        m.insert("grok-4.20-multi-agent-0309", 2_000_000);
+        m.insert("grok-4.3", 2_000_000);
         // Grok Build / Composer (CLI proxy or public)
         m.insert("grok-build", 512_000);
         m.insert("grok-build-0.1", 256_000);
@@ -185,7 +185,14 @@ mod tests {
 
     #[test]
     fn test_context_windows_match_live_api() {
-        assert_eq!(xai_context_window("grok-4.3"), Some(1_000_000));
+        // Grok 4 Fast lineage = 2M (published tier, no 1M guesses)
+        assert_eq!(xai_context_window("grok-4.3"), Some(2_000_000));
+        assert_eq!(
+            xai_context_window("grok-4.20-0309-reasoning"),
+            Some(2_000_000)
+        );
         assert_eq!(xai_context_window("grok-build-0.1"), Some(256_000));
+        assert_eq!(xai_context_window("grok-build"), Some(512_000));
+        assert_eq!(xai_context_window("grok-composer-2.5-fast"), Some(200_000));
     }
 }

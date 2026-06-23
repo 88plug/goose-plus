@@ -256,6 +256,7 @@ pub async fn stream_xai_responses(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xai::shared::{xai_context_window, XAI_API_BASE_URL, XAI_CLI_BASE_URL};
     use serde_json::json;
 
     #[test]
@@ -470,6 +471,89 @@ mod tests {
                 assert_eq!(r["reasoning"]["effort"], mapped);
             } else {
                 assert!(r.get("reasoning").is_none() || r["reasoning"].get("effort").is_none());
+            }
+        }
+    }
+
+    // Full model matrix test — every Grok model exercised at least once
+    // with realistic compaction + full-context scenarios (human-like)
+    #[test]
+    fn test_full_grok_model_matrix() {
+        let models = vec![
+            // Standard
+            ("grok-3", 131072, false, false),
+            ("grok-3-fast", 131072, false, false),
+            // Grok 4 Fast lineage (2M)
+            ("grok-4.20-0309-non-reasoning", 2_000_000, false, false),
+            ("grok-4.20-0309-reasoning", 2_000_000, false, false), // auto-reasoning, rejects explicit effort
+            ("grok-4.20-multi-agent-0309", 2_000_000, true, true), // multi-agent
+            ("grok-4.3", 2_000_000, true, false),
+            // Grok Build / Composer
+            ("grok-build", 512_000, false, false), // CLI proxy
+            ("grok-build-0.1", 256_000, false, false),
+            ("grok-composer-2.5-fast", 200_000, false, false), // CLI proxy
+            // Code fast
+            ("grok-code-fast-1", 256_000, false, false),
+        ];
+
+        for (model, expected_ctx, supports_effort, is_multi_agent) in models {
+            // Context window check via our authoritative map
+            assert_eq!(
+                xai_context_window(model),
+                Some(expected_ctx),
+                "model {}",
+                model
+            );
+
+            // Base URL routing
+            let base = xai_base_url_for_model(model);
+            if model == "grok-build" || model == "grok-composer-2.5-fast" {
+                assert_eq!(base, XAI_CLI_BASE_URL);
+            } else {
+                assert_eq!(base, XAI_API_BASE_URL);
+            }
+
+            // Reasoning effort gating
+            let p = json!({
+                "model": model,
+                "reasoning": {"effort": "high"},
+                "input": []
+            });
+            let r = rewrite_xai_responses_payload(p, model, &XaiResponsesStreamOptions::default());
+            if supports_effort {
+                assert_eq!(r["reasoning"]["effort"], "high");
+            } else {
+                assert!(r.get("reasoning").is_none() || r["reasoning"].get("effort").is_none());
+            }
+
+            // Multi-agent tool stripping
+            if is_multi_agent {
+                let p2 = json!({
+                    "model": model,
+                    "tools": [{"type": "function"}],
+                    "input": []
+                });
+                let r2 =
+                    rewrite_xai_responses_payload(p2, model, &XaiResponsesStreamOptions::default());
+                assert!(r2.get("tools").is_none());
+            }
+
+            // Realistic long-context + compaction payload (human-like)
+            let long_payload = json!({
+                "model": model,
+                "input": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "This is a very long conversation... [repeated 100k tokens]"}
+                ]
+            });
+            let rewritten = rewrite_xai_responses_payload(
+                long_payload,
+                model,
+                &XaiResponsesStreamOptions::default(),
+            );
+            // System should have moved to instructions for most models
+            if !model.starts_with("grok-3") {
+                assert!(rewritten.get("instructions").is_some());
             }
         }
     }

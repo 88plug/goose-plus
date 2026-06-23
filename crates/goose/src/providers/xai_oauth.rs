@@ -716,32 +716,58 @@ impl Provider for XaiOAuthProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        // Use xAI Responses API path with payload rewriting (matches pi spec)
         use goose_providers::xai::responses::{stream_xai_responses, XaiResponsesStreamOptions};
+        use goose_providers::xai::shared::grok_supports_reasoning_effort;
 
-        // Obtain a fresh Bearer token
-        let token_data = self
-            .auth_provider
-            .get_valid_token()
+        // Use Responses API only for models that support reasoning effort.
+        // Other models use standard chat/completions via the inner provider.
+        if grok_supports_reasoning_effort(&model_config.model_name) {
+            // Obtain a fresh Bearer token
+            let token_data = self
+                .auth_provider
+                .get_valid_token()
+                .await
+                .map_err(|e| ProviderError::Authentication(e.to_string()))?;
+
+            let auth_header = format!("Bearer {}", token_data.access_token);
+
+            let options = XaiResponsesStreamOptions {
+                session_id: Some(session_id.to_string()),
+                reasoning_effort: None,
+                extra_headers: None,
+                authorization: Some(auth_header),
+            };
+
+            let owned_messages = messages.to_vec();
+            let owned_tools = tools.to_vec();
+            let owned_model = model_config.clone();
+
+            // Try Responses; if it fails or returns empty, fall back to chat/completions
+            if let Ok(mut stream) = stream_xai_responses(
+                owned_model.clone(),
+                system,
+                owned_messages.clone(),
+                owned_tools.clone(),
+                options,
+            )
             .await
-            .map_err(|e| ProviderError::Authentication(e.to_string()))?;
+            {
+                // Peek first item to detect empty streams
+                use futures::StreamExt;
+                if let Some(first) = stream.next().await {
+                    // Reconstruct stream with first item
+                    return Ok(Box::pin(
+                        futures::stream::once(async move { first }).chain(stream),
+                    ));
+                }
+                // Empty stream - fall through to fallback
+            }
+        }
 
-        let auth_header = format!("Bearer {}", token_data.access_token);
-
-        let options = XaiResponsesStreamOptions {
-            session_id: Some(session_id.to_string()),
-            reasoning_effort: None,
-            extra_headers: None,
-            authorization: Some(auth_header),
-        };
-
-        // Convert the slice to owned Vec for the Responses adapter
-        let owned_messages = messages.to_vec();
-        let owned_tools = tools.to_vec();
-        let owned_model = model_config.clone();
-
-        // stream_xai_responses returns a MessageStream directly
-        stream_xai_responses(owned_model, system, owned_messages, owned_tools, options).await
+        // Standard chat/completions path (works for all models)
+        self.inner
+            .stream(model_config, session_id, system, messages, tools)
+            .await
     }
 
     async fn fetch_supported_models(&self) -> Result<Vec<String>, ProviderError> {
