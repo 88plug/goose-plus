@@ -72,6 +72,23 @@ fn resolve_ollama_num_ctx(model_config: &ModelConfig) -> Option<usize> {
     input_limit.or(model_config.context_limit)
 }
 
+/// Default keep_alive sent to Ollama so the model stays resident in memory
+/// between requests. Ollama's own default is "5m"; with multi-call agent loops
+/// the model can be evicted and reloaded mid-session (the dominant cause of
+/// "goose is slow with Ollama" reports). A longer default keeps it warm.
+const OLLAMA_DEFAULT_KEEP_ALIVE: &str = "30m";
+
+/// Resolve the keep_alive value to send to Ollama. Accepts Ollama's duration
+/// syntax ("30m", "1h", "-1" for indefinite, "0" to unload immediately).
+/// Configurable via OLLAMA_KEEP_ALIVE; defaults to OLLAMA_DEFAULT_KEEP_ALIVE.
+fn resolve_ollama_keep_alive() -> String {
+    let config = crate::config::Config::global();
+    match config.get_param::<String>("OLLAMA_KEEP_ALIVE") {
+        Ok(val) if !val.trim().is_empty() => val,
+        _ => OLLAMA_DEFAULT_KEEP_ALIVE.to_string(),
+    }
+}
+
 fn resolve_ollama_stream_usage() -> bool {
     let config = crate::config::Config::global();
     match config.get_param::<bool>("OLLAMA_STREAM_USAGE") {
@@ -122,6 +139,12 @@ fn apply_ollama_options(payload: &mut Value, model_config: &ModelConfig) {
                 options_obj.insert("num_ctx".to_string(), json!(limit));
             }
         }
+
+        // Keep the model resident between calls so it isn't reloaded each
+        // request. Ollama's OpenAI-compatible endpoint accepts keep_alive as a
+        // top-level body field.
+        obj.entry("keep_alive")
+            .or_insert_with(|| json!(resolve_ollama_keep_alive()));
     }
 }
 
@@ -549,6 +572,42 @@ mod tests {
         let mut payload = json!({});
         apply_ollama_options(&mut payload, &model_config);
         assert!(payload.get("options").is_none());
+    }
+
+    #[test]
+    fn test_apply_ollama_options_sets_default_keep_alive() {
+        let _guard = env_lock::lock_env([("OLLAMA_KEEP_ALIVE", None::<&str>)]);
+        let model_config = ModelConfig::new("qwen3").unwrap();
+        let mut payload = json!({});
+        apply_ollama_options(&mut payload, &model_config);
+        assert_eq!(payload["keep_alive"], OLLAMA_DEFAULT_KEEP_ALIVE);
+    }
+
+    #[test]
+    fn test_apply_ollama_options_honors_keep_alive_override() {
+        let _guard = env_lock::lock_env([("OLLAMA_KEEP_ALIVE", Some("-1"))]);
+        let model_config = ModelConfig::new("qwen3").unwrap();
+        let mut payload = json!({});
+        apply_ollama_options(&mut payload, &model_config);
+        assert_eq!(payload["keep_alive"], "-1");
+    }
+
+    #[test]
+    fn test_apply_ollama_options_keep_alive_blank_falls_back_to_default() {
+        let _guard = env_lock::lock_env([("OLLAMA_KEEP_ALIVE", Some("  "))]);
+        let model_config = ModelConfig::new("qwen3").unwrap();
+        let mut payload = json!({});
+        apply_ollama_options(&mut payload, &model_config);
+        assert_eq!(payload["keep_alive"], OLLAMA_DEFAULT_KEEP_ALIVE);
+    }
+
+    #[test]
+    fn test_apply_ollama_options_preserves_existing_keep_alive() {
+        let _guard = env_lock::lock_env([("OLLAMA_KEEP_ALIVE", Some("30m"))]);
+        let model_config = ModelConfig::new("qwen3").unwrap();
+        let mut payload = json!({ "keep_alive": "1h" });
+        apply_ollama_options(&mut payload, &model_config);
+        assert_eq!(payload["keep_alive"], "1h");
     }
 
     #[test]

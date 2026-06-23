@@ -9,6 +9,13 @@ use utoipa::ToSchema;
 
 pub const DEFAULT_CONTEXT_LIMIT: usize = 128_000;
 
+/// Floor applied when resolving a model's context limit. A fresh install with an
+/// unknown local model can end up with a missing or degenerately small context
+/// limit (e.g. a quantized GGUF server reporting a tiny allocated window, or 0),
+/// which makes even a short first message overflow. Any resolved limit below this
+/// floor falls back to [`DEFAULT_CONTEXT_LIMIT`] so the first message never fails.
+pub const MINIMUM_CONTEXT_LIMIT: usize = 8_192;
+
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Environment variable '{0}' not found")]
@@ -271,7 +278,10 @@ impl ModelConfig {
     }
 
     pub fn context_limit(&self) -> usize {
-        self.context_limit.unwrap_or(DEFAULT_CONTEXT_LIMIT)
+        match self.context_limit {
+            Some(limit) if limit >= MINIMUM_CONTEXT_LIMIT => limit,
+            _ => DEFAULT_CONTEXT_LIMIT,
+        }
     }
 
     pub fn is_openai_reasoning_model(&self) -> bool {
@@ -383,6 +393,60 @@ mod tests {
         assert_eq!(fast_config.context_limit, Some(4096));
         assert_eq!(fast_config.max_tokens, Some(1024));
         assert_eq!(config.use_fast_model().model_name, "fast-model");
+    }
+
+    mod context_limit_resolution {
+        use super::*;
+
+        #[test]
+        fn unset_falls_back_to_default() {
+            let config = ModelConfig {
+                model_name: "unknown-model".to_string(),
+                context_limit: None,
+                ..Default::default()
+            };
+            assert_eq!(config.context_limit(), DEFAULT_CONTEXT_LIMIT);
+        }
+
+        #[test]
+        fn zero_falls_back_to_default() {
+            let config = ModelConfig {
+                model_name: "unknown-model".to_string(),
+                context_limit: Some(0),
+                ..Default::default()
+            };
+            assert_eq!(config.context_limit(), DEFAULT_CONTEXT_LIMIT);
+        }
+
+        #[test]
+        fn too_small_falls_back_to_default() {
+            let config = ModelConfig {
+                model_name: "tiny-local-model".to_string(),
+                context_limit: Some(MINIMUM_CONTEXT_LIMIT - 1),
+                ..Default::default()
+            };
+            assert_eq!(config.context_limit(), DEFAULT_CONTEXT_LIMIT);
+        }
+
+        #[test]
+        fn at_floor_is_preserved() {
+            let config = ModelConfig {
+                model_name: "small-model".to_string(),
+                context_limit: Some(MINIMUM_CONTEXT_LIMIT),
+                ..Default::default()
+            };
+            assert_eq!(config.context_limit(), MINIMUM_CONTEXT_LIMIT);
+        }
+
+        #[test]
+        fn explicit_large_limit_is_preserved() {
+            let config = ModelConfig {
+                model_name: "big-model".to_string(),
+                context_limit: Some(200_000),
+                ..Default::default()
+            };
+            assert_eq!(config.context_limit(), 200_000);
+        }
     }
 
     mod thinking_effort_tests {

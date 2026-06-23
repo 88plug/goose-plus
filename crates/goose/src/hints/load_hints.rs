@@ -8,6 +8,7 @@ use crate::config::paths::Paths;
 use crate::hints::import_files::read_referenced_files;
 
 pub const GOOSE_HINTS_FILENAME: &str = ".goosehints";
+pub const GOOSE_MD_FILENAME: &str = "GOOSE.md";
 pub const AGENTS_MD_FILENAME: &str = "AGENTS.md";
 
 pub fn get_context_filenames() -> Vec<String> {
@@ -18,6 +19,7 @@ pub fn get_context_filenames() -> Vec<String> {
         .unwrap_or_else(|_| {
             vec![
                 GOOSE_HINTS_FILENAME.to_string(),
+                GOOSE_MD_FILENAME.to_string(),
                 AGENTS_MD_FILENAME.to_string(),
             ]
         })
@@ -325,6 +327,54 @@ mod tests {
         let hints = load_hint_files(dir.path(), &[GOOSE_HINTS_FILENAME.to_string()], &gitignore);
 
         assert!(hints.contains("Test hint content"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_default_context_filenames_include_goose_md() {
+        std::env::remove_var("CONTEXT_FILE_NAMES");
+        let filenames = get_context_filenames();
+        assert!(
+            filenames.iter().any(|name| name == GOOSE_MD_FILENAME),
+            "GOOSE.md should be a recognized default context filename, got {filenames:?}"
+        );
+    }
+
+    #[test]
+    fn test_goose_md_when_present() {
+        let dir = TempDir::new().unwrap();
+
+        fs::write(
+            dir.path().join(GOOSE_MD_FILENAME),
+            "GOOSE.md project documentation",
+        )
+        .unwrap();
+        let gitignore = create_dummy_gitignore();
+        let hints = load_hint_files(dir.path(), &[GOOSE_MD_FILENAME.to_string()], &gitignore);
+
+        assert!(hints.contains("GOOSE.md project documentation"));
+        assert!(hints.contains("Project Hints"));
+    }
+
+    #[test]
+    fn test_goose_md_combined_with_goosehints() {
+        let dir = TempDir::new().unwrap();
+
+        fs::write(dir.path().join(GOOSE_HINTS_FILENAME), "hints content").unwrap();
+        fs::write(dir.path().join(GOOSE_MD_FILENAME), "goose md content").unwrap();
+
+        let gitignore = create_dummy_gitignore();
+        let hints = load_hint_files(
+            dir.path(),
+            &[
+                GOOSE_HINTS_FILENAME.to_string(),
+                GOOSE_MD_FILENAME.to_string(),
+            ],
+            &gitignore,
+        );
+
+        assert!(hints.contains("hints content"));
+        assert!(hints.contains("goose md content"));
     }
 
     #[test]

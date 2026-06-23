@@ -280,6 +280,34 @@ impl DatabricksProvider {
         candidates
     }
 
+    fn parse_serving_endpoints_page(
+        json: &Value,
+    ) -> Result<(Vec<ModelInfo>, Option<String>), ProviderError> {
+        let endpoints = json
+            .get("endpoints")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| {
+                ProviderError::RequestFailed(
+                    "Unexpected response format from Databricks API: missing 'endpoints' array"
+                        .to_string(),
+                )
+            })?;
+
+        let models = endpoints
+            .iter()
+            .filter_map(Self::endpoint_info_from_value)
+            .map(Self::model_info_from_endpoint)
+            .collect();
+
+        let next_page_token = json
+            .get("next_page_token")
+            .and_then(|v| v.as_str())
+            .filter(|token| !token.is_empty())
+            .map(str::to_string);
+
+        Ok((models, next_page_token))
+    }
+
     fn endpoint_info_from_value(endpoint: &Value) -> Option<DatabricksEndpointInfo> {
         let name = endpoint.get("name")?.as_str()?.to_string();
         let supports_responses_api = Self::endpoint_supports_responses_api(endpoint);
@@ -764,43 +792,50 @@ impl Provider for DatabricksProvider {
     }
 
     async fn fetch_supported_model_info(&self) -> Result<Vec<ModelInfo>, ProviderError> {
-        let response = self
-            .api_client
-            .request(None, "api/2.0/serving-endpoints")
-            .response_get()
-            .await
-            .map_err(|e| {
-                ProviderError::RequestFailed(format!("Failed to fetch Databricks models: {}", e))
-            })?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let detail = response.text().await.unwrap_or_default();
-            return Err(ProviderError::RequestFailed(format!(
-                "Failed to fetch Databricks models: {} {}",
-                status, detail
-            )));
-        }
-
-        let json: Value = response.json().await.map_err(|e| {
-            ProviderError::RequestFailed(format!("Failed to parse Databricks API response: {}", e))
-        })?;
-
-        let endpoints = json
-            .get("endpoints")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                ProviderError::RequestFailed(
-                    "Unexpected response format from Databricks API: missing 'endpoints' array"
-                        .to_string(),
-                )
-            })?;
-
         let mut models = Vec::new();
-        for endpoint in endpoints {
-            if let Some(endpoint_info) = Self::endpoint_info_from_value(endpoint) {
-                models.push(Self::model_info_from_endpoint(endpoint_info));
+        let mut page_token: Option<String> = None;
+
+        loop {
+            let mut path = "api/2.0/serving-endpoints".to_string();
+            if let Some(token) = &page_token {
+                path.push_str(&format!("?page_token={}", urlencoding::encode(token)));
             }
+
+            let response = self
+                .api_client
+                .request(None, &path)
+                .response_get()
+                .await
+                .map_err(|e| {
+                    ProviderError::RequestFailed(format!(
+                        "Failed to fetch Databricks models: {}",
+                        e
+                    ))
+                })?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let detail = response.text().await.unwrap_or_default();
+                return Err(ProviderError::RequestFailed(format!(
+                    "Failed to fetch Databricks models: {} {}",
+                    status, detail
+                )));
+            }
+
+            let json: Value = response.json().await.map_err(|e| {
+                ProviderError::RequestFailed(format!(
+                    "Failed to parse Databricks API response: {}",
+                    e
+                ))
+            })?;
+
+            let (page_models, next_page_token) = Self::parse_serving_endpoints_page(&json)?;
+            models.extend(page_models);
+
+            if next_page_token.is_none() || next_page_token == page_token {
+                break;
+            }
+            page_token = next_page_token;
         }
 
         Ok(models)
@@ -1028,5 +1063,62 @@ mod tests {
             None,
             &["databricks-claude-sonnet-4"]
         ));
+    }
+
+    #[test]
+    fn serving_endpoints_page_surfaces_all_endpoints() {
+        let json = json!({
+            "endpoints": [
+                {"name": "databricks-claude-sonnet-4-6"},
+                {"name": "databricks-gpt-5-5"},
+                {"name": "team-custom-llama"}
+            ]
+        });
+
+        let (models, next_page_token) =
+            DatabricksProvider::parse_serving_endpoints_page(&json).unwrap();
+
+        let names: Vec<&str> = models.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "databricks-claude-sonnet-4-6",
+                "databricks-gpt-5-5",
+                "team-custom-llama"
+            ]
+        );
+        assert_eq!(next_page_token, None);
+    }
+
+    #[test]
+    fn serving_endpoints_page_reads_next_page_token() {
+        let json = json!({
+            "endpoints": [{"name": "databricks-claude-sonnet-4-6"}],
+            "next_page_token": "tok-2"
+        });
+
+        let (models, next_page_token) =
+            DatabricksProvider::parse_serving_endpoints_page(&json).unwrap();
+
+        assert_eq!(models.len(), 1);
+        assert_eq!(next_page_token.as_deref(), Some("tok-2"));
+    }
+
+    #[test]
+    fn serving_endpoints_page_treats_empty_token_as_last_page() {
+        let json = json!({
+            "endpoints": [{"name": "databricks-claude-sonnet-4-6"}],
+            "next_page_token": ""
+        });
+
+        let (_, next_page_token) = DatabricksProvider::parse_serving_endpoints_page(&json).unwrap();
+
+        assert_eq!(next_page_token, None);
+    }
+
+    #[test]
+    fn serving_endpoints_page_errors_on_missing_array() {
+        let json = json!({ "unexpected": true });
+        assert!(DatabricksProvider::parse_serving_endpoints_page(&json).is_err());
     }
 }
