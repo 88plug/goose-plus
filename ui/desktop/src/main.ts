@@ -1202,6 +1202,34 @@ const createChat = async (app: App, options: CreateChatOptions = {}) => {
     shell.openExternal(url);
   });
 
+  // Keep top-level navigations from hijacking the app window. Same-origin (and
+  // local file:) navigations stay in the same window; anything external is
+  // handed off to the user's browser instead of replacing the SPA.
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    const appOrigin = getAppUrl().origin;
+    let target: URL;
+    try {
+      target = new URL(navigationUrl);
+    } catch {
+      event.preventDefault();
+      return;
+    }
+
+    if (target.origin === appOrigin || target.protocol === 'file:') {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (BLOCKED_PROTOCOLS.includes(target.protocol)) {
+      return;
+    }
+
+    if (WEB_PROTOCOLS.includes(target.protocol)) {
+      shell.openExternal(navigationUrl);
+    }
+  });
+
   const windowId = mainWindow.id;
   const url = getAppUrl();
 
@@ -1290,6 +1318,25 @@ const createChat = async (app: App, options: CreateChatOptions = {}) => {
   });
 
   windowMap.set(windowId, mainWindow);
+
+  // Close-to-tray: when enabled and a tray exists, hide the window instead of
+  // closing it so the app keeps running in the background. The user can still
+  // quit explicitly (tray Quit, menu Quit, Cmd+Q), which sets isQuitting first.
+  mainWindow.on('close', (event) => {
+    if (isQuitting || !tray) {
+      return;
+    }
+    if (!getSettings().closeToTray) {
+      return;
+    }
+    event.preventDefault();
+    if (mainWindow.isFullScreen()) {
+      mainWindow.once('leave-full-screen', () => mainWindow.hide());
+      mainWindow.setFullScreen(false);
+    } else {
+      mainWindow.hide();
+    }
+  });
 
   // Handle window closure
   mainWindow.on('closed', () => {
@@ -1393,6 +1440,13 @@ const createLauncher = () => {
 
 // Track tray instance
 let tray: Tray | null = null;
+
+// Set once the user explicitly quits, so the close-to-tray handler knows to
+// let windows actually close instead of hiding them.
+let isQuitting = false;
+app.on('before-quit', () => {
+  isQuitting = true;
+});
 
 const destroyTray = () => {
   if (tray) {

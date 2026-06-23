@@ -286,3 +286,50 @@ export function applyThemeTokens(theme?: 'light' | 'dark'): void {
     root.style.setProperty(key, value);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Font scaling — accessibility / low-vision support
+// ---------------------------------------------------------------------------
+
+/**
+ * Available base font-size multipliers. Because every typography token is
+ * expressed in `rem`, scaling the document root font-size scales body text,
+ * headings, inline code and code blocks together.
+ */
+export type FontScale = 'small' | 'normal' | 'large' | 'xlarge';
+
+export const FONT_SCALE_VALUES: Record<FontScale, number> = {
+  small: 0.9,
+  normal: 1,
+  large: 1.15,
+  xlarge: 1.3,
+};
+
+const FONT_SCALE_STORAGE_KEY = 'font_scale';
+const DEFAULT_ROOT_FONT_SIZE_PX = 16;
+
+function isFontScale(value: string | null): value is FontScale {
+  return value === 'small' || value === 'normal' || value === 'large' || value === 'xlarge';
+}
+
+/**
+ * Resolve the persisted font scale from localStorage, defaulting to 'normal'.
+ */
+export function getFontScale(): FontScale {
+  const stored = localStorage.getItem(FONT_SCALE_STORAGE_KEY);
+  return isFontScale(stored) ? stored : 'normal';
+}
+
+/**
+ * Persist and apply a base font scale to the document root.
+ * Sets the root font-size (driving all rem-based tokens) and exposes the
+ * multiplier as `--app-font-scale` for any non-rem consumers.
+ */
+export function applyFontScale(scale?: FontScale): void {
+  const resolved = scale ?? getFontScale();
+  const multiplier = FONT_SCALE_VALUES[resolved];
+  const root = document.documentElement;
+  root.style.fontSize = `${DEFAULT_ROOT_FONT_SIZE_PX * multiplier}px`;
+  root.style.setProperty('--app-font-scale', String(multiplier));
+  localStorage.setItem(FONT_SCALE_STORAGE_KEY, resolved);
+}

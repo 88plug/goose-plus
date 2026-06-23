@@ -33,6 +33,7 @@ export type LanguageSetting = 'system' | 'en' | 'es' | 'hi' | 'ja' | 'ko' | 'ru'
 export interface Settings {
   // Desktop app settings
   showMenuBarIcon: boolean;
+  closeToTray: boolean;
   disableAutoDownload: boolean;
   showDockIcon: boolean;
   enableWakelock: boolean;
@@ -71,6 +72,7 @@ export const defaultKeyboardShortcuts: DefaultKeyboardShortcuts = {
 export const defaultSettings: Settings = {
   // Desktop app settings
   showMenuBarIcon: true,
+  closeToTray: false,
   disableAutoDownload: false,
   showDockIcon: true,
   enableWakelock: false,

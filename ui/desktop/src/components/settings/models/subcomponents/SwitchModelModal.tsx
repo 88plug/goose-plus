@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { Bot, ExternalLink } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Bot, ExternalLink, Star } from 'lucide-react';
 import { defineMessages, useIntl } from '../../../../i18n';
 
 import {
@@ -18,9 +18,12 @@ import { useConfig } from '../../../ConfigContext';
 import { useModelAndProvider } from '../../../ModelAndProviderContext';
 import type { View } from '../../../../utils/navigationUtils';
 import Model, {
+  favoriteModelKey,
   fetchModelReasoning,
   fetchModelsForProviders,
   getProviderMetadata,
+  readFavoriteModels,
+  toggleFavoriteModel,
 } from '../modelInterface';
 import { getPredefinedModelsFromEnv, shouldShowPredefinedModels } from '../predefinedModelsUtils';
 import type { ProviderType, ThinkingEffort } from '../../../../api';
@@ -191,6 +194,14 @@ const i18n = defineMessages({
     id: 'switchModelModal.claudeDisabled',
     defaultMessage: 'Disabled - No extended thinking',
   },
+  addFavorite: {
+    id: 'switchModelModal.addFavorite',
+    defaultMessage: 'Add to favorites',
+  },
+  removeFavorite: {
+    id: 'switchModelModal.removeFavorite',
+    defaultMessage: 'Remove from favorites',
+  },
 });
 
 // Thinking effort options are created inside the component to support i18n.
@@ -308,6 +319,21 @@ export const SwitchModelModal = ({
   const reasoningRequestId = useRef(0);
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort | null>(null);
   const [selectedModelReasoning, setSelectedModelReasoning] = useState<boolean | null>(null);
+  const [favoriteModels, setFavoriteModels] = useState<string[]>([]);
+  const favoriteModelSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
+
+  useEffect(() => {
+    readFavoriteModels(read).then(setFavoriteModels);
+  }, [read]);
+
+  const handleToggleFavorite = useCallback(
+    (providerName: string, modelName: string) => {
+      toggleFavoriteModel(read, upsert, providerName, modelName)
+        .then(setFavoriteModels)
+        .catch(console.warn);
+    },
+    [read, upsert]
+  );
 
   const modelReasoning = selectedModelReasoning ?? selectedPredefinedModel?.reasoning;
   const showThinkingControl = modelReasoning === true;
@@ -595,6 +621,52 @@ export const SwitchModelModal = ({
   const filteredModelOptions = provider
     ? modelOptions.filter((group) => group.options[0]?.provider === provider)
     : [];
+
+  const sortedModelOptions = useMemo(
+    () =>
+      filteredModelOptions.map((group) => ({
+        ...group,
+        options: [...group.options].sort((a, b) => {
+          if (a.value === 'custom') return 1;
+          if (b.value === 'custom') return -1;
+          const aFav = favoriteModelSet.has(favoriteModelKey(a.provider, a.value));
+          const bFav = favoriteModelSet.has(favoriteModelKey(b.provider, b.value));
+          if (aFav === bFav) return 0;
+          return aFav ? -1 : 1;
+        }),
+      })),
+    [filteredModelOptions, favoriteModelSet]
+  );
+
+  const formatModelOptionLabel = (data: unknown) => {
+    const option = data as ModelOption;
+    if (!option.provider || option.value === 'custom' || option.value.startsWith('__')) {
+      return <span>{option.label}</span>;
+    }
+    const isFavorite = favoriteModelSet.has(favoriteModelKey(option.provider, option.value));
+    return (
+      <span className="flex items-center justify-between gap-2 w-full">
+        <span className="truncate">{option.label}</span>
+        <button
+          type="button"
+          aria-label={intl.formatMessage(isFavorite ? i18n.removeFavorite : i18n.addFavorite)}
+          title={intl.formatMessage(isFavorite ? i18n.removeFavorite : i18n.addFavorite)}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleToggleFavorite(option.provider, option.value);
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          className="flex-shrink-0 text-text-secondary hover:text-text-primary"
+        >
+          <Star
+            size={14}
+            className={isFavorite ? 'fill-current text-yellow-500' : ''}
+          />
+        </button>
+      </span>
+    );
+  };
 
   useEffect(() => {
     // Don't auto-select if user explicitly cleared the model
@@ -893,10 +965,11 @@ export const SwitchModelModal = ({
                         options={
                           loadingModels
                             ? []
-                            : filteredModelOptions.length > 0
-                              ? filteredModelOptions
+                            : sortedModelOptions.length > 0
+                              ? sortedModelOptions
                               : []
                         }
+                        formatOptionLabel={formatModelOptionLabel}
                         onChange={handleModelChange}
                         onInputChange={handleInputChange}
                         value={

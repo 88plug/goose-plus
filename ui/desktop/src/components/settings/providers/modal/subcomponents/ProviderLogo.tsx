@@ -30,6 +30,7 @@ const providerLogos: Record<string, string> = {
   openrouter: OpenRouterLogo,
   snowflake: SnowflakeLogo,
   xai: XaiLogo,
+  xai_oauth: XaiLogo,
   minimax: MiniMaxLogo,
   tanzu_ai: TanzuLogo,
   default: DefaultLogo,
@@ -45,8 +46,8 @@ export default function ProviderLogo({ providerName }: ProviderLogoProps) {
   const logoKey = providerName.toLowerCase();
   const logo = providerLogos[logoKey] || DefaultLogo;
 
-  // Special handling for xAI logo
-  const isXai = logoKey === 'xai';
+  // Special handling for xAI logo (covers both API-key and OAuth/SuperGrok variants)
+  const isXai = logoKey === 'xai' || logoKey === 'xai_oauth';
   const imageStyle = isXai ? { filter: 'invert(1)', opacity: 0.9 } : {};
 
   // Use smaller size for xAI logo to fit better in circle

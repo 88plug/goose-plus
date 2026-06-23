@@ -23,6 +23,12 @@ import { CallToolResponse, ContentBlock, EmbeddedResource } from '../api';
 import McpAppRenderer from './McpApps/McpAppRenderer';
 import ToolApprovalButtons from './ToolApprovalButtons';
 import { defineMessages, useIntl } from '../i18n';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import {
+  oneDark,
+  oneLight,
+} from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTheme } from '../contexts/ThemeContext';
 
 const i18n = defineMessages({
   mcpUiExperimental: {
@@ -60,6 +66,10 @@ const i18n = defineMessages({
   loadingSpinner: {
     id: 'toolCallWithResponse.loadingSpinner',
     defaultMessage: 'Loading spinner',
+  },
+  diff: {
+    id: 'toolCallWithResponse.diff',
+    defaultMessage: 'Diff',
   },
 });
 
@@ -267,6 +277,7 @@ export default function ToolCallWithResponse({
             toolResponse,
             notifications,
             isStreamingMessage,
+            isPendingApproval,
           }}
         />
         {/* Inline approval UI */}
@@ -378,6 +389,7 @@ interface ToolCallViewProps {
   toolResponse?: ToolResponseMessageContent;
   notifications?: NotificationEvent[];
   isStreamingMessage?: boolean;
+  isPendingApproval?: boolean;
 }
 
 interface Progress {
@@ -504,6 +516,7 @@ function ToolCallView({
   toolResponse,
   notifications,
   isStreamingMessage = false,
+  isPendingApproval = false,
 }: ToolCallViewProps) {
   const intl = useIntl();
   const [responseStyle, setResponseStyle] = useState<string>('concise');
@@ -838,6 +851,20 @@ function ToolCallView({
           );
         }
 
+        const editDiff = getEditDiffArgs(getToolName(toolCall.name), toolCall.arguments ?? {});
+        if (editDiff) {
+          return (
+            <div className="border-t border-border-primary">
+              <DiffView
+                path={editDiff.path}
+                before={editDiff.before}
+                after={editDiff.after}
+                isStartExpanded={isPendingApproval || isExpandToolDetails}
+              />
+            </div>
+          );
+        }
+
         if (isToolDetails) {
           return (
             <div className="border-t border-border-primary">
@@ -901,6 +928,189 @@ function ToolCallView({
           </div>
         );
       })()}
+    </ToolCallExpandable>
+  );
+}
+
+const DIFF_LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  jsx: 'jsx',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  rs: 'rust',
+  py: 'python',
+  go: 'go',
+  java: 'java',
+  c: 'c',
+  h: 'c',
+  cpp: 'cpp',
+  cc: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  css: 'css',
+  scss: 'scss',
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  html: 'markup',
+  xml: 'markup',
+  svg: 'markup',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  sql: 'sql',
+  toml: 'toml',
+  swift: 'swift',
+  m: 'objectivec',
+  mm: 'objectivec',
+  md: 'markdown',
+  rb: 'ruby',
+  php: 'php',
+  kt: 'kotlin',
+};
+
+// Cap highlighted lines for performance; larger diffs render as plain text.
+const MAX_HIGHLIGHTED_DIFF_LINES = 500;
+
+function languageFromPath(path: string | undefined): string {
+  if (!path) return 'text';
+  const lastDot = path.lastIndexOf('.');
+  if (lastDot === -1) return 'text';
+  const ext = path.slice(lastDot + 1).toLowerCase();
+  return DIFF_LANGUAGE_BY_EXTENSION[ext] ?? 'text';
+}
+
+type DiffLineType = 'context' | 'add' | 'remove';
+
+interface DiffLine {
+  type: DiffLineType;
+  text: string;
+}
+
+// Line-level diff via longest-common-subsequence so unchanged lines are shared
+// and only the real edits are flagged as additions/removals.
+function computeLineDiff(before: string, after: string): DiffLine[] {
+  const oldLines = before.length === 0 ? [] : before.split('\n');
+  const newLines = after.length === 0 ? [] : after.split('\n');
+  const n = oldLines.length;
+  const m = newLines.length;
+
+  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i][j] =
+        oldLines[i] === newLines[j]
+          ? lcs[i + 1][j + 1] + 1
+          : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  const result: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (oldLines[i] === newLines[j]) {
+      result.push({ type: 'context', text: oldLines[i] });
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      result.push({ type: 'remove', text: oldLines[i] });
+      i++;
+    } else {
+      result.push({ type: 'add', text: newLines[j] });
+      j++;
+    }
+  }
+  while (i < n) result.push({ type: 'remove', text: oldLines[i++] });
+  while (j < m) result.push({ type: 'add', text: newLines[j++] });
+
+  return result;
+}
+
+function getEditDiffArgs(
+  toolName: string,
+  args: Record<string, unknown>
+): { path?: string; before: string; after: string } | null {
+  const isEdit = toolName === 'edit' || toolName === 'text_editor';
+  if (!isEdit) return null;
+
+  const before = args.before ?? args.old_str;
+  const after = args.after ?? args.new_str;
+  if (typeof before !== 'string' || typeof after !== 'string') return null;
+  if (before === after) return null;
+
+  const path = typeof args.path === 'string' ? args.path : undefined;
+  return { path, before, after };
+}
+
+interface DiffViewProps {
+  path?: string;
+  before: string;
+  after: string;
+  isStartExpanded: boolean;
+}
+
+function DiffView({ path, before, after, isStartExpanded }: DiffViewProps) {
+  const intl = useIntl();
+  const { resolvedTheme } = useTheme();
+  const language = languageFromPath(path);
+  const lines = computeLineDiff(before, after);
+  const highlight = lines.length <= MAX_HIGHLIGHTED_DIFF_LINES;
+  const theme = resolvedTheme === 'dark' ? oneDark : oneLight;
+
+  const gutter = (type: DiffLineType) => (type === 'add' ? '+' : type === 'remove' ? '-' : ' ');
+
+  const lineClass = (type: DiffLineType) => {
+    if (type === 'add') return 'bg-green-500/15 text-green-700 dark:text-green-300';
+    if (type === 'remove') return 'bg-red-500/15 text-red-700 dark:text-red-300';
+    return 'text-text-secondary';
+  };
+
+  return (
+    <ToolCallExpandable
+      label={<span className="pl-4 py-1 font-sans text-sm">{intl.formatMessage(i18n.diff)}</span>}
+      isStartExpanded={isStartExpanded}
+    >
+      <div className="pl-4 pr-4 py-2 overflow-x-auto">
+        <div className="font-mono text-xs leading-relaxed">
+          {lines.map((line, index) => (
+            <div key={index} className={cn('flex', lineClass(line.type))}>
+              <span className="select-none pr-2 opacity-60 flex-shrink-0">{gutter(line.type)}</span>
+              <div className="min-w-0 flex-1 whitespace-pre-wrap break-all">
+                {highlight ? (
+                  <SyntaxHighlighter
+                    language={language}
+                    style={theme}
+                    PreTag="span"
+                    CodeTag="span"
+                    customStyle={{
+                      margin: 0,
+                      padding: 0,
+                      background: 'transparent',
+                      display: 'inline',
+                      whiteSpace: 'pre-wrap',
+                      overflowWrap: 'anywhere',
+                    }}
+                    codeTagProps={{
+                      style: {
+                        background: 'transparent',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '12px',
+                      },
+                    }}
+                  >
+                    {line.text.length > 0 ? line.text : ' '}
+                  </SyntaxHighlighter>
+                ) : (
+                  line.text
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </ToolCallExpandable>
   );
 }

@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { applyThemeTokens, buildMcpHostStyles } from '../theme/theme-tokens';
+import {
+  applyFontScale,
+  applyThemeTokens,
+  buildMcpHostStyles,
+  getFontScale,
+  type FontScale,
+} from '../theme/theme-tokens';
 import type { McpUiHostStyles } from '@modelcontextprotocol/ext-apps/app-bridge';
 
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -10,6 +16,8 @@ interface ThemeContextValue {
   setUserThemePreference: (pref: ThemePreference) => void;
   resolvedTheme: ResolvedTheme;
   mcpHostStyles: McpUiHostStyles;
+  fontScale: FontScale;
+  setFontScale: (scale: FontScale) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -43,6 +51,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   // Start with light theme to avoid flash, will update once settings load
   const [userThemePreference, setUserThemePreferenceState] = useState<ThemePreference>('light');
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('light');
+  const [fontScale, setFontScaleState] = useState<FontScale>(() => getFontScale());
 
   useEffect(() => {
     async function loadThemeFromSettings() {
@@ -145,11 +154,22 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     applyThemeTokens(resolvedTheme);
   }, [resolvedTheme]);
 
+  // Apply base font scale whenever it changes (and on first mount)
+  useEffect(() => {
+    applyFontScale(fontScale);
+  }, [fontScale]);
+
+  const setFontScale = useCallback((scale: FontScale) => {
+    setFontScaleState(scale);
+  }, []);
+
   const value: ThemeContextValue = {
     userThemePreference,
     setUserThemePreference,
     resolvedTheme,
     mcpHostStyles,
+    fontScale,
+    setFontScale,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

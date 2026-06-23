@@ -123,6 +123,39 @@ export async function fetchModelsForProviders(
   return await Promise.all(modelPromises);
 }
 
+export const FAVORITE_MODELS_CONFIG_KEY = 'GOOSE_FAVORITE_MODELS';
+
+export function favoriteModelKey(provider: string, model: string): string {
+  return `${provider}::${model}`;
+}
+
+type ConfigRead = (key: string, isSecret: boolean) => Promise<unknown>;
+type ConfigUpsert = (key: string, value: unknown, isSecret: boolean) => Promise<void>;
+
+export async function readFavoriteModels(read: ConfigRead): Promise<string[]> {
+  try {
+    const value = await read(FAVORITE_MODELS_CONFIG_KEY, false);
+    return Array.isArray(value) ? (value as unknown[]).filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function toggleFavoriteModel(
+  read: ConfigRead,
+  upsert: ConfigUpsert,
+  provider: string,
+  model: string
+): Promise<string[]> {
+  const key = favoriteModelKey(provider, model);
+  const favorites = await readFavoriteModels(read);
+  const next = favorites.includes(key)
+    ? favorites.filter((f) => f !== key)
+    : [...favorites, key];
+  await upsert(FAVORITE_MODELS_CONFIG_KEY, next, false);
+  return next;
+}
+
 export async function fetchModelReasoning(
   provider: string,
   model: string,

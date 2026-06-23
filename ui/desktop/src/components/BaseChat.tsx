@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { defineMessages, useIntl } from '../i18n';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SearchView } from './conversation/SearchView';
+import { ConversationFilter, filterMessagesBySearch } from './conversation/ConversationFilter';
 import LoadingGoose from './LoadingGoose';
 import ProgressiveMessageList from './ProgressiveMessageList';
 import { MainPanelLayout } from './Layout/MainPanelLayout';
@@ -87,6 +88,11 @@ export default function BaseChat({
   const contentClassName = cn('pr-1 pb-10 pt-12', (isMobile || isNavCollapsed) && 'pt-16');
   const { droppedFiles, setDroppedFiles, handleDrop, handleDragOver } = useFileDrop();
   const onStreamFinish = useCallback(() => {}, []);
+  const [search, setSearch] = useState<{ term: string; caseSensitive: boolean }>({
+    term: '',
+    caseSensitive: false,
+  });
+  const [filterToMatches, setFilterToMatches] = useState(false);
 
   const {
     session,
@@ -198,6 +204,19 @@ export default function BaseChat({
       }, [])
       .reverse();
   }, [messages]);
+
+  const matchedMessages = useMemo(
+    () => filterMessagesBySearch(messages, search.term, search.caseSensitive),
+    [messages, search.term, search.caseSensitive]
+  );
+  const displayedMessages = filterToMatches ? matchedMessages : messages;
+
+  const handleSearch = useCallback((term: string, caseSensitive: boolean) => {
+    setSearch({ term, caseSensitive });
+    if (!term.trim()) {
+      setFilterToMatches(false);
+    }
+  }, []);
 
   const chatInputSubmit = (input: UserInput) => {
     if (recipe && input.msg.trim()) {
@@ -459,9 +478,16 @@ export default function BaseChat({
 
             {messages.length > 0 || recipe ? (
               <>
-                <SearchView>
+                <SearchView onSearch={handleSearch}>
+                  <ConversationFilter
+                    term={search.term}
+                    enabled={filterToMatches}
+                    onToggle={setFilterToMatches}
+                    matchedCount={matchedMessages.length}
+                    totalCount={messages.length}
+                  />
                   <ProgressiveMessageList
-                    messages={messages}
+                    messages={displayedMessages}
                     chat={{ sessionId }}
                     toolCallNotifications={toolCallNotifications}
                     append={(text: string) => handleSubmit({ msg: text, images: [] })}

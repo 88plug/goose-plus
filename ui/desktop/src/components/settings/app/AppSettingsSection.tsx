@@ -16,6 +16,8 @@ import UpdateSection from './UpdateSection';
 import { COST_TRACKING_ENABLED, UPDATES_ENABLED } from '../../../updates';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import ThemeSelector from '../../GooseSidebar/ThemeSelector';
+import { useTheme } from '../../../contexts/ThemeContext';
+import type { FontScale } from '../../../theme/theme-tokens';
 import BlockLogoBlack from './icons/block-lockup_black.png';
 import BlockLogoWhite from './icons/block-lockup_white.png';
 import TelemetrySettings from './TelemetrySettings';
@@ -66,6 +68,15 @@ const i18n = defineMessages({
     id: 'settings.theme.description',
     defaultMessage: 'Customize the look and feel of goose',
   },
+  fontSizeTitle: { id: 'settings.fontSize.title', defaultMessage: 'Text size' },
+  fontSizeDesc: {
+    id: 'settings.fontSize.description',
+    defaultMessage: 'Increase the base text size for easier reading',
+  },
+  fontSizeSmall: { id: 'settings.fontSize.small', defaultMessage: 'Small' },
+  fontSizeNormal: { id: 'settings.fontSize.normal', defaultMessage: 'Default' },
+  fontSizeLarge: { id: 'settings.fontSize.large', defaultMessage: 'Large' },
+  fontSizeXLarge: { id: 'settings.fontSize.xlarge', defaultMessage: 'Largest' },
   languageTitle: { id: 'settings.language.title', defaultMessage: 'Language' },
   languageDesc: {
     id: 'settings.language.description',
@@ -142,6 +153,13 @@ const i18n = defineMessages({
   },
   close: { id: 'settings.close', defaultMessage: 'Close' },
 });
+
+const FONT_SCALE_OPTIONS: Array<{ value: FontScale; message: keyof typeof i18n }> = [
+  { value: 'small', message: 'fontSizeSmall' },
+  { value: 'normal', message: 'fontSizeNormal' },
+  { value: 'large', message: 'fontSizeLarge' },
+  { value: 'xlarge', message: 'fontSizeXLarge' },
+];
 
 const LANGUAGE_OPTIONS: Array<{ value: LanguageSetting; message: keyof typeof i18n }> = [
   { value: 'system', message: 'languageSystem' },
@@ -308,6 +326,7 @@ export default function AppSettingsSection({ scrollToSection }: AppSettingsSecti
   };
 
   const intl = useIntl();
+  const { fontScale, setFontScale } = useTheme();
   const selectedLanguage =
     LANGUAGE_OPTIONS.find((option) => option.value === language) ?? LANGUAGE_OPTIONS[0];
 
@@ -452,8 +471,33 @@ export default function AppSettingsSection({ scrollToSection }: AppSettingsSecti
           <CardTitle className="mb-1">{intl.formatMessage(i18n.themeTitle)}</CardTitle>
           <CardDescription>{intl.formatMessage(i18n.themeDesc)}</CardDescription>
         </CardHeader>
-        <CardContent className="pt-4 px-4">
+        <CardContent className="pt-4 px-4 space-y-4">
           <ThemeSelector className="w-auto" hideTitle horizontal />
+
+          <div>
+            <h3 className="text-text-primary text-xs">{intl.formatMessage(i18n.fontSizeTitle)}</h3>
+            <p className="text-xs text-text-secondary max-w-md mt-[2px] mb-2">
+              {intl.formatMessage(i18n.fontSizeDesc)}
+            </p>
+            <div className="flex gap-1">
+              {FONT_SCALE_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  data-testid={`font-scale-${option.value}-button`}
+                  onClick={() => setFontScale(option.value)}
+                  className={`flex items-center justify-center gap-1 p-2 rounded-md border transition-colors text-xs ${
+                    fontScale === option.value
+                      ? 'bg-background-inverse text-text-inverse border-text-inverse hover:!bg-background-inverse hover:!text-text-inverse'
+                      : 'border-border-primary hover:!bg-background-secondary text-text-secondary hover:text-text-primary'
+                  }`}
+                  variant="ghost"
+                  size="sm"
+                >
+                  {intl.formatMessage(i18n[option.message])}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
