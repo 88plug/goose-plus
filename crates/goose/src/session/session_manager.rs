@@ -27,6 +27,18 @@ pub const CURRENT_SCHEMA_VERSION: i32 = 14;
 pub const SESSIONS_FOLDER: &str = "sessions";
 pub const DB_NAME: &str = "sessions.db";
 
+/// Columns loaded into [`Session`] from the `sessions` table.
+const SESSION_TABLE_COLUMNS: &str = "\
+id, working_dir, name, description, user_set_name, session_type, created_at, updated_at, extension_data, \
+total_tokens, input_tokens, output_tokens, \
+cache_read_tokens, cache_write_tokens, \
+accumulated_total_tokens, accumulated_input_tokens, accumulated_output_tokens, \
+accumulated_cache_read_tokens, accumulated_cache_write_tokens, \
+accumulated_cost, \
+schedule_id, recipe_json, user_recipe_values_json, \
+provider_name, model_config_json, goose_mode, \
+archived_at, project_id";
+
 #[derive(
     Debug,
     Clone,
@@ -1289,7 +1301,7 @@ impl SessionStorage {
         let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
 
         let today = chrono::Utc::now().format("%Y%m%d").to_string();
-        let session = sqlx::query_as(
+        let session = sqlx::query_as::<_, Session>(&format!(
             r#"
                 INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
                 VALUES (
@@ -1302,12 +1314,12 @@ impl SessionStorage {
                     FALSE,
                     ?,
                     ?,
-                    '{}',
+                    '{{}}',
                     ?
                 )
-                RETURNING *
-                "#,
-        )
+                RETURNING {SESSION_TABLE_COLUMNS}
+                "#
+        ))
             .bind(&today)
             .bind(&today)
             .bind(&name)
@@ -1325,21 +1337,13 @@ impl SessionStorage {
 
     async fn get_session(&self, id: &str, include_messages: bool) -> Result<Session> {
         let pool = self.pool().await?;
-        let mut session = sqlx::query_as::<_, Session>(
+        let mut session = sqlx::query_as::<_, Session>(&format!(
             r#"
-        SELECT id, working_dir, name, description, user_set_name, session_type, created_at, updated_at, extension_data,
-               total_tokens, input_tokens, output_tokens,
-               cache_read_tokens, cache_write_tokens,
-               accumulated_total_tokens, accumulated_input_tokens, accumulated_output_tokens,
-               accumulated_cache_read_tokens, accumulated_cache_write_tokens,
-               accumulated_cost,
-               schedule_id, recipe_json, user_recipe_values_json,
-               provider_name, model_config_json, goose_mode,
-               archived_at, project_id
+        SELECT {SESSION_TABLE_COLUMNS}
         FROM sessions
         WHERE id = ?
-    "#,
-        )
+    "#
+        ))
             .bind(id)
             .fetch_optional(pool)
             .await?
@@ -3335,5 +3339,60 @@ mod tests {
         let loaded = sm.get_session("cache_id", false).await.unwrap();
         assert_eq!(loaded.usage, usage);
         assert_eq!(loaded.accumulated_usage, accumulated_usage);
+    }
+
+    #[tokio::test]
+    async fn test_create_session_after_cache_token_migration() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join(SESSIONS_FOLDER).join(DB_NAME);
+
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        let pool = SqlitePoolOptions::new()
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .create_if_missing(true),
+            )
+            .await
+            .unwrap();
+
+        SessionStorage::create_schema(&pool).await.unwrap();
+
+        for column in [
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "accumulated_cache_read_tokens",
+            "accumulated_cache_write_tokens",
+        ] {
+            sqlx::query(&format!("ALTER TABLE sessions DROP COLUMN {column}"))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        sqlx::query("UPDATE schema_version SET version = 13")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        pool.close().await;
+
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+        sm.storage().pool().await.unwrap();
+
+        let session = sm
+            .create_session(
+                PathBuf::from("/tmp/migrated-create"),
+                "Migrated create".to_string(),
+                SessionType::User,
+                GooseMode::default(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(session.name, "Migrated create");
+        assert_eq!(session.working_dir, PathBuf::from("/tmp/migrated-create"));
     }
 }
