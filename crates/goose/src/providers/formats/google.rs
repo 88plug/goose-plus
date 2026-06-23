@@ -245,6 +245,32 @@ pub fn format_messages(messages: &[Message]) -> Vec<Value> {
         .collect()
 }
 
+/// Gemini rejects any `format` other than these on a STRING-typed schema node
+/// with a 400, e.g. `"format": "uri"` on the fetch extension's `url` parameter.
+fn sanitize_gemini_schema(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            let is_string_type = map.get("type").and_then(|t| t.as_str()) == Some("string");
+            if is_string_type {
+                if let Some(format) = map.get("format").and_then(|f| f.as_str()) {
+                    if format != "enum" && format != "date-time" {
+                        map.remove("format");
+                    }
+                }
+            }
+            for nested in map.values_mut() {
+                sanitize_gemini_schema(nested);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                sanitize_gemini_schema(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub fn format_tools(tools: &[Tool]) -> Vec<Value> {
     tools
         .iter()
@@ -260,7 +286,9 @@ pub fn format_tools(tools: &[Tool]) -> Vec<Value> {
                 .and_then(|v| v.as_object())
                 .is_some_and(|p| !p.is_empty())
             {
-                parameters.insert("parametersJsonSchema".to_string(), json!(tool.input_schema));
+                let mut schema = json!(tool.input_schema);
+                sanitize_gemini_schema(&mut schema);
+                parameters.insert("parametersJsonSchema".to_string(), schema);
             }
             json!(parameters)
         })
@@ -1450,6 +1478,57 @@ data: [DONE]"#;
         let schema = &result[0]["parametersJsonSchema"];
         assert_eq!(schema["properties"]["field"]["$ref"], "#/$defs/MyType");
         assert!(schema.get("$defs").is_some());
+    }
+
+    #[test]
+    fn test_format_tools_strips_unsupported_string_format() {
+        let tool = Tool::new(
+            "fetch",
+            "Fetch a URL",
+            object!({
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to fetch"
+                    },
+                    "when": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "email"
+                        }
+                    }
+                },
+                "required": ["url"]
+            }),
+        );
+
+        let result = format_tools(&[tool]);
+        let schema = &result[0]["parametersJsonSchema"];
+
+        assert!(
+            schema["properties"]["url"].get("format").is_none(),
+            "unsupported STRING format 'uri' must be stripped"
+        );
+        assert_eq!(schema["properties"]["url"]["type"], "string");
+        assert_eq!(schema["properties"]["url"]["description"], "URL to fetch");
+        assert_eq!(
+            schema["properties"]["when"]["format"], "date-time",
+            "supported 'date-time' format must be preserved"
+        );
+        assert!(
+            schema["properties"]["items"]["items"]
+                .get("format")
+                .is_none(),
+            "unsupported format inside nested array items must be stripped"
+        );
+        assert_eq!(schema["required"], json!(["url"]));
     }
 
     #[test]

@@ -612,6 +612,18 @@ pub fn create_responses_request(
         );
     }
 
+    // Requests are sent stateless (`store: false`), so reasoning tokens are not
+    // retained server-side. Reasoning models (o-series, gpt-5, gpt-5-codex)
+    // require `reasoning.encrypted_content` in `include` to return reasoning
+    // items that can be replayed across turns; without it codex/gpt-5 lose
+    // chain-of-thought between turns and reject follow-up reasoning items.
+    if is_reasoning_model {
+        payload.as_object_mut().unwrap().insert(
+            "include".to_string(),
+            json!(["reasoning.encrypted_content"]),
+        );
+    }
+
     if !tools.is_empty() {
         let tools_spec: Vec<Value> = tools
             .iter()
@@ -1365,6 +1377,58 @@ mod tests {
         assert_eq!(result["model"], "o3-mini");
         assert_eq!(result["reasoning"]["effort"], "high");
         assert_eq!(result["reasoning"]["summary"], "auto");
+    }
+
+    #[test]
+    fn test_responses_request_includes_encrypted_reasoning_for_codex_model() {
+        for model_name in ["gpt-5-codex", "gpt-5.2-codex", "o3", "gpt-5"] {
+            let model_config = ModelConfig {
+                model_name: model_name.to_string(),
+                context_limit: None,
+                temperature: None,
+                max_tokens: None,
+                toolshim: false,
+                toolshim_model: None,
+                fast_model_config: None,
+                request_params: None,
+                reasoning: None,
+            };
+
+            let result =
+                create_responses_request(&model_config, "You are helpful.", &[], &[]).unwrap();
+
+            assert_eq!(
+                result["include"],
+                json!(["reasoning.encrypted_content"]),
+                "reasoning model {model_name} must request encrypted reasoning for stateless replay"
+            );
+            assert_eq!(
+                result["store"], false,
+                "stateless store is required for encrypted reasoning to be meaningful"
+            );
+        }
+    }
+
+    #[test]
+    fn test_responses_request_omits_include_for_non_reasoning_model() {
+        let model_config = ModelConfig {
+            model_name: "gpt-4o".to_string(),
+            context_limit: None,
+            temperature: None,
+            max_tokens: None,
+            toolshim: false,
+            toolshim_model: None,
+            fast_model_config: None,
+            request_params: None,
+            reasoning: None,
+        };
+
+        let result = create_responses_request(&model_config, "You are helpful.", &[], &[]).unwrap();
+
+        assert!(
+            result.get("include").is_none(),
+            "non-reasoning models must not request encrypted reasoning content"
+        );
     }
 
     #[test]

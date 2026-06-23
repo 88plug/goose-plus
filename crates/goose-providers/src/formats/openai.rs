@@ -958,6 +958,27 @@ where
             } else if chunk.choices[0].delta.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty()) {
                 let mut tool_call_data: ToolCallData = HashMap::new();
 
+                // Capture any text the provider streams alongside the tool_calls. Some
+                // providers include a trailing summary in the same (or a continuation)
+                // chunk as the tool call; feed it through the think filter so it is not
+                // dropped. See #8503.
+                if let (Some(text), _) = extract_content_and_signature(chunk.choices[0].delta.content.as_ref()) {
+                    let filtered = think_filter.push(&text);
+                    if !saw_structured_reasoning && !filtered.thinking.is_empty() {
+                        pending_inline_thinking.push_str(&filtered.thinking);
+                    }
+                    if !filtered.content.is_empty() {
+                        yield (
+                            Some(Message::new(
+                                Role::Assistant,
+                                chrono::Utc::now().timestamp(),
+                                vec![MessageContent::text(filtered.content)],
+                            )),
+                            None,
+                        );
+                    }
+                }
+
                 if let Some(tool_calls) = &chunk.choices[0].delta.tool_calls {
                     for tool_call in tool_calls {
                         if let (Some(index), Some(id), Some(name)) = (tool_call.index, &tool_call.id, &tool_call.function.name) {
@@ -996,6 +1017,22 @@ where
                                         if !rc.is_empty() {
                                             saw_structured_reasoning = true;
                                             pending_inline_thinking.clear();
+                                        }
+                                    }
+                                    if let (Some(text), _) = extract_content_and_signature(tool_chunk.choices[0].delta.content.as_ref()) {
+                                        let filtered = think_filter.push(&text);
+                                        if !saw_structured_reasoning && !filtered.thinking.is_empty() {
+                                            pending_inline_thinking.push_str(&filtered.thinking);
+                                        }
+                                        if !filtered.content.is_empty() {
+                                            yield (
+                                                Some(Message::new(
+                                                    Role::Assistant,
+                                                    chrono::Utc::now().timestamp(),
+                                                    vec![MessageContent::text(filtered.content)],
+                                                )),
+                                                None,
+                                            );
                                         }
                                     }
                                     if let Some(delta_tool_calls) = &tool_chunk.choices[0].delta.tool_calls {
@@ -2383,6 +2420,8 @@ mod tests {
         usage: Option<ProviderUsage>,
         tool_calls: Vec<String>,
         has_text_content: bool,
+        text: String,
+        thinking: String,
     }
 
     async fn run_streaming_test(response_lines: &str) -> anyhow::Result<StreamingUsageTestResult> {
@@ -2396,6 +2435,8 @@ mod tests {
             usage: None,
             tool_calls: Vec::new(),
             has_text_content: false,
+            text: String::new(),
+            thinking: String::new(),
         };
 
         while let Some(Ok((message, usage))) = messages.next().await {
@@ -2413,6 +2454,10 @@ mod tests {
                         }
                         MessageContent::Text(text) if !text.text.is_empty() => {
                             result.has_text_content = true;
+                            result.text.push_str(&text.text);
+                        }
+                        MessageContent::Thinking(thinking) => {
+                            result.thinking.push_str(&thinking.thinking);
                         }
                         _ => {}
                     }
@@ -2536,6 +2581,80 @@ data: [DONE]
             .all(|name| name == "developer__shell"));
 
         assert_usage_yielded_once(&result, 4982, 122, 5104);
+
+        Ok(())
+    }
+
+    // #8503: the final text segment must not be dropped when the last chunk
+    // carries both content and a finish_reason before [DONE].
+    #[tokio::test]
+    async fn test_streaming_final_chunk_with_content_and_finish_reason() -> anyhow::Result<()> {
+        let response_lines = r#"
+data: {"model":"deepseek-chat","choices":[{"delta":{"role":"assistant","content":"I counted from 1 to 10."},"index":0,"finish_reason":null}]}
+data: {"model":"deepseek-chat","choices":[{"delta":{"content":" Summary: done"},"index":0,"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}
+data: [DONE]
+"#;
+
+        let result = run_streaming_test(response_lines).await?;
+
+        assert!(result.has_text_content, "Expected text content in response");
+        assert!(
+            result.text.contains("Summary: done"),
+            "Final text segment was dropped, got: {:?}",
+            result.text
+        );
+        assert_usage_yielded_once(&result, 12, 8, 20);
+
+        Ok(())
+    }
+
+    // #9397/#9675: reasoning_content streamed by openai-compatible providers
+    // (DeepSeek and friends) must be accumulated and emitted as thinking.
+    #[tokio::test]
+    async fn test_streaming_reasoning_content_emitted_as_thinking() -> anyhow::Result<()> {
+        let response_lines = r#"
+data: {"model":"deepseek-reasoner","choices":[{"delta":{"role":"assistant","reasoning_content":"Let me "},"index":0,"finish_reason":null}]}
+data: {"model":"deepseek-reasoner","choices":[{"delta":{"reasoning_content":"think about it."},"index":0,"finish_reason":null}]}
+data: {"model":"deepseek-reasoner","choices":[{"delta":{"content":"The answer is 42."},"index":0,"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":10,"total_tokens":15}}
+data: [DONE]
+"#;
+
+        let result = run_streaming_test(response_lines).await?;
+
+        assert_eq!(
+            result.thinking, "Let me think about it.",
+            "reasoning_content should be accumulated and emitted as thinking"
+        );
+        assert!(
+            result.text.contains("The answer is 42."),
+            "final content lost, got: {:?}",
+            result.text
+        );
+        assert_usage_yielded_once(&result, 5, 10, 15);
+
+        Ok(())
+    }
+
+    // #8503: a trailing text summary that arrives in the same chunk as the
+    // tool_calls finish_reason must not be dropped.
+    #[tokio::test]
+    async fn test_streaming_text_alongside_tool_call_not_dropped() -> anyhow::Result<()> {
+        let response_lines = r#"
+data: {"model":"deepseek-chat","choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"developer__shell","arguments":""}}]},"index":0,"finish_reason":null}]}
+data: {"model":"deepseek-chat","choices":[{"delta":{"content":"Running the command now.","tool_calls":[{"index":0,"function":{"arguments":"{\"command\":\"ls\"}"}}]},"index":0,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":7,"completion_tokens":9,"total_tokens":16}}
+data: [DONE]
+"#;
+
+        let result = run_streaming_test(response_lines).await?;
+
+        assert_eq!(result.tool_calls.len(), 1, "Expected 1 tool call");
+        assert_eq!(result.tool_calls[0], "developer__shell");
+        assert!(
+            result.text.contains("Running the command now."),
+            "text alongside tool_calls was dropped, got: {:?}",
+            result.text
+        );
+        assert_usage_yielded_once(&result, 7, 9, 16);
 
         Ok(())
     }
