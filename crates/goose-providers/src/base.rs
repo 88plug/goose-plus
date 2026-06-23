@@ -478,52 +478,62 @@ pub trait Provider: Send + Sync {
         })?;
 
         let provider_name = self.get_name();
+        let toolshim = self.get_model_config().toolshim;
 
-        // Get all text-capable models with their release dates
-        let mut models_with_dates: Vec<(String, Option<String>)> = all_models
-            .iter()
-            .filter_map(|model| {
-                let canonical_id = map_to_canonical_model(provider_name, model, registry)?;
+        // Classify each model as mapped (resolves to a canonical entry) or
+        // unmapped. If at least one model maps, the registry is treated as
+        // authoritative for this provider: we keep the canonical chat models
+        // and drop the unmapped remainder (embeddings/TTS/image, new aliases).
+        // If nothing maps (proxy/OpenRouter/custom endpoints), the registry
+        // has no opinion, so we surface the raw list verbatim rather than
+        // silently hiding models the user's key can actually reach.
+        let mut mapped_chat_models: Vec<(String, Option<String>)> = Vec::new();
+        let mut any_mapped = false;
 
-                let (provider, model_name) = canonical_id.split_once('/')?;
-                let canonical_model = registry.get(provider, model_name)?;
+        for model in &all_models {
+            let Some(canonical_id) = map_to_canonical_model(provider_name, model, registry) else {
+                continue;
+            };
+            any_mapped = true;
 
-                if !canonical_model
-                    .modalities
-                    .input
-                    .contains(&crate::canonical::Modality::Text)
-                {
-                    return None;
-                }
+            let Some((provider, model_name)) = canonical_id.split_once('/') else {
+                continue;
+            };
+            let Some(canonical_model) = registry.get(provider, model_name) else {
+                continue;
+            };
 
-                if !canonical_model.tool_call && !self.get_model_config().toolshim {
-                    return None;
-                }
+            if !canonical_model
+                .modalities
+                .input
+                .contains(&crate::canonical::Modality::Text)
+            {
+                continue;
+            }
 
-                let release_date = canonical_model.release_date.clone();
+            if !canonical_model.tool_call && !toolshim {
+                continue;
+            }
 
-                Some((model.clone(), release_date))
-            })
-            .collect();
+            mapped_chat_models.push((model.clone(), canonical_model.release_date.clone()));
+        }
+
+        if !any_mapped {
+            return Ok(all_models);
+        }
 
         // Sort by release date (most recent first), then alphabetically for models without dates
-        models_with_dates.sort_by(|a, b| match (&a.1, &b.1) {
+        mapped_chat_models.sort_by(|a, b| match (&a.1, &b.1) {
             (Some(date_a), Some(date_b)) => date_b.cmp(date_a),
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => a.0.cmp(&b.0),
         });
 
-        let inventory_models: Vec<String> = models_with_dates
+        Ok(mapped_chat_models
             .into_iter()
             .map(|(name, _)| name)
-            .collect();
-
-        if inventory_models.is_empty() {
-            Ok(all_models)
-        } else {
-            Ok(inventory_models)
-        }
+            .collect())
     }
 
     async fn fetch_recommended_model_info(&self) -> Result<Vec<ModelInfo>, ProviderError> {
@@ -740,5 +750,68 @@ mod tests {
         assert_eq!(info.input_token_cost, Some(0.0000025));
         assert_eq!(info.output_token_cost, Some(0.00001));
         assert_eq!(info.currency, Some("$".to_string()));
+    }
+
+    struct MockProvider {
+        name: String,
+        models: Vec<String>,
+    }
+
+    #[async_trait]
+    impl Provider for MockProvider {
+        fn get_name(&self) -> &str {
+            &self.name
+        }
+
+        async fn stream(
+            &self,
+            _model_config: &ModelConfig,
+            _session_id: &str,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<MessageStream, ProviderError> {
+            Err(ProviderError::NotImplemented("mock".to_string()))
+        }
+
+        fn get_model_config(&self) -> ModelConfig {
+            ModelConfig::new_or_fail(self.models.first().map(String::as_str).unwrap_or("gpt-4o"))
+        }
+
+        async fn fetch_supported_models(&self) -> Result<Vec<String>, ProviderError> {
+            Ok(self.models.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_recommended_models_uncovered_provider_surfaces_all() {
+        let provider = MockProvider {
+            name: "some-unknown-proxy".to_string(),
+            models: vec![
+                "openrouter/qwen/qwen3-plus:free".to_string(),
+                "custom-alias-model".to_string(),
+                "another-proxy-model".to_string(),
+            ],
+        };
+
+        let recommended = provider.fetch_recommended_models().await.unwrap();
+
+        assert_eq!(recommended.len(), 3);
+        assert!(recommended.contains(&"openrouter/qwen/qwen3-plus:free".to_string()));
+        assert!(recommended.contains(&"custom-alias-model".to_string()));
+        assert!(recommended.contains(&"another-proxy-model".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_recommended_models_covered_openai_keeps_chat_drops_embedding() {
+        let provider = MockProvider {
+            name: "openai".to_string(),
+            models: vec!["gpt-4o".to_string(), "text-embedding-3-small".to_string()],
+        };
+
+        let recommended = provider.fetch_recommended_models().await.unwrap();
+
+        assert!(recommended.contains(&"gpt-4o".to_string()));
+        assert!(!recommended.contains(&"text-embedding-3-small".to_string()));
     }
 }

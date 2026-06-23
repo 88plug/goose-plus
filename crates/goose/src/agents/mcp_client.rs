@@ -2,6 +2,7 @@ use crate::action_required_manager::{ActionRequiredManager, ElicitationOutcome};
 use crate::agents::tool_execution::ToolCallContext;
 use crate::agents::types::SharedProvider;
 use crate::session_context::{SESSION_ID_HEADER, WORKING_DIR_HEADER};
+use futures::future::BoxFuture;
 use rmcp::model::{
     CreateElicitationRequestParams, CreateElicitationResult, ElicitationAction, ErrorCode,
     ExtensionCapabilities, Extensions, JsonObject, ListRootsResult, LoggingMessageNotification,
@@ -36,6 +37,58 @@ use tokio_util::sync::CancellationToken;
 pub type BoxError = Box<dyn std::error::Error + Sync + Send>;
 
 pub type Error = rmcp::ServiceError;
+
+/// Builds a fresh [`RunningService`] for an MCP extension whose transport has
+/// dropped. Supplied by the caller (e.g. the extension manager that knows how to
+/// re-spawn the underlying process/transport) and invoked by [`McpClient`] to
+/// recover from [`ServiceError::TransportClosed`].
+pub type ReconnectFactory = Arc<
+    dyn Fn() -> BoxFuture<'static, Result<RunningService<RoleClient, GooseClient>, BoxError>>
+        + Send
+        + Sync,
+>;
+
+const RECONNECT_MAX_ATTEMPTS: u32 = 3;
+const RECONNECT_INITIAL_BACKOFF: Duration = Duration::from_millis(250);
+const RECONNECT_MAX_BACKOFF: Duration = Duration::from_secs(5);
+
+/// Exponential backoff delay for reconnect attempt `attempt` (0-indexed),
+/// doubling from [`RECONNECT_INITIAL_BACKOFF`] and capped at
+/// [`RECONNECT_MAX_BACKOFF`].
+fn reconnect_backoff(attempt: u32) -> Duration {
+    let scaled = RECONNECT_INITIAL_BACKOFF.saturating_mul(1u32 << attempt.min(16));
+    scaled.min(RECONNECT_MAX_BACKOFF)
+}
+
+/// Runs `build` up to [`RECONNECT_MAX_ATTEMPTS`] times, sleeping
+/// [`reconnect_backoff`] between attempts. Returns the first success, or
+/// [`ServiceError::TransportClosed`] after the last attempt fails.
+async fn retry_with_backoff<T, F, Fut>(mut build: F) -> Result<T, Error>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, BoxError>>,
+{
+    let mut last_err: Option<BoxError> = None;
+    for attempt in 0..RECONNECT_MAX_ATTEMPTS {
+        if attempt > 0 {
+            tokio::time::sleep(reconnect_backoff(attempt - 1)).await;
+        }
+        match build().await {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                tracing::warn!(attempt, error = %err, "MCP reconnect attempt failed");
+                last_err = Some(err);
+            }
+        }
+    }
+
+    tracing::error!(
+        attempts = RECONNECT_MAX_ATTEMPTS,
+        error = ?last_err,
+        "MCP reconnect exhausted all attempts"
+    );
+    Err(ServiceError::TransportClosed)
+}
 
 const MCP_APPS_UI_EXTENSION_ID: &str = "io.modelcontextprotocol/ui";
 const MCP_APPS_UI_MIME_TYPE: &str = "text/html;profile=mcp-app";
@@ -456,6 +509,11 @@ pub struct McpClient {
     server_info: Option<InitializeResult>,
     timeout: std::time::Duration,
     docker_container: Option<String>,
+    /// When set, a dropped transport is recovered by rebuilding the underlying
+    /// [`RunningService`] and retrying the request once. `None` (the default)
+    /// preserves the upstream behaviour: a closed transport leaves the
+    /// extension dead until manual intervention.
+    reconnect_factory: Option<ReconnectFactory>,
 }
 
 impl McpClient {
@@ -516,11 +574,36 @@ impl McpClient {
             server_info,
             timeout,
             docker_container,
+            reconnect_factory: None,
         })
+    }
+
+    /// Enable opt-in auto-reconnect: when the transport drops, the supplied
+    /// factory rebuilds the underlying [`RunningService`] and the failed
+    /// request is retried once. Returns `self` so it can be chained after
+    /// [`McpClient::connect`].
+    pub fn with_reconnect_factory(mut self, factory: ReconnectFactory) -> Self {
+        self.reconnect_factory = Some(factory);
+        self
     }
 
     pub fn docker_container(&self) -> Option<&str> {
         self.docker_container.as_deref()
+    }
+
+    /// Rebuilds the [`RunningService`] via the reconnect factory using bounded
+    /// exponential backoff, then swaps it in under the client mutex and
+    /// re-establishes the session id.
+    async fn reconnect(&self, session_id: &str) -> Result<(), Error> {
+        let Some(factory) = self.reconnect_factory.as_ref() else {
+            return Err(ServiceError::TransportClosed);
+        };
+
+        let new_service = retry_with_backoff(|| factory()).await?;
+        let mut client = self.client.lock().await;
+        new_service.service().set_session_id(session_id).await;
+        *client = new_service;
+        Ok(())
     }
 
     async fn do_update_working_dir(&self, new_dir: PathBuf) -> Result<(), Error> {
@@ -539,6 +622,31 @@ impl McpClient {
         cancel_token: CancellationToken,
     ) -> Result<ServerResult, Error> {
         let request = inject_session_context_into_request(request, Some(session_id), working_dir);
+
+        let result = self
+            .dispatch_request(session_id, request.clone(), &cancel_token)
+            .await;
+
+        // A dropped transport is the one failure mode auto-reconnect targets.
+        // Retry exactly once, only when a factory is configured, after
+        // rebuilding the underlying service.
+        if matches!(result, Err(ServiceError::TransportClosed)) && self.reconnect_factory.is_some()
+        {
+            self.reconnect(session_id).await?;
+            return self
+                .dispatch_request(session_id, request, &cancel_token)
+                .await;
+        }
+
+        result
+    }
+
+    async fn dispatch_request(
+        &self,
+        session_id: &str,
+        request: ClientRequest,
+        cancel_token: &CancellationToken,
+    ) -> Result<ServerResult, Error> {
         // The inner mutex is held only for the send; the actual response wait
         // happens outside the lock so concurrent calls can overlap.
         let handle = {
@@ -549,7 +657,7 @@ impl McpClient {
                 .await
         }?;
 
-        await_response(handle, self.timeout, &cancel_token).await
+        await_response(handle, self.timeout, cancel_token).await
     }
 }
 
@@ -1171,5 +1279,63 @@ mod tests {
         assert_eq!(result.roots.len(), 1);
         assert_eq!(result.roots[0].uri, "file:///tmp/test-project");
         assert_eq!(result.roots[0].name.as_deref(), Some("working_directory"));
+    }
+
+    #[test]
+    fn test_reconnect_backoff_is_bounded_and_exponential() {
+        assert_eq!(reconnect_backoff(0), Duration::from_millis(250));
+        assert_eq!(reconnect_backoff(1), Duration::from_millis(500));
+        assert_eq!(reconnect_backoff(2), Duration::from_secs(1));
+        // Doubling continues until it saturates at the 5s cap.
+        assert_eq!(reconnect_backoff(3), Duration::from_secs(2));
+        assert_eq!(reconnect_backoff(4), Duration::from_secs(4));
+        assert_eq!(reconnect_backoff(5), RECONNECT_MAX_BACKOFF);
+        assert_eq!(reconnect_backoff(100), RECONNECT_MAX_BACKOFF);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_retry_with_backoff_succeeds_after_transient_failures() {
+        let calls = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let calls_clone = calls.clone();
+
+        let result = retry_with_backoff(|| {
+            let calls = calls_clone.clone();
+            async move {
+                let n = calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if n < RECONNECT_MAX_ATTEMPTS - 1 {
+                    Err::<u32, BoxError>("transport closed".into())
+                } else {
+                    Ok(n)
+                }
+            }
+        })
+        .await;
+
+        assert_eq!(result.unwrap(), RECONNECT_MAX_ATTEMPTS - 1);
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            RECONNECT_MAX_ATTEMPTS
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_retry_with_backoff_gives_up_after_max_attempts() {
+        let calls = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let calls_clone = calls.clone();
+
+        let result: Result<u32, Error> = retry_with_backoff(|| {
+            let calls = calls_clone.clone();
+            async move {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err::<u32, BoxError>("transport closed".into())
+            }
+        })
+        .await;
+
+        assert!(matches!(result, Err(ServiceError::TransportClosed)));
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            RECONNECT_MAX_ATTEMPTS
+        );
     }
 }

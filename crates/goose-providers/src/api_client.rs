@@ -13,7 +13,6 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const DEFAULT_PROVIDER_TIMEOUT_SECS: u64 = 600;
 const SESSION_ID_HEADER: &str = "agent-session-id";
 
 pub struct ApiClient {
@@ -237,7 +236,7 @@ impl ApiClient {
         Self::with_timeout_and_tls(
             host,
             auth,
-            Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS),
+            crate::retry::provider_timeout_from_env(),
             tls_config,
         )
     }
@@ -607,7 +606,43 @@ ShGoCNbfNS+COlPMRAujyDlATZcLs9p4tA==
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use test_case::test_case;
+
+    /// `GOOSE_PROVIDER_TIMEOUT` is process-global; serialize the env-mutating
+    /// tests so they don't observe each other's writes.
+    static ENV_GUARD: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn test_new_with_tls_uses_default_timeout() {
+        let _guard = ENV_GUARD.lock().unwrap();
+        std::env::remove_var("GOOSE_PROVIDER_TIMEOUT");
+
+        let client = ApiClient::new_with_tls(
+            "http://localhost:8080".to_string(),
+            AuthMethod::NoAuth,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(client.timeout, Duration::from_secs(600));
+    }
+
+    #[test]
+    fn test_new_with_tls_honors_env_override() {
+        let _guard = ENV_GUARD.lock().unwrap();
+        std::env::set_var("GOOSE_PROVIDER_TIMEOUT", "42");
+
+        let client = ApiClient::new_with_tls(
+            "http://localhost:8080".to_string(),
+            AuthMethod::NoAuth,
+            None,
+        )
+        .unwrap();
+
+        std::env::remove_var("GOOSE_PROVIDER_TIMEOUT");
+        assert_eq!(client.timeout, Duration::from_secs(42));
+    }
 
     #[test_case(Some("test-session_id-456"), None, Some("test-session_id-456"); "header set")]
     #[test_case(Some("new-session"), Some(("Agent-Session-Id", "old-session")), Some("new-session"); "replaces existing")]

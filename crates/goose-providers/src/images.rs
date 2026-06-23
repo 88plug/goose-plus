@@ -33,11 +33,39 @@ pub fn convert_image(image: &ImageContent, image_format: &ImageFormat) -> Value 
     }
 }
 
-pub fn detect_image_path(text: &str) -> Option<&str> {
+/// Undo POSIX-style shell escaping that drag-and-drop sources (e.g. macOS
+/// Finder) apply to filenames: a backslash before any non-alphanumeric
+/// character escapes that character, so we drop the backslash. A trailing lone
+/// backslash is kept verbatim. Returns `None` when nothing was escaped so the
+/// caller can avoid an allocation in the common case.
+fn unescape_path(candidate: &str) -> Option<String> {
+    if !candidate.contains('\\') {
+        return None;
+    }
+    let mut out = String::with_capacity(candidate.len());
+    let mut chars = candidate.chars().peekable();
+    let mut changed = false;
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(&next) = chars.peek() {
+                if !next.is_alphanumeric() {
+                    out.push(next);
+                    chars.next();
+                    changed = true;
+                    continue;
+                }
+            }
+        }
+        out.push(c);
+    }
+    changed.then_some(out)
+}
+
+pub fn detect_image_path(text: &str) -> Option<String> {
     const EXTENSIONS: [&str; 3] = [".png", ".jpg", ".jpeg"];
     const MAX_PATH_LEN: usize = 4096;
 
-    let mut best: Option<(usize, &str)> = None;
+    let mut best: Option<(usize, String)> = None;
     let mut from = 0;
     while from < text.len() {
         let Some(end) = EXTENSIONS
@@ -70,20 +98,30 @@ pub fn detect_image_path(text: &str) -> Option<&str> {
                     let Some(candidate) = text.get(start..end) else {
                         continue;
                     };
-                    let path = Path::new(candidate);
-                    if path.is_absolute() && path.is_file() && is_image_file(path) {
-                        // Keep the first referenced path, but allow a longer
-                        // match anchored at the same start to extend it (a
-                        // whitespace-terminated extension may be a prefix of a
-                        // spaced filename ending in a later extension).
-                        match best {
-                            Some((best_start, _)) if start == best_start => {
-                                best = Some((start, candidate));
+                    // Drag-and-drop sources backslash-escape spaces and other
+                    // shell metacharacters; try the raw slice first, then an
+                    // unescaped form so escaped filenames still resolve on disk.
+                    let resolved = if Path::new(candidate).is_file() {
+                        Some(candidate.to_string())
+                    } else {
+                        unescape_path(candidate).filter(|unescaped| Path::new(unescaped).is_file())
+                    };
+                    if let Some(resolved) = resolved {
+                        let path = Path::new(&resolved);
+                        if path.is_absolute() && is_image_file(path) {
+                            // Keep the first referenced path, but allow a longer
+                            // match anchored at the same start to extend it (a
+                            // whitespace-terminated extension may be a prefix of
+                            // a spaced filename ending in a later extension).
+                            match best {
+                                Some((best_start, _)) if start == best_start => {
+                                    best = Some((start, resolved));
+                                }
+                                None => best = Some((start, resolved)),
+                                Some(_) => {}
                             }
-                            None => best = Some((start, candidate)),
-                            Some(_) => {}
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -196,7 +234,7 @@ mod tests {
 
         // Test with valid PNG file using absolute path
         let text = format!("Here is an image {}", png_path_str);
-        assert_eq!(detect_image_path(&text), Some(png_path_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(png_path_str));
 
         // Test with non-image file that has .png extension
         let text = format!("Here is a fake image {}", fake_png_path.to_str().unwrap());
@@ -225,25 +263,25 @@ mod tests {
         let png_path_str = png_path.to_str().unwrap();
 
         let text = format!("please describe {} for me", png_path_str);
-        assert_eq!(detect_image_path(&text), Some(png_path_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(png_path_str));
 
         // Case-insensitive extension also matches.
         let upper = temp_dir.path().join("Another Shot.PNG");
         std::fs::write(&upper, png_data).unwrap();
         let upper_str = upper.to_str().unwrap();
         let text = format!("see {}", upper_str);
-        assert_eq!(detect_image_path(&text), Some(upper_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(upper_str));
 
         // Quoted path with spaces: the closing quote terminates the candidate.
         let text = format!("describe \"{}\" please", png_path_str);
-        assert_eq!(detect_image_path(&text), Some(png_path_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(png_path_str));
         let text = format!("describe '{}'", png_path_str);
-        assert_eq!(detect_image_path(&text), Some(png_path_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(png_path_str));
 
         // A stray closing quote in prose must not act as a terminator for an
         // unquoted path.
         let text = format!("here {}\" trailing", png_path_str);
-        assert_eq!(detect_image_path(&text), Some(png_path_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(png_path_str));
 
         // When a spaced filename contains an earlier image extension, prefer
         // the longer existing candidate over the embedded prefix.
@@ -253,7 +291,7 @@ mod tests {
         let prefix = temp_dir.path().join("Screen Shot.png");
         std::fs::write(&prefix, png_data).unwrap();
         let text = format!("look at {}", edited_str);
-        assert_eq!(detect_image_path(&text), Some(edited_str));
+        assert_eq!(detect_image_path(&text).as_deref(), Some(edited_str));
 
         // With multiple distinct images, the first referenced one wins even if
         // a later one has a longer path.
@@ -266,7 +304,74 @@ mod tests {
             a.to_str().unwrap(),
             longer.to_str().unwrap()
         );
-        assert_eq!(detect_image_path(&text), Some(a.to_str().unwrap()));
+        assert_eq!(
+            detect_image_path(&text).as_deref(),
+            Some(a.to_str().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_detect_image_path_with_shell_escapes() {
+        // macOS Finder drag-and-drop backslash-escapes spaces and other shell
+        // metacharacters in filenames; detection must resolve the unescaped
+        // path against disk.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let png_data = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+        let cases = [
+            "My Project (v2).png", // parentheses
+            "Logo & Mark.png",     // ampersand
+            "Cost $5.png",         // dollar
+            "It's mine.png",       // single quote
+            "Array [0].png",       // bracket
+        ];
+
+        for name in cases {
+            let png_path = temp_dir.path().join(name);
+            std::fs::write(&png_path, png_data).unwrap();
+            let real = png_path.to_str().unwrap();
+
+            // Re-create the escaped form a shell/Finder would produce: backslash
+            // before every non-alphanumeric, non-separator character.
+            let escaped: String = real
+                .chars()
+                .flat_map(|c| {
+                    if !c.is_alphanumeric() && c != '/' && c != '.' && c != '-' && c != '_' {
+                        vec!['\\', c]
+                    } else {
+                        vec![c]
+                    }
+                })
+                .collect();
+            assert_ne!(escaped, real, "case {name} should produce escapes");
+
+            let text = format!("please describe {} for me", escaped);
+            assert_eq!(
+                detect_image_path(&text).as_deref(),
+                Some(real),
+                "failed to detect escaped path for {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_unescape_path() {
+        assert_eq!(unescape_path("/a/no-escapes.png"), None);
+        assert_eq!(
+            unescape_path("/a/My\\ Project\\ \\(v2\\).png").as_deref(),
+            Some("/a/My Project (v2).png")
+        );
+        assert_eq!(
+            unescape_path("/a/back\\\\slash.png").as_deref(),
+            Some("/a/back\\slash.png")
+        );
+        // A trailing lone backslash is kept verbatim.
+        assert_eq!(
+            unescape_path("/a/trailing\\").as_deref(),
+            Some("/a/trailing\\")
+        );
+        // Backslash before an alphanumeric is preserved (not a shell escape).
+        assert_eq!(unescape_path("/a/\\name.png"), None);
     }
 
     #[test]
