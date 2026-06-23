@@ -1,6 +1,7 @@
 //! Shared utilities for xAI provider routing and model handling.
 //! Core logic ported from packages/ai/src/providers/xai-shared.ts in pi.
 
+use crate::thinking::ThinkingEffort;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
@@ -28,11 +29,11 @@ pub static XAI_CONTEXT_WINDOWS: LazyLock<std::collections::HashMap<&'static str,
         // Standard models
         m.insert("grok-3", 131072);
         m.insert("grok-3-fast", 131072);
-        // Grok 4 Fast lineage – 2M tier (published, matches pi spec)
-        m.insert("grok-4.20-0309-non-reasoning", 2_000_000);
-        m.insert("grok-4.20-0309-reasoning", 2_000_000);
-        m.insert("grok-4.20-multi-agent-0309", 2_000_000);
-        m.insert("grok-4.3", 2_000_000);
+        // Grok 4 lineage – 1M, verified against GET /v1/models context_length (OAuth)
+        m.insert("grok-4.20-0309-non-reasoning", 1_000_000);
+        m.insert("grok-4.20-0309-reasoning", 1_000_000);
+        m.insert("grok-4.20-multi-agent-0309", 1_000_000);
+        m.insert("grok-4.3", 1_000_000);
         // Grok Build / Composer (CLI proxy or public)
         m.insert("grok-build", 512_000);
         m.insert("grok-build-0.1", 256_000);
@@ -129,16 +130,18 @@ pub fn grok_supports_reasoning_effort(model_id: &str) -> bool {
     normalized.starts_with("grok-4.3") || is_xai_multi_agent_model(model_id)
 }
 
-/// Mapping from generic thinking levels to xAI Responses effort values.
-/// Only models that support explicit effort use this.
-pub fn xai_reasoning_effort_for_thinking(thinking_level: &str) -> Option<&'static str> {
-    match thinking_level {
-        "minimal" => Some("low"),
-        "low" => Some("low"),
-        "medium" => Some("medium"),
-        "high" => Some("high"),
-        "xhigh" => Some("high"),
-        _ => None,
+/// Map a goose thinking effort to xAI's `reasoning_effort` value.
+///
+/// xAI accepts only `none`, `low`, `medium`, `high` — it rejects `max` with
+/// "Invalid reasoning effort" — so `Max` is clamped to `high`. `Off` maps to
+/// `none`, which on reasoning models like grok-4.3 disables extended thinking.
+pub fn xai_reasoning_effort_value(effort: ThinkingEffort) -> &'static str {
+    match effort {
+        ThinkingEffort::Off => "none",
+        ThinkingEffort::Low => "low",
+        ThinkingEffort::Medium => "medium",
+        ThinkingEffort::High => "high",
+        ThinkingEffort::Max => "high",
     }
 }
 
@@ -184,12 +187,22 @@ mod tests {
     }
 
     #[test]
+    fn test_reasoning_effort_value_maps_to_xai_valid_set() {
+        // xAI accepts only none/low/medium/high; "max" is rejected by the API.
+        assert_eq!(xai_reasoning_effort_value(ThinkingEffort::Off), "none");
+        assert_eq!(xai_reasoning_effort_value(ThinkingEffort::Low), "low");
+        assert_eq!(xai_reasoning_effort_value(ThinkingEffort::Medium), "medium");
+        assert_eq!(xai_reasoning_effort_value(ThinkingEffort::High), "high");
+        assert_eq!(xai_reasoning_effort_value(ThinkingEffort::Max), "high");
+    }
+
+    #[test]
     fn test_context_windows_match_live_api() {
-        // Grok 4 Fast lineage = 2M (published tier, no 1M guesses)
-        assert_eq!(xai_context_window("grok-4.3"), Some(2_000_000));
+        // Grok 4 lineage = 1M, verified against GET /v1/models context_length
+        assert_eq!(xai_context_window("grok-4.3"), Some(1_000_000));
         assert_eq!(
             xai_context_window("grok-4.20-0309-reasoning"),
-            Some(2_000_000)
+            Some(1_000_000)
         );
         assert_eq!(xai_context_window("grok-build-0.1"), Some(256_000));
         assert_eq!(xai_context_window("grok-build"), Some(512_000));

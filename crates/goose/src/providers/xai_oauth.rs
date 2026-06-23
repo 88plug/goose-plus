@@ -16,6 +16,7 @@ use goose_providers::xai::shared::{xai_base_url_for_model, xai_context_window};
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -698,6 +699,14 @@ impl XaiOAuthProvider {
     }
 }
 
+/// True when an xAI error indicates the model rejected the `reasoning_effort`
+/// parameter (unsupported model, or an out-of-range effort value).
+fn is_reasoning_effort_rejected(err: &ProviderError) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("reasoning")
+        && (msg.contains("does not support") || msg.contains("invalid reasoning"))
+}
+
 #[async_trait]
 impl Provider for XaiOAuthProvider {
     fn get_name(&self) -> &str {
@@ -716,56 +725,42 @@ impl Provider for XaiOAuthProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        use goose_providers::xai::responses::{stream_xai_responses, XaiResponsesStreamOptions};
+        use goose_providers::xai::shared::{
+            grok_supports_reasoning_effort, xai_reasoning_effort_value,
+        };
 
-        // Use Responses API only when reasoning effort is explicitly configured.
-        // During initial config test, model_config.reasoning is None,
-        // so we always use chat/completions (inner) which reliably supports
-        // every model returned by /models. Responses is opt-in for reasoning users.
-        if model_config.reasoning.is_some() {
-            // Obtain a fresh Bearer token
-            let token_data = self
-                .auth_provider
-                .get_valid_token()
-                .await
-                .map_err(|e| ProviderError::Authentication(e.to_string()))?;
+        // Plumb the user's thinking-effort selection into xAI's chat/completions
+        // `reasoning_effort` parameter. Only models that accept an explicit effort
+        // get it (grok-4.3 and multi-agent); others — grok-build-0.1,
+        // grok-4.20-*-reasoning — hard-reject the parameter, so they fall through
+        // to a plain request. If the gate is wrong for some model, the request is
+        // retried once without the parameter rather than failing the turn.
+        if let Some(effort) = model_config.thinking_effort() {
+            if grok_supports_reasoning_effort(&model_config.model_name) {
+                let mut cfg = model_config.clone();
+                cfg.request_params.get_or_insert_with(HashMap::new).insert(
+                    "reasoning_effort".to_string(),
+                    serde_json::json!(xai_reasoning_effort_value(effort)),
+                );
 
-            let auth_header = format!("Bearer {}", token_data.access_token);
-
-            let options = XaiResponsesStreamOptions {
-                session_id: Some(session_id.to_string()),
-                reasoning_effort: None,
-                extra_headers: None,
-                authorization: Some(auth_header),
-            };
-
-            let owned_messages = messages.to_vec();
-            let owned_tools = tools.to_vec();
-            let owned_model = model_config.clone();
-
-            // Try Responses; if it fails or returns empty, fall back to chat/completions
-            if let Ok(mut stream) = stream_xai_responses(
-                owned_model.clone(),
-                system,
-                owned_messages.clone(),
-                owned_tools.clone(),
-                options,
-            )
-            .await
-            {
-                // Peek first item to detect empty streams
-                use futures::StreamExt;
-                if let Some(first) = stream.next().await {
-                    // Reconstruct stream with first item
-                    return Ok(Box::pin(
-                        futures::stream::once(async move { first }).chain(stream),
-                    ));
+                match self
+                    .inner
+                    .stream(&cfg, session_id, system, messages, tools)
+                    .await
+                {
+                    Ok(stream) => return Ok(stream),
+                    Err(e) if is_reasoning_effort_rejected(&e) => {
+                        tracing::warn!(
+                            "xAI rejected reasoning_effort for {}; retrying without it: {}",
+                            model_config.model_name,
+                            e
+                        );
+                    }
+                    Err(e) => return Err(e),
                 }
-                // Empty stream - fall through to fallback
             }
         }
 
-        // Standard chat/completions path (works for all models)
         self.inner
             .stream(model_config, session_id, system, messages, tools)
             .await
@@ -901,6 +896,19 @@ impl AuthProvider for SharedAuthProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_reasoning_effort_rejection() {
+        assert!(is_reasoning_effort_rejected(&ProviderError::RequestFailed(
+            "Model grok-code-fast-1 does not support parameter reasoningEffort.".into()
+        )));
+        assert!(is_reasoning_effort_rejected(&ProviderError::RequestFailed(
+            "Invalid reasoning effort.".into()
+        )));
+        assert!(!is_reasoning_effort_rejected(
+            &ProviderError::RequestFailed("rate limit exceeded".into())
+        ));
+    }
 
     #[test]
     fn pkce_challenge_is_url_safe_base64_of_sha256_of_verifier() {
