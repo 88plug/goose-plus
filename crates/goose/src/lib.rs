@@ -47,6 +47,7 @@ pub mod source_roots;
 pub mod sources;
 pub mod subprocess;
 
+pub mod marketplaces;
 pub mod token_counter;
 pub mod tool_inspection;
 pub mod tool_monitor;

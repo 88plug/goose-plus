@@ -12,9 +12,11 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use goose_providers::errors::ProviderError;
 use goose_providers::model::ModelConfig;
+use goose_providers::xai::shared::{xai_base_url_for_model, xai_context_window};
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -608,7 +610,7 @@ impl XaiOAuthAuthProvider {
         }
     }
 
-    async fn get_valid_token(&self) -> Result<TokenData> {
+    pub(crate) async fn get_valid_token(&self) -> Result<TokenData> {
         if let Some(mut token_data) = self.cache.load() {
             if token_data.expires_at
                 > Utc::now() + chrono::Duration::seconds(ACCESS_TOKEN_REFRESH_SKEW_SECS)
@@ -697,6 +699,14 @@ impl XaiOAuthProvider {
     }
 }
 
+/// True when an xAI error indicates the model rejected the `reasoning_effort`
+/// parameter (unsupported model, or an out-of-range effort value).
+fn is_reasoning_effort_rejected(err: &ProviderError) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("reasoning")
+        && (msg.contains("does not support") || msg.contains("invalid reasoning"))
+}
+
 #[async_trait]
 impl Provider for XaiOAuthProvider {
     fn get_name(&self) -> &str {
@@ -715,6 +725,42 @@ impl Provider for XaiOAuthProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        use goose_providers::xai::shared::{
+            grok_supports_reasoning_effort, xai_reasoning_effort_value,
+        };
+
+        // Plumb the user's thinking-effort selection into xAI's chat/completions
+        // `reasoning_effort` parameter. Only models that accept an explicit effort
+        // get it (grok-4.3 and multi-agent); others — grok-build-0.1,
+        // grok-4.20-*-reasoning — hard-reject the parameter, so they fall through
+        // to a plain request. If the gate is wrong for some model, the request is
+        // retried once without the parameter rather than failing the turn.
+        if let Some(effort) = model_config.thinking_effort() {
+            if grok_supports_reasoning_effort(&model_config.model_name) {
+                let mut cfg = model_config.clone();
+                cfg.request_params.get_or_insert_with(HashMap::new).insert(
+                    "reasoning_effort".to_string(),
+                    serde_json::json!(xai_reasoning_effort_value(effort)),
+                );
+
+                match self
+                    .inner
+                    .stream(&cfg, session_id, system, messages, tools)
+                    .await
+                {
+                    Ok(stream) => return Ok(stream),
+                    Err(e) if is_reasoning_effort_rejected(&e) => {
+                        tracing::warn!(
+                            "xAI rejected reasoning_effort for {}; retrying without it: {}",
+                            model_config.model_name,
+                            e
+                        );
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
         self.inner
             .stream(model_config, session_id, system, messages, tools)
             .await
@@ -725,6 +771,17 @@ impl Provider for XaiOAuthProvider {
     }
 
     async fn configure_oauth(&self) -> Result<(), ProviderError> {
+        // If a valid non-expired token already exists, skip re-auth.
+        // Users frequently re-run `goose configure` just to switch models,
+        // not to change their xAI account. Forcing re-auth on every configure
+        // is disruptive. Only start a fresh flow if the token is missing/expired.
+        if let Some(token) = self.auth_provider.cache.load() {
+            if token.expires_at > Utc::now() {
+                tracing::debug!("xAI OAuth token valid, skipping re-auth");
+                return Ok(());
+            }
+        }
+
         // Preserve the previous token so a partially-completed sign-in
         // attempt (e.g. user closes the browser) doesn't sign them out.
         let previous_token = self.auth_provider.cache.load();
@@ -787,9 +844,11 @@ impl ProviderDef for XaiOAuthProvider {
     ) -> BoxFuture<'static, Result<Self::Provider>> {
         Box::pin(async move {
             let config = crate::config::Config::global();
+            // Use model-aware base URL when possible (CLI proxy models need the special endpoint)
+            let model_aware_host = xai_base_url_for_model(&model.model_name);
             let host: String = config
                 .get_param("XAI_HOST")
-                .unwrap_or_else(|_| XAI_API_HOST.to_string());
+                .unwrap_or_else(|_| model_aware_host.to_string());
 
             let auth_provider = Arc::new(XaiOAuthAuthProvider::new(XaiAuthState::instance()));
             let auth_for_client = Arc::clone(&auth_provider);
@@ -798,6 +857,14 @@ impl ProviderDef for XaiOAuthProvider {
                 AuthMethod::Custom(Box::new(SharedAuthProvider(auth_for_client))),
                 tls_config,
             )?;
+
+            // Apply authoritative xAI context windows (source of truth)
+            let mut model = model;
+            if let Some(ctx) = xai_context_window(&model.model_name) {
+                if model.context_limit.is_none() {
+                    model.context_limit = Some(ctx);
+                }
+            }
 
             let inner = OpenAiCompatibleProvider::new(
                 XAI_OAUTH_PROVIDER_NAME.to_string(),
@@ -829,6 +896,19 @@ impl AuthProvider for SharedAuthProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_reasoning_effort_rejection() {
+        assert!(is_reasoning_effort_rejected(&ProviderError::RequestFailed(
+            "Model grok-code-fast-1 does not support parameter reasoningEffort.".into()
+        )));
+        assert!(is_reasoning_effort_rejected(&ProviderError::RequestFailed(
+            "Invalid reasoning effort.".into()
+        )));
+        assert!(!is_reasoning_effort_rejected(
+            &ProviderError::RequestFailed("rate limit exceeded".into())
+        ));
+    }
 
     #[test]
     fn pkce_challenge_is_url_safe_base64_of_sha256_of_verifier() {

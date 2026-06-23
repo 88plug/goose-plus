@@ -80970,7 +80970,7 @@
   },
   {
     "id": "nano-gpt/gemini-2.5-flash-lite-preview-09-2025-thinking",
-    "name": "Gemini 2.5 Flash Lite Preview (09/2025) – Thinking",
+    "name": "Gemini 2.5 Flash Lite Preview (09/2025) \u2013 Thinking",
     "attachment": true,
     "reasoning": true,
     "tool_call": true,
@@ -81162,7 +81162,7 @@
   },
   {
     "id": "nano-gpt/gemini-2.5-flash-preview-09-2025-thinking",
-    "name": "Gemini 2.5 Flash Preview (09/2025) – Thinking",
+    "name": "Gemini 2.5 Flash Preview (09/2025) \u2013 Thinking",
     "attachment": true,
     "reasoning": true,
     "tool_call": true,
