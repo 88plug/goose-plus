@@ -508,7 +508,7 @@ impl McpClient {
         );
         let client: rmcp::service::RunningService<rmcp::RoleClient, GooseClient> =
             client.serve(transport).await?;
-        let server_info = client.peer_info().cloned();
+        let server_info = client.peer_info().map(|arc| (*arc).clone());
 
         Ok(Self {
             client: Mutex::new(client),

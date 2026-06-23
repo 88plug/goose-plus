@@ -717,11 +717,12 @@ impl Provider for XaiOAuthProvider {
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
         use goose_providers::xai::responses::{stream_xai_responses, XaiResponsesStreamOptions};
-        use goose_providers::xai::shared::grok_supports_reasoning_effort;
 
-        // Use Responses API only for models that support reasoning effort.
-        // Other models use standard chat/completions via the inner provider.
-        if grok_supports_reasoning_effort(&model_config.model_name) {
+        // Use Responses API only when reasoning effort is explicitly configured.
+        // During initial config test, model_config.reasoning is None,
+        // so we always use chat/completions (inner) which reliably supports
+        // every model returned by /models. Responses is opt-in for reasoning users.
+        if model_config.reasoning.is_some() {
             // Obtain a fresh Bearer token
             let token_data = self
                 .auth_provider
@@ -775,6 +776,17 @@ impl Provider for XaiOAuthProvider {
     }
 
     async fn configure_oauth(&self) -> Result<(), ProviderError> {
+        // If a valid non-expired token already exists, skip re-auth.
+        // Users frequently re-run `goose configure` just to switch models,
+        // not to change their xAI account. Forcing re-auth on every configure
+        // is disruptive. Only start a fresh flow if the token is missing/expired.
+        if let Some(token) = self.auth_provider.cache.load() {
+            if token.expires_at > Utc::now() {
+                tracing::debug!("xAI OAuth token valid, skipping re-auth");
+                return Ok(());
+            }
+        }
+
         // Preserve the previous token so a partially-completed sign-in
         // attempt (e.g. user closes the browser) doesn't sign them out.
         let previous_token = self.auth_provider.cache.load();
