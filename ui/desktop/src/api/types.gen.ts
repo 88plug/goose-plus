@@ -20,9 +20,15 @@ export type ActionRequiredData = {
     message: string;
     requested_schema: unknown;
 } | {
+    action?: string;
     actionType: 'elicitationResponse';
     id: string;
     user_data: unknown;
+};
+
+export type AddExtensionRequest = {
+    config: ExtensionConfig;
+    session_id: string;
 };
 
 export type Annotations = {
@@ -32,11 +38,6 @@ export type Annotations = {
 };
 
 export type Author = {
-    contact?: string | null;
-    metadata?: string | null;
-};
-
-export type AuthorRequest = {
     contact?: string | null;
     metadata?: string | null;
 };
@@ -172,16 +173,6 @@ export type CreateCustomProviderResponse = {
     provider_name: string;
 };
 
-export type CreateRecipeRequest = {
-    author?: AuthorRequest | null;
-    session_id: string;
-};
-
-export type CreateRecipeResponse = {
-    error?: string | null;
-    recipe?: Recipe | null;
-};
-
 export type CreateScheduleRequest = {
     cron: string;
     id: string;
@@ -287,9 +278,17 @@ export type DictationProviderStatus = {
 
 export type DownloadModelRequest = {
     /**
-     * Model spec like "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M"
+     * Optional backend id for callers selecting a concrete variant row.
+     */
+    backend_id?: string | null;
+    /**
+     * Model spec/download id like "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M" or "google/gemma-4-31B-it"
      */
     spec: string;
+    /**
+     * Optional backend-specific variant id, such as a GGUF quantization or MLX dtype.
+     */
+    variant_id?: string | null;
 };
 
 export type DownloadProgress = {
@@ -378,6 +377,7 @@ export type ExtensionConfig = {
     available_tools?: Array<string>;
     bundled?: boolean | null;
     cmd: string;
+    cwd?: string | null;
     description: string;
     env_keys?: Array<string>;
     envs?: Envs;
@@ -488,6 +488,17 @@ export type ExtensionLoadResult = {
     success: boolean;
 };
 
+export type ExtensionQuery = {
+    config: ExtensionConfig;
+    enabled: boolean;
+    name: string;
+};
+
+export type ExtensionResponse = {
+    extensions: Array<ExtensionEntry>;
+    warnings?: Array<string>;
+};
+
 export type FeaturesResponse = {
     /**
      * Map of feature name to enabled status
@@ -542,6 +553,24 @@ export type HfModelInfo = {
     gguf_files: Array<HfGgufFile>;
     model_name: string;
     repo_id: string;
+    variants?: Array<HfModelVariant>;
+};
+
+export type HfModelVariant = {
+    backend_id: string;
+    description: string;
+    download_id: string;
+    download_url?: string | null;
+    filename?: string | null;
+    format: string;
+    label: string;
+    model_id: string;
+    quality_rank: number;
+    sharded?: boolean;
+    size_bytes: number;
+    supported?: boolean;
+    unsupported_reason?: string | null;
+    variant_id: string;
 };
 
 /**
@@ -590,10 +619,6 @@ export type ImportAppResponse = {
 
 export type ImportSessionNostrRequest = {
     deeplink: string;
-};
-
-export type ImportSessionRequest = {
-    json: string;
 };
 
 export type InferenceMetadata = {
@@ -755,6 +780,12 @@ export type MessageMetadata = {
     agentVisible: boolean;
     inference?: InferenceMetadata | null;
     /**
+     * Whether this message is a steer injected into an active run. UI-only:
+     * surfaced as `_meta.goose.steer` so clients can mark the steer boundary
+     * without matching user-visible text. Never sent to providers.
+     */
+    steer?: boolean;
+    /**
      * Whether the message should be visible to the user in the UI
      */
     userVisible: boolean;
@@ -857,8 +888,13 @@ export type ModelInfoResponse = {
 };
 
 export type ModelSettings = {
+    /**
+     * Backend implementation to use for this model. Defaults to llama.cpp.
+     */
+    backend_id?: string | null;
     chat_template?: ChatTemplate;
     context_size?: number | null;
+    draft_model?: string | null;
     enable_thinking?: boolean;
     flash_attention?: boolean | null;
     frequency_penalty?: number;
@@ -1014,6 +1050,29 @@ export type ProviderModelInfoQuery = {
     model: string;
 };
 
+export type ProviderSecret = {
+    can_configure: boolean;
+    can_delete: boolean;
+    configure_provider?: string | null;
+    configured: boolean;
+    expires_at?: string | null;
+    has_secret: boolean;
+    id: string;
+    name: string;
+    provider: string;
+    provider_display_name: string;
+    status: ProviderSecretStatus;
+    storage: ProviderSecretStorage;
+};
+
+export type ProviderSecretStatus = 'valid' | 'expired' | 'unknown';
+
+export type ProviderSecretStorage = 'secret_store' | 'provider_cache';
+
+export type ProviderSecretsResponse = {
+    secrets: Array<ProviderSecret>;
+};
+
 export type ProviderTemplate = {
     api_url: string;
     doc_url: string;
@@ -1136,11 +1195,17 @@ export type RedactedThinkingContent = {
     data: string;
 };
 
+export type RemoveExtensionRequest = {
+    name: string;
+    session_id: string;
+};
+
 export type RepoVariantsResponse = {
     available_memory_bytes: number;
     downloaded_quants: Array<string>;
+    downloaded_variants: Array<string>;
     recommended_index?: number | null;
-    variants: Array<HfQuantVariant>;
+    variants: Array<HfModelVariant>;
 };
 
 export type ResourceContents = {
@@ -1284,27 +1349,24 @@ export type ScheduledJob = {
 
 export type Session = {
     accumulated_cost?: number | null;
-    accumulated_input_tokens?: number | null;
-    accumulated_output_tokens?: number | null;
-    accumulated_total_tokens?: number | null;
+    accumulated_usage?: Usage;
     archived_at?: string | null;
     conversation?: Conversation | null;
     created_at: string;
     extension_data: ExtensionData;
     goose_mode?: GooseMode;
     id: string;
-    input_tokens?: number | null;
+    last_message_snippet?: string | null;
     message_count: number;
     model_config?: ModelConfig | null;
     name: string;
-    output_tokens?: number | null;
     project_id?: string | null;
     provider_name?: string | null;
     recipe?: Recipe | null;
     schedule_id?: string | null;
     session_type?: SessionType;
-    total_tokens?: number | null;
     updated_at: string;
+    usage?: Usage;
     user_recipe_values?: {
         [key: string]: string;
     } | null;
@@ -1327,16 +1389,8 @@ export type SessionDisplayInfo = {
     workingDir: string;
 };
 
-export type SessionInsights = {
-    totalSessions: number;
-    totalTokens: number;
-};
-
-export type SessionListResponse = {
-    /**
-     * List of available session information objects
-     */
-    sessions: Array<Session>;
+export type SessionExtensionsResponse = {
+    extensions: Array<ExtensionConfig>;
 };
 
 export type SessionReplyRequest = {
@@ -1490,10 +1544,14 @@ export type ThinkingContent = {
 export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
 
 export type TokenState = {
+    accumulatedCacheReadTokens?: number;
+    accumulatedCacheWriteTokens?: number;
     accumulatedCost?: number | null;
     accumulatedInputTokens: number;
     accumulatedOutputTokens: number;
     accumulatedTotalTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
@@ -1703,6 +1761,24 @@ export type UpsertPermissionsQuery = {
     tool_permissions: Array<ToolPermission>;
 };
 
+/**
+ * `input_tokens` is the total input including cache read/write tokens;
+ * the cache fields are breakdown subsets of it. Parsers for providers
+ * that report cache tokens separately from input (e.g. Anthropic,
+ * Bedrock) must fold them into `input_tokens`.
+ */
+export type Usage = {
+    cache_read_input_tokens?: number | null;
+    cache_write_input_tokens?: number | null;
+    /**
+     * All prompt tokens, including any served from or written to cache.
+     * `cache_read_input_tokens` and `cache_write_input_tokens` are subsets of this.
+     */
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    total_tokens?: number | null;
+};
+
 export type WhisperModelResponse = {
     /**
      * Description
@@ -1755,6 +1831,37 @@ export type ConfirmToolActionResponses = {
      */
     200: unknown;
 };
+
+export type AgentAddExtensionData = {
+    body: AddExtensionRequest;
+    path?: never;
+    query?: never;
+    url: '/agent/add_extension';
+};
+
+export type AgentAddExtensionErrors = {
+    /**
+     * Unauthorized - invalid secret key
+     */
+    401: unknown;
+    /**
+     * Agent not initialized
+     */
+    424: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type AgentAddExtensionResponses = {
+    /**
+     * Extension added
+     */
+    200: string;
+};
+
+export type AgentAddExtensionResponse = AgentAddExtensionResponses[keyof AgentAddExtensionResponses];
 
 export type CallToolData = {
     body: CallToolRequest;
@@ -1925,6 +2032,37 @@ export type ReadResourceResponses = {
 };
 
 export type ReadResourceResponse2 = ReadResourceResponses[keyof ReadResourceResponses];
+
+export type AgentRemoveExtensionData = {
+    body: RemoveExtensionRequest;
+    path?: never;
+    query?: never;
+    url: '/agent/remove_extension';
+};
+
+export type AgentRemoveExtensionErrors = {
+    /**
+     * Unauthorized - invalid secret key
+     */
+    401: unknown;
+    /**
+     * Agent not initialized
+     */
+    424: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type AgentRemoveExtensionResponses = {
+    /**
+     * Extension removed
+     */
+    200: string;
+};
+
+export type AgentRemoveExtensionResponse = AgentRemoveExtensionResponses[keyof AgentRemoveExtensionResponses];
 
 export type RestartAgentData = {
     body: RestartAgentRequest;
@@ -2361,6 +2499,89 @@ export type UpdateCustomProviderResponses = {
 
 export type UpdateCustomProviderResponse = UpdateCustomProviderResponses[keyof UpdateCustomProviderResponses];
 
+export type GetExtensionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/config/extensions';
+};
+
+export type GetExtensionsErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type GetExtensionsResponses = {
+    /**
+     * All extensions retrieved successfully
+     */
+    200: ExtensionResponse;
+};
+
+export type GetExtensionsResponse = GetExtensionsResponses[keyof GetExtensionsResponses];
+
+export type AddExtensionData = {
+    body: ExtensionQuery;
+    path?: never;
+    query?: never;
+    url: '/config/extensions';
+};
+
+export type AddExtensionErrors = {
+    /**
+     * Invalid request
+     */
+    400: unknown;
+    /**
+     * Could not serialize config.yaml
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type AddExtensionResponses = {
+    /**
+     * Extension added or updated successfully
+     */
+    200: string;
+};
+
+export type AddExtensionResponse = AddExtensionResponses[keyof AddExtensionResponses];
+
+export type RemoveExtensionData = {
+    body?: never;
+    path: {
+        name: string;
+    };
+    query?: never;
+    url: '/config/extensions/{name}';
+};
+
+export type RemoveExtensionErrors = {
+    /**
+     * Extension not found
+     */
+    404: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type RemoveExtensionResponses = {
+    /**
+     * Extension removed successfully
+     */
+    200: string;
+};
+
+export type RemoveExtensionResponse = RemoveExtensionResponses[keyof RemoveExtensionResponses];
+
 export type UpsertPermissionsData = {
     body: UpsertPermissionsQuery;
     path?: never;
@@ -2547,6 +2768,61 @@ export type GetProviderCatalogTemplateResponses = {
 };
 
 export type GetProviderCatalogTemplateResponse = GetProviderCatalogTemplateResponses[keyof GetProviderCatalogTemplateResponses];
+
+export type ListProviderSecretsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/config/provider-secrets';
+};
+
+export type ListProviderSecretsErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListProviderSecretsResponses = {
+    /**
+     * Provider secrets retrieved successfully
+     */
+    200: ProviderSecretsResponse;
+};
+
+export type ListProviderSecretsResponse = ListProviderSecretsResponses[keyof ListProviderSecretsResponses];
+
+export type DeleteProviderSecretData = {
+    body?: never;
+    path: {
+        /**
+         * Provider secret identifier
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/config/provider-secrets/{id}';
+};
+
+export type DeleteProviderSecretErrors = {
+    /**
+     * Invalid provider secret identifier
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DeleteProviderSecretResponses = {
+    /**
+     * Provider secret deleted successfully
+     */
+    200: string;
+};
+
+export type DeleteProviderSecretResponse = DeleteProviderSecretResponses[keyof DeleteProviderSecretResponses];
 
 export type ProvidersData = {
     body?: never;
@@ -3354,37 +3630,6 @@ export type McpUiProxyResponses = {
     200: unknown;
 };
 
-export type CreateRecipeData = {
-    body: CreateRecipeRequest;
-    path?: never;
-    query?: never;
-    url: '/recipes/create';
-};
-
-export type CreateRecipeErrors = {
-    /**
-     * Bad request
-     */
-    400: unknown;
-    /**
-     * Precondition failed - Agent not available
-     */
-    412: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type CreateRecipeResponses = {
-    /**
-     * Recipe created successfully
-     */
-    200: CreateRecipeResponse;
-};
-
-export type CreateRecipeResponse2 = CreateRecipeResponses[keyof CreateRecipeResponses];
-
 export type DecodeRecipeData = {
     body: DecodeRecipeRequest;
     path?: never;
@@ -3969,64 +4214,6 @@ export type UnpauseScheduleResponses = {
 
 export type UnpauseScheduleResponse = UnpauseScheduleResponses[keyof UnpauseScheduleResponses];
 
-export type ListSessionsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/sessions';
-};
-
-export type ListSessionsErrors = {
-    /**
-     * Unauthorized - Invalid or missing API key
-     */
-    401: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type ListSessionsResponses = {
-    /**
-     * List of available sessions retrieved successfully
-     */
-    200: SessionListResponse;
-};
-
-export type ListSessionsResponse = ListSessionsResponses[keyof ListSessionsResponses];
-
-export type ImportSessionData = {
-    body: ImportSessionRequest;
-    path?: never;
-    query?: never;
-    url: '/sessions/import';
-};
-
-export type ImportSessionErrors = {
-    /**
-     * Bad request - Invalid JSON
-     */
-    400: unknown;
-    /**
-     * Unauthorized - Invalid or missing API key
-     */
-    401: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type ImportSessionResponses = {
-    /**
-     * Session imported successfully
-     */
-    200: Session;
-};
-
-export type ImportSessionResponse = ImportSessionResponses[keyof ImportSessionResponses];
-
 export type ImportSessionNostrData = {
     body: ImportSessionNostrRequest;
     path?: never;
@@ -4057,81 +4244,6 @@ export type ImportSessionNostrResponses = {
 };
 
 export type ImportSessionNostrResponse = ImportSessionNostrResponses[keyof ImportSessionNostrResponses];
-
-export type GetSessionInsightsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/sessions/insights';
-};
-
-export type GetSessionInsightsErrors = {
-    /**
-     * Unauthorized - Invalid or missing API key
-     */
-    401: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type GetSessionInsightsResponses = {
-    /**
-     * Session insights retrieved successfully
-     */
-    200: SessionInsights;
-};
-
-export type GetSessionInsightsResponse = GetSessionInsightsResponses[keyof GetSessionInsightsResponses];
-
-export type SearchSessionsData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Search query string
-         */
-        query: string;
-        /**
-         * Maximum results (default: 10, max: 50)
-         */
-        limit?: number | null;
-        /**
-         * Filter after date (ISO 8601)
-         */
-        after_date?: string | null;
-        /**
-         * Filter before date (ISO 8601)
-         */
-        before_date?: string | null;
-    };
-    url: '/sessions/search';
-};
-
-export type SearchSessionsErrors = {
-    /**
-     * Bad request - Invalid query
-     */
-    400: unknown;
-    /**
-     * Unauthorized
-     */
-    401: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type SearchSessionsResponses = {
-    /**
-     * Matching sessions
-     */
-    200: Array<Session>;
-};
-
-export type SearchSessionsResponse = SearchSessionsResponses[keyof SearchSessionsResponses];
 
 export type SessionCancelData = {
     body: CancelRequest;
@@ -4220,40 +4332,6 @@ export type SessionReplyResponses = {
 
 export type SessionReplyResponse2 = SessionReplyResponses[keyof SessionReplyResponses];
 
-export type DeleteSessionData = {
-    body?: never;
-    path: {
-        /**
-         * Unique identifier for the session
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/sessions/{session_id}';
-};
-
-export type DeleteSessionErrors = {
-    /**
-     * Unauthorized - Invalid or missing API key
-     */
-    401: unknown;
-    /**
-     * Session not found
-     */
-    404: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type DeleteSessionResponses = {
-    /**
-     * Session deleted successfully
-     */
-    200: unknown;
-};
-
 export type GetSessionData = {
     body?: never;
     path: {
@@ -4290,7 +4368,7 @@ export type GetSessionResponses = {
 
 export type GetSessionResponse = GetSessionResponses[keyof GetSessionResponses];
 
-export type ExportSessionData = {
+export type GetSessionExtensionsData = {
     body?: never;
     path: {
         /**
@@ -4299,10 +4377,10 @@ export type ExportSessionData = {
         session_id: string;
     };
     query?: never;
-    url: '/sessions/{session_id}/export';
+    url: '/sessions/{session_id}/extensions';
 };
 
-export type ExportSessionErrors = {
+export type GetSessionExtensionsErrors = {
     /**
      * Unauthorized - Invalid or missing API key
      */
@@ -4317,14 +4395,14 @@ export type ExportSessionErrors = {
     500: unknown;
 };
 
-export type ExportSessionResponses = {
+export type GetSessionExtensionsResponses = {
     /**
-     * Session exported successfully
+     * Session extensions retrieved successfully
      */
-    200: string;
+    200: SessionExtensionsResponse;
 };
 
-export type ExportSessionResponse = ExportSessionResponses[keyof ExportSessionResponses];
+export type GetSessionExtensionsResponse = GetSessionExtensionsResponses[keyof GetSessionExtensionsResponses];
 
 export type ForkSessionData = {
     body: ForkRequest;

@@ -9,12 +9,13 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(test)]
 use super::base::stream_from_single_message;
-use super::base::{MessageStream, Provider, ProviderDef, ProviderMetadata, ProviderUsage};
-use super::errors::ProviderError;
+use super::base::{MessageStream, Provider, ProviderDef, ProviderMetadata};
 use crate::conversation::message::{Message, ToolResponse};
-use crate::model::ModelConfig;
 use crate::utils::bytes_to_hex;
 use futures::future::BoxFuture;
+use goose_providers::conversation::token_usage::ProviderUsage;
+use goose_providers::errors::ProviderError;
+use goose_providers::model::ModelConfig;
 use rmcp::model::{CallToolResult, Tool};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,9 +138,7 @@ impl TestProvider {
     }
 }
 
-impl ProviderDef for TestProvider {
-    type Provider = Self;
-
+impl goose_providers::base::ProviderDescriptor for TestProvider {
     fn metadata() -> ProviderMetadata {
         ProviderMetadata::new(
             Self::PROVIDER_NAME,
@@ -151,10 +150,15 @@ impl ProviderDef for TestProvider {
             vec![],
         )
     }
+}
+
+impl ProviderDef for TestProvider {
+    type Provider = Self;
 
     fn from_env(
         _model: ModelConfig,
         _extensions: Vec<crate::config::ExtensionConfig>,
+        _tls_config: Option<crate::providers::api_client::TlsConfig>,
     ) -> BoxFuture<'static, Result<Self::Provider>> {
         Box::pin(async { Err(anyhow!("TestProvider must be constructed explicitly")) })
     }
@@ -225,8 +229,8 @@ impl Provider for TestProvider {
 mod tests {
     use super::*;
     use crate::conversation::message::{Message, MessageContent};
-    use crate::providers::base::{ProviderUsage, Usage};
     use chrono::Utc;
+    use goose_providers::conversation::token_usage::{ProviderUsage, Usage};
     use rmcp::model::{RawTextContent, Role, TextContent};
     use std::env;
 

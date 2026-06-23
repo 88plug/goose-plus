@@ -2,6 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use futures::future::BoxFuture;
+use goose_providers::conversation::token_usage::{ProviderUsage, Usage};
+use goose_providers::thinking::ThinkingEffort;
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::Write;
@@ -11,18 +13,16 @@ use tempfile::NamedTempFile;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use super::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata, ProviderUsage, Usage,
-};
-use super::errors::ProviderError;
-use super::utils::{filter_extensions_from_system_prompt, RequestLog};
-use crate::config::base::{CodexCommand, CodexSkipGitCheck};
+use super::base::{ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata};
+use super::utils::filter_extensions_from_system_prompt;
 use crate::config::paths::Paths;
 use crate::config::search_path::SearchPaths;
 use crate::config::{Config, ExtensionConfig, GooseMode};
 use crate::conversation::message::{Message, MessageContent};
-use crate::model::ModelConfig;
 use crate::subprocess::configure_subprocess;
+use goose_providers::errors::ProviderError;
+use goose_providers::model::ModelConfig;
+use goose_providers::request_log::{start_log, LoggerHandleExt};
 use rmcp::model::Role;
 use rmcp::model::Tool;
 
@@ -60,25 +60,22 @@ pub struct CodexProvider {
 }
 
 impl CodexProvider {
-    fn legacy_reasoning_effort() -> Option<crate::model::ThinkingEffort> {
+    fn legacy_reasoning_effort() -> Option<ThinkingEffort> {
         Config::global()
             .get_param::<String>("CODEX_REASONING_EFFORT")
             .ok()
             .and_then(|effort| match effort.to_lowercase().as_str() {
-                "none" => Some(crate::model::ThinkingEffort::Off),
-                "low" => Some(crate::model::ThinkingEffort::Low),
-                "medium" => Some(crate::model::ThinkingEffort::Medium),
-                "high" => Some(crate::model::ThinkingEffort::High),
-                "xhigh" => Some(crate::model::ThinkingEffort::Max),
+                "none" => Some(ThinkingEffort::Off),
+                "low" => Some(ThinkingEffort::Low),
+                "medium" => Some(ThinkingEffort::Medium),
+                "high" => Some(ThinkingEffort::High),
+                "xhigh" => Some(ThinkingEffort::Max),
                 _ => None,
             })
     }
 
-    fn map_thinking_effort(
-        _model_name: &str,
-        effort: Option<crate::model::ThinkingEffort>,
-    ) -> Option<String> {
-        use crate::model::ThinkingEffort;
+    fn map_thinking_effort(_model_name: &str, effort: Option<ThinkingEffort>) -> Option<String> {
+        use ThinkingEffort;
         match effort
             .or_else(Self::legacy_reasoning_effort)
             .unwrap_or(ThinkingEffort::High)
@@ -293,7 +290,7 @@ impl CodexProvider {
         }
     }
 
-    /// Extract usage information from a JSON object
+    /// Codex `input_tokens` already includes `cached_input_tokens`.
     fn extract_usage(usage_info: &serde_json::Value, usage: &mut Usage) {
         if usage.input_tokens.is_none() {
             usage.input_tokens = usage_info
@@ -304,6 +301,12 @@ impl CodexProvider {
         if usage.output_tokens.is_none() {
             usage.output_tokens = usage_info
                 .get("output_tokens")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32);
+        }
+        if usage.cache_read_input_tokens.is_none() {
+            usage.cache_read_input_tokens = usage_info
+                .get("cached_input_tokens")
                 .and_then(|v| v.as_i64())
                 .map(|v| v as i32);
         }
@@ -618,9 +621,7 @@ fn codex_mcp_config_overrides(extensions: &[ExtensionConfig]) -> Vec<String> {
     overrides
 }
 
-impl ProviderDef for CodexProvider {
-    type Provider = Self;
-
+impl goose_providers::base::ProviderDescriptor for CodexProvider {
     fn metadata() -> ProviderMetadata {
         ProviderMetadata::new(
             CODEX_PROVIDER_NAME,
@@ -630,15 +631,20 @@ impl ProviderDef for CodexProvider {
             CODEX_KNOWN_MODELS.to_vec(),
             CODEX_DOC_URL,
             vec![
-                ConfigKey::from_value_type::<CodexCommand>(true, false, true),
-                ConfigKey::from_value_type::<CodexSkipGitCheck>(false, false, true),
+                ConfigKey::new("CODEX_COMMAND", true, false, Some("codex"), true),
+                ConfigKey::new("CODEX_SKIP_GIT_CHECK", false, false, Some("false"), true),
             ],
         )
     }
+}
+
+impl ProviderDef for CodexProvider {
+    type Provider = Self;
 
     fn from_env(
         model: ModelConfig,
         extensions: Vec<ExtensionConfig>,
+        _tls_config: Option<crate::providers::api_client::TlsConfig>,
     ) -> BoxFuture<'static, Result<Self::Provider>> {
         Box::pin(async move {
             let config = Config::global();
@@ -720,9 +726,7 @@ impl Provider for CodexProvider {
             "messages_count": messages.len()
         });
 
-        let mut log = RequestLog::start(model_config, &payload).map_err(|e| {
-            ProviderError::RequestFailed(format!("Failed to start request log: {}", e))
-        })?;
+        let mut log = start_log(model_config, &payload)?;
 
         let response = json!({
             "lines": lines.len(),
@@ -757,6 +761,7 @@ impl Provider for CodexProvider {
 mod tests {
     use super::*;
     use crate::agents::extension::Envs;
+    use goose_providers::base::ProviderDescriptor as _;
     use goose_test_support::TEST_IMAGE_B64;
     use std::collections::HashMap;
     use test_case::test_case;
@@ -783,6 +788,7 @@ mod tests {
             env_keys: vec![],
             description: "Lookup".into(),
             timeout: Some(30),
+            cwd: None,
             bundled: None,
             available_tools: vec![],
         },
@@ -839,6 +845,7 @@ mod tests {
             env_keys: vec![],
             description: String::new(),
             timeout: None,
+            cwd: None,
             bundled: None,
             available_tools: vec![],
         },
@@ -982,6 +989,7 @@ mod tests {
         assert_eq!(usage.input_tokens, Some(100));
         assert_eq!(usage.output_tokens, Some(50));
         assert_eq!(usage.total_tokens, Some(150));
+        assert_eq!(usage.cache_read_input_tokens, Some(30));
     }
 
     #[test]
@@ -1082,6 +1090,7 @@ mod tests {
         assert_eq!(usage.input_tokens, Some(5000));
         assert_eq!(usage.output_tokens, Some(100));
         assert_eq!(usage.total_tokens, Some(5100));
+        assert_eq!(usage.cache_read_input_tokens, Some(3000));
     }
 
     #[test_case(
@@ -1238,7 +1247,7 @@ mod tests {
 
     #[test]
     fn test_map_thinking_effort() {
-        use crate::model::ThinkingEffort;
+        use ThinkingEffort;
 
         let _guard = env_lock::lock_env([
             ("CODEX_REASONING_EFFORT", None::<&str>),

@@ -9,6 +9,7 @@ use agent_client_protocol::schema::{
     WriteTextFileResponse,
 };
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use fs_err as fs;
 use goose::acp::server::{serve, AcpProviderFactory, GooseAcpAgent, GooseAcpAgentOptions};
 pub use goose::acp::{map_permission_response, PermissionDecision};
@@ -19,16 +20,185 @@ use goose::config::{GooseMode, PermissionManager};
 use goose::providers::api_client::{ApiClient, AuthMethod as ApiAuthMethod};
 use goose::providers::base::Provider;
 use goose::providers::openai::OpenAiProvider;
+use goose::scheduler::{ScheduledJob, SchedulerError};
+use goose::scheduler_trait::SchedulerTrait;
+use goose::session::Session as GooseSession;
 use goose::session_context::SESSION_ID_HEADER;
 use goose_test_support::{ExpectedSessionId, TEST_MODEL};
 use std::collections::VecDeque;
 use std::future::Future;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
 use tokio::task::JoinHandle;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+static ACP_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static ACP_CONFIG_ROOT: LazyLock<tempfile::TempDir> =
+    LazyLock::new(|| tempfile::tempdir().unwrap());
+
+struct FixtureScheduler {
+    jobs: tokio::sync::Mutex<Vec<ScheduledJob>>,
+}
+
+impl FixtureScheduler {
+    fn new() -> Self {
+        Self {
+            jobs: tokio::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    async fn job_mut<F>(&self, id: &str, update: F) -> Result<(), SchedulerError>
+    where
+        F: FnOnce(&mut ScheduledJob),
+    {
+        let mut jobs = self.jobs.lock().await;
+        let job = jobs
+            .iter_mut()
+            .find(|job| job.id == id)
+            .ok_or_else(|| SchedulerError::JobNotFound(id.to_string()))?;
+        update(job);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl SchedulerTrait for FixtureScheduler {
+    async fn add_scheduled_job(
+        &self,
+        job: ScheduledJob,
+        _copy_recipe: bool,
+    ) -> Result<(), SchedulerError> {
+        let mut jobs = self.jobs.lock().await;
+        if jobs.iter().any(|existing| existing.id == job.id) {
+            return Err(SchedulerError::JobIdExists(job.id));
+        }
+        jobs.push(job);
+        Ok(())
+    }
+
+    async fn schedule_recipe(
+        &self,
+        recipe_path: PathBuf,
+        cron_schedule: Option<String>,
+    ) -> anyhow::Result<(), SchedulerError> {
+        let id = recipe_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("test_recipe")
+            .to_string();
+        self.add_scheduled_job(
+            ScheduledJob {
+                id,
+                source: recipe_path.to_string_lossy().to_string(),
+                cron: cron_schedule.unwrap_or_else(|| "0 0 * * * *".to_string()),
+                last_run: None,
+                currently_running: false,
+                paused: false,
+                current_session_id: None,
+                process_start_time: None,
+                parameters: Vec::new(),
+                recipe_base_dir: recipe_path
+                    .parent()
+                    .map(|parent| parent.to_string_lossy().to_string()),
+            },
+            false,
+        )
+        .await
+    }
+
+    async fn list_scheduled_jobs(&self) -> Vec<ScheduledJob> {
+        self.jobs.lock().await.clone()
+    }
+
+    async fn remove_scheduled_job(
+        &self,
+        id: &str,
+        _remove_recipe: bool,
+    ) -> Result<(), SchedulerError> {
+        let mut jobs = self.jobs.lock().await;
+        if let Some(index) = jobs.iter().position(|job| job.id == id) {
+            jobs.remove(index);
+            Ok(())
+        } else {
+            Err(SchedulerError::JobNotFound(id.to_string()))
+        }
+    }
+
+    async fn pause_schedule(&self, id: &str) -> Result<(), SchedulerError> {
+        self.job_mut(id, |job| job.paused = true).await
+    }
+
+    async fn unpause_schedule(&self, id: &str) -> Result<(), SchedulerError> {
+        self.job_mut(id, |job| job.paused = false).await
+    }
+
+    async fn run_now(&self, id: &str) -> Result<String, SchedulerError> {
+        self.job_mut(id, |job| {
+            job.last_run = Some(Utc::now());
+            job.current_session_id = Some("test_session_123".to_string());
+        })
+        .await?;
+        Ok("test_session_123".to_string())
+    }
+
+    async fn sessions(
+        &self,
+        sched_id: &str,
+        _limit: usize,
+    ) -> Result<Vec<(String, GooseSession)>, SchedulerError> {
+        let jobs = self.jobs.lock().await;
+        if jobs.iter().any(|job| job.id == sched_id) {
+            Ok(Vec::new())
+        } else {
+            Err(SchedulerError::JobNotFound(sched_id.to_string()))
+        }
+    }
+
+    async fn update_schedule(
+        &self,
+        sched_id: &str,
+        new_cron: String,
+    ) -> Result<(), SchedulerError> {
+        self.job_mut(sched_id, |job| job.cron = new_cron).await
+    }
+
+    async fn kill_running_job(&self, sched_id: &str) -> Result<(), SchedulerError> {
+        self.job_mut(sched_id, |job| {
+            job.currently_running = false;
+            job.current_session_id = None;
+            job.process_start_time = None;
+        })
+        .await
+    }
+
+    async fn get_running_job_info(
+        &self,
+        sched_id: &str,
+    ) -> Result<Option<(String, DateTime<Utc>)>, SchedulerError> {
+        let jobs = self.jobs.lock().await;
+        let job = jobs
+            .iter()
+            .find(|job| job.id == sched_id)
+            .ok_or_else(|| SchedulerError::JobNotFound(sched_id.to_string()))?;
+        Ok(job.current_session_id.clone().zip(job.process_start_time))
+    }
+}
+
+fn write_global_test_config(config_path: &Path, openai_base_url: &str) {
+    let contents = fs::read_to_string(config_path).unwrap();
+    let mut config: serde_yaml::Mapping = serde_yaml::from_str(&contents).unwrap();
+    config.insert(
+        serde_yaml::Value::String("OPENAI_HOST".to_string()),
+        serde_yaml::Value::String(openai_base_url.to_string()),
+    );
+
+    let global_config_dir = Paths::config_dir();
+    fs::create_dir_all(&global_config_dir).unwrap();
+    let global_config_path = global_config_dir.join(goose::config::base::CONFIG_YAML_NAME);
+    fs::write(&global_config_path, serde_yaml::to_string(&config).unwrap()).unwrap();
+}
 
 pub struct OpenAiFixture {
     _server: MockServer,
@@ -167,19 +337,24 @@ pub async fn spawn_acp_server_in_process(
     if !config_path.exists() {
         fs::write(
             &config_path,
-            format!("GOOSE_MODEL: {current_model}\nGOOSE_PROVIDER: openai\n"),
+            format!(
+                "GOOSE_MODEL: {current_model}\nGOOSE_PROVIDER: openai\nGOOSE_MODE: {}\n",
+                goose_mode
+            ),
         )
         .unwrap();
     }
+    write_global_test_config(&config_path, openai_base_url);
     let provider_factory = provider_factory.unwrap_or_else(|| {
         let base_url = openai_base_url.to_string();
         Arc::new(
             move |_provider_name, model_config, _extensions, _working_dir| {
                 let base_url = base_url.clone();
                 Box::pin(async move {
-                    let api_client = ApiClient::new(
+                    let api_client = ApiClient::new_with_tls(
                         base_url,
                         ApiAuthMethod::BearerToken("test-key".to_string()),
+                        None,
                     )
                     .unwrap();
                     let provider: Arc<dyn Provider> =
@@ -195,10 +370,10 @@ pub async fn spawn_acp_server_in_process(
         builtins: builtins.to_vec(),
         data_dir: data_root.to_path_buf(),
         config_dir: data_root.to_path_buf(),
-        goose_mode,
         disable_session_naming,
         goose_platform: GoosePlatform::GooseCli,
         additional_source_roots: Vec::new(),
+        scheduler: Arc::new(FixtureScheduler::new()),
     })
     .await
     .unwrap();
@@ -281,6 +456,13 @@ pub fn to_notifications(updates: &[SessionUpdate]) -> Vec<Notification> {
             SessionUpdate::ConfigOptionUpdate(_) => out.push(Notification::ConfigOption),
             SessionUpdate::SessionInfoUpdate(update) => {
                 let meta = update.meta.as_ref();
+                let is_active_run_update = meta
+                    .and_then(|m| m.get("goose"))
+                    .and_then(|g| g.get("activeRunId"))
+                    .is_some();
+                if is_active_run_update {
+                    continue;
+                }
                 out.push(Notification::SessionInfoUpdate {
                     title: update.title.value().cloned(),
                     updated_at: update.updated_at.value().cloned(),
@@ -585,6 +767,10 @@ pub fn run_test<F>(fut: F)
 where
     F: Future<Output = ()> + Send + 'static,
 {
+    let _guard = ACP_TEST_LOCK.lock().unwrap_or_else(|err| err.into_inner());
+    if std::env::var_os("GOOSE_PATH_ROOT").is_none() {
+        std::env::set_var("GOOSE_PATH_ROOT", ACP_CONFIG_ROOT.path());
+    }
     register_builtin_extensions(goose_mcp::BUILTIN_EXTENSIONS.clone());
 
     let handle = std::thread::Builder::new()

@@ -3,8 +3,8 @@ use console::style;
 use goose::config::paths::Paths;
 use goose::config::Config;
 use goose::conversation::message::Message;
-use goose::providers::errors::ProviderError;
 use goose::session::session_manager::{DB_NAME, SESSIONS_FOLDER};
+use goose_providers::errors::ProviderError;
 use serde_yaml;
 use std::time::Duration;
 
@@ -73,9 +73,8 @@ async fn check_provider(
         }
     };
 
-    let model_config = goose::model::ModelConfig::new(&model)
-        .map_err(|e| ProviderCheckError::InvalidModel(e.to_string()))?
-        .with_canonical_limits(&provider);
+    let model_config = goose::model_config::model_config_from_user_config(&provider, &model)
+        .map_err(|e| ProviderCheckError::InvalidModel(e.to_string()))?;
 
     let provider_client = goose::providers::create(&provider, model_config, Vec::new())
         .await

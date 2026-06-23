@@ -11,6 +11,9 @@
   "announcementModal.gotIt": {
     "defaultMessage": "Got it!"
   },
+  "appLayout.collapseNavigation": {
+    "defaultMessage": "Collapse navigation"
+  },
   "appLayout.openNavigation": {
     "defaultMessage": "Open navigation"
   },
@@ -44,6 +47,66 @@
   "appsView.title": {
     "defaultMessage": "Apps"
   },
+  "authSettings.activeProviderWarning": {
+    "defaultMessage": "This is the active provider. New requests may fail until you configure another credential."
+  },
+  "authSettings.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "authSettings.delete": {
+    "defaultMessage": "Delete"
+  },
+  "authSettings.deleteCredential": {
+    "defaultMessage": "Delete credential"
+  },
+  "authSettings.deleteMessage": {
+    "defaultMessage": "Delete the {name} credential for {provider}?"
+  },
+  "authSettings.deleteTitle": {
+    "defaultMessage": "Delete credential"
+  },
+  "authSettings.deleted": {
+    "defaultMessage": "Credential deleted"
+  },
+  "authSettings.description": {
+    "defaultMessage": "Manage provider credentials stored locally by goose."
+  },
+  "authSettings.empty": {
+    "defaultMessage": "No locally stored provider credentials were found."
+  },
+  "authSettings.expiresAt": {
+    "defaultMessage": "Expires {date}"
+  },
+  "authSettings.failedToConfigure": {
+    "defaultMessage": "Failed to configure credential: {error}"
+  },
+  "authSettings.failedToDelete": {
+    "defaultMessage": "Failed to delete credential: {error}"
+  },
+  "authSettings.failedToLoad": {
+    "defaultMessage": "Failed to load provider credentials"
+  },
+  "authSettings.loading": {
+    "defaultMessage": "Loading credentials..."
+  },
+  "authSettings.reauthorize": {
+    "defaultMessage": "Reauthorize"
+  },
+  "authSettings.signIn": {
+    "defaultMessage": "Sign in"
+  },
+  "authSettings.signedIn": {
+    "defaultMessage": "Credential configured"
+  },
+  "authSettings.storageProviderCache": {
+    "defaultMessage": "Provider cache"
+  },
+  "authSettings.storageSecretStore": {
+    "defaultMessage": "Secret store"
+  },
+  "authSettings.title": {
+    "defaultMessage": "Provider Credentials"
+  },
   "backButton.back": {
     "defaultMessage": "Back"
   },
@@ -52,18 +115,6 @@
   },
   "baseChat.goHome": {
     "defaultMessage": "Go home"
-  },
-  "baseChat.noSession": {
-    "defaultMessage": "No Session"
-  },
-  "baseChat.recipeCreatedMessage": {
-    "defaultMessage": "\"{title}\" has been saved and is ready to use."
-  },
-  "baseChat.recipeCreatedTitle": {
-    "defaultMessage": "Recipe created successfully!"
-  },
-  "bottomMenuExtensionSelection.extensionToggleError": {
-    "defaultMessage": "Extension Toggle Error"
   },
   "bottomMenuExtensionSelection.extensionUpdated": {
     "defaultMessage": "Extension Updated"
@@ -83,9 +134,6 @@
   "bottomMenuExtensionSelection.manageExtensions": {
     "defaultMessage": "manage extensions"
   },
-  "bottomMenuExtensionSelection.noActiveSession": {
-    "defaultMessage": "No active session found. Please start a chat session first."
-  },
   "bottomMenuExtensionSelection.noExtensionsAvailable": {
     "defaultMessage": "no extensions available"
   },
@@ -94,15 +142,6 @@
   },
   "bottomMenuExtensionSelection.searchExtensions": {
     "defaultMessage": "search extensions..."
-  },
-  "bottomMenuModeSelection.autoFallback": {
-    "defaultMessage": "auto"
-  },
-  "bottomMenuModeSelection.automaticModeDescription": {
-    "defaultMessage": "Automatic mode selection"
-  },
-  "bottomMenuModeSelection.currentModeTitle": {
-    "defaultMessage": "Current mode: {label} - {description}"
   },
   "cardButtons.configure": {
     "defaultMessage": "Configure"
@@ -118,9 +157,6 @@
   },
   "chatInput.contextWindow": {
     "defaultMessage": "Context window"
-  },
-  "chatInput.createRecipeFromSession": {
-    "defaultMessage": "Create Recipe from Session"
   },
   "chatInput.dictationError": {
     "defaultMessage": "Dictation Error"
@@ -352,54 +388,6 @@
   },
   "createEditRecipe.viewEditRecipeTitle": {
     "defaultMessage": "View/edit recipe"
-  },
-  "createRecipeFromSession.analyzingTitle": {
-    "defaultMessage": "Analyzing your conversation"
-  },
-  "createRecipeFromSession.cancel": {
-    "defaultMessage": "Cancel"
-  },
-  "createRecipeFromSession.createAndRunRecipe": {
-    "defaultMessage": "Create & Run Recipe"
-  },
-  "createRecipeFromSession.createRecipe": {
-    "defaultMessage": "Create Recipe"
-  },
-  "createRecipeFromSession.creating": {
-    "defaultMessage": "Creating..."
-  },
-  "createRecipeFromSession.extractingInsights": {
-    "defaultMessage": "Extracting insights from your chat"
-  },
-  "createRecipeFromSession.failedToCreateDefaultMsg": {
-    "defaultMessage": "An unexpected error occurred while creating the recipe. Please try again."
-  },
-  "createRecipeFromSession.failedToCreateTitle": {
-    "defaultMessage": "Failed to create recipe"
-  },
-  "createRecipeFromSession.stageComplete": {
-    "defaultMessage": "Complete!"
-  },
-  "createRecipeFromSession.stageExtracting": {
-    "defaultMessage": "Extracting main topics..."
-  },
-  "createRecipeFromSession.stageFinalizing": {
-    "defaultMessage": "Finalizing details..."
-  },
-  "createRecipeFromSession.stageGenerating": {
-    "defaultMessage": "Generating recipe structure..."
-  },
-  "createRecipeFromSession.stageIdentifying": {
-    "defaultMessage": "Identifying key patterns..."
-  },
-  "createRecipeFromSession.stageReading": {
-    "defaultMessage": "Reading your conversation..."
-  },
-  "createRecipeFromSession.subtitle": {
-    "defaultMessage": "Create a reusable recipe based on your current conversation."
-  },
-  "createRecipeFromSession.title": {
-    "defaultMessage": "Create Recipe from Session"
   },
   "createSubRecipeInline.cancel": {
     "defaultMessage": "Cancel"
@@ -941,6 +929,9 @@
   "elicitationRequest.submit": {
     "defaultMessage": "Submit"
   },
+  "elicitationRequest.submitError": {
+    "defaultMessage": "This request is no longer active. The extension will need to ask again."
+  },
   "elicitationRequest.submitted": {
     "defaultMessage": "Information submitted"
   },
@@ -1443,7 +1434,7 @@
     "defaultMessage": "Loading variants..."
   },
   "huggingFaceModelSearch.noGgufModels": {
-    "defaultMessage": "No GGUF models found for this query."
+    "defaultMessage": "No compatible local models found for this query."
   },
   "huggingFaceModelSearch.recommended": {
     "defaultMessage": "Recommended"
@@ -1461,10 +1452,25 @@
     "defaultMessage": "Search returned no data."
   },
   "huggingFaceModelSearch.searchPlaceholder": {
-    "defaultMessage": "Search for GGUF models..."
+    "defaultMessage": "Search for local models..."
   },
   "huggingFaceModelSearch.tooLarge": {
     "defaultMessage": "May not fit in memory ({size} model, {available} available)"
+  },
+  "huggingFaceSignInPrompt.failedToConfigure": {
+    "defaultMessage": "Failed to sign in to Hugging Face: {error}"
+  },
+  "huggingFaceSignInPrompt.signIn": {
+    "defaultMessage": "Sign in"
+  },
+  "huggingFaceSignInPrompt.signedIn": {
+    "defaultMessage": "Hugging Face signed in"
+  },
+  "huggingFaceSignInPrompt.signingIn": {
+    "defaultMessage": "Signing in..."
+  },
+  "huggingFaceSignInPrompt.title": {
+    "defaultMessage": "Hugging Face"
   },
   "imagePreview.altText": {
     "defaultMessage": "goose image"
@@ -1785,10 +1791,16 @@
     "defaultMessage": "Delete this model? You can re-download it later."
   },
   "localInferenceSettings.description": {
-    "defaultMessage": "Download and manage local LLM models for inference without API keys. Search HuggingFace for any GGUF model or use the featured picks below."
+    "defaultMessage": "Download and manage local LLM models for inference without API keys. Search HuggingFace for GGUF or MLX models, or use the featured picks below."
+  },
+  "localInferenceSettings.dismiss": {
+    "defaultMessage": "Dismiss"
   },
   "localInferenceSettings.download": {
     "defaultMessage": "Download"
+  },
+  "localInferenceSettings.downloadCancelled": {
+    "defaultMessage": "Download cancelled"
   },
   "localInferenceSettings.downloadFailed": {
     "defaultMessage": "Download failed"
@@ -1805,6 +1817,9 @@
   "localInferenceSettings.featuredModels": {
     "defaultMessage": "Featured Models"
   },
+  "localInferenceSettings.huggingFaceSignInNote": {
+    "defaultMessage": "Sign in to increase rate limits when searching and downloading models, and to access private or gated Hugging Face repositories."
+  },
   "localInferenceSettings.modelSettings": {
     "defaultMessage": "Model Settings"
   },
@@ -1819,6 +1834,9 @@
   },
   "localInferenceSettings.remaining": {
     "defaultMessage": "{time} remaining"
+  },
+  "localInferenceSettings.retry": {
+    "defaultMessage": "Retry"
   },
   "localInferenceSettings.showAllFeatured": {
     "defaultMessage": "Show all featured ({count} more)"
@@ -2384,9 +2402,6 @@
   "navigationPanel.chats": {
     "defaultMessage": "Chats"
   },
-  "navigationPanel.collapseSidebar": {
-    "defaultMessage": "Collapse sidebar"
-  },
   "navigationPanel.noChats": {
     "defaultMessage": "No recent chats"
   },
@@ -2800,6 +2815,9 @@
   },
   "providerConfigurationModal.goBack": {
     "defaultMessage": "Go Back"
+  },
+  "providerConfigurationModal.huggingFaceOAuthDescription": {
+    "defaultMessage": "Sign in to use Hugging Face Inference Providers without manually entering an API token."
   },
   "providerConfigurationModal.oauthLoginFailed": {
     "defaultMessage": "OAuth login failed: {error}"
@@ -3659,6 +3677,9 @@
   "securityToggle.mlTokenDescription": {
     "defaultMessage": "Authentication token for the ML service (e.g., HuggingFace token)"
   },
+  "securityToggle.overrideNotice": {
+    "defaultMessage": "This setting is managed by your organization and cannot be changed."
+  },
   "securityToggle.promptInjectionDescription": {
     "defaultMessage": "Detect and prevent potential prompt injection attacks"
   },
@@ -3667,6 +3688,75 @@
   },
   "securityToggle.thresholdDescription": {
     "defaultMessage": "Higher values are more strict (0.01 = very lenient, 1.0 = maximum strict)"
+  },
+  "securityToggle.warpNotice": {
+    "defaultMessage": "Command injection detection works best when connected to WARP (required to reach the classification service)."
+  },
+  "sessionActionsHeader.actionsLabel": {
+    "defaultMessage": "Session actions"
+  },
+  "sessionActionsHeader.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "sessionActionsHeader.close": {
+    "defaultMessage": "Close"
+  },
+  "sessionActionsHeader.copiedJson": {
+    "defaultMessage": "Session JSON copied"
+  },
+  "sessionActionsHeader.copiedText": {
+    "defaultMessage": "Text copied"
+  },
+  "sessionActionsHeader.copyJson": {
+    "defaultMessage": "Copy JSON"
+  },
+  "sessionActionsHeader.copyText": {
+    "defaultMessage": "Copy text"
+  },
+  "sessionActionsHeader.duplicateFailed": {
+    "defaultMessage": "Failed to duplicate session: {error}"
+  },
+  "sessionActionsHeader.duplicateSession": {
+    "defaultMessage": "Duplicate session"
+  },
+  "sessionActionsHeader.duplicated": {
+    "defaultMessage": "Session duplicated"
+  },
+  "sessionActionsHeader.fullTextTitle": {
+    "defaultMessage": "Text value"
+  },
+  "sessionActionsHeader.jsonFailed": {
+    "defaultMessage": "Failed to load session JSON: {error}"
+  },
+  "sessionActionsHeader.jsonTitle": {
+    "defaultMessage": "Session JSON"
+  },
+  "sessionActionsHeader.loadingJson": {
+    "defaultMessage": "Loading JSON..."
+  },
+  "sessionActionsHeader.renameFailed": {
+    "defaultMessage": "Failed to rename session: {error}"
+  },
+  "sessionActionsHeader.renamePlaceholder": {
+    "defaultMessage": "Enter session name"
+  },
+  "sessionActionsHeader.renameSession": {
+    "defaultMessage": "Rename session"
+  },
+  "sessionActionsHeader.renameTitle": {
+    "defaultMessage": "Rename Session"
+  },
+  "sessionActionsHeader.renamed": {
+    "defaultMessage": "Session renamed"
+  },
+  "sessionActionsHeader.save": {
+    "defaultMessage": "Save"
+  },
+  "sessionActionsHeader.saving": {
+    "defaultMessage": "Saving..."
+  },
+  "sessionActionsHeader.viewJson": {
+    "defaultMessage": "View session JSON"
   },
   "sessionHistory.cancel": {
     "defaultMessage": "Cancel"
@@ -3727,9 +3817,6 @@
   },
   "sessionIndicators.streaming": {
     "defaultMessage": "Streaming"
-  },
-  "sessionItem.messageCount": {
-    "defaultMessage": "{count} messages"
   },
   "sessionSharingSection.alreadyConfigured": {
     "defaultMessage": "Session sharing has already been configured"
@@ -3854,9 +3941,6 @@
   "sessions.error.tryAgain": {
     "defaultMessage": "Try Again"
   },
-  "sessions.extensions": {
-    "defaultMessage": "Extensions:"
-  },
   "sessions.import": {
     "defaultMessage": "Import Session"
   },
@@ -3974,6 +4058,39 @@
   "settings.help.title": {
     "defaultMessage": "Help & feedback"
   },
+  "settings.language.description": {
+    "defaultMessage": "Choose the display language for goose"
+  },
+  "settings.language.english": {
+    "defaultMessage": "English"
+  },
+  "settings.language.hindi": {
+    "defaultMessage": "Hindi"
+  },
+  "settings.language.japanese": {
+    "defaultMessage": "Japanese"
+  },
+  "settings.language.korean": {
+    "defaultMessage": "Korean"
+  },
+  "settings.language.russian": {
+    "defaultMessage": "Russian"
+  },
+  "settings.language.spanish": {
+    "defaultMessage": "Spanish"
+  },
+  "settings.language.systemDefault": {
+    "defaultMessage": "System Default"
+  },
+  "settings.language.title": {
+    "defaultMessage": "Language"
+  },
+  "settings.language.turkish": {
+    "defaultMessage": "Turkish"
+  },
+  "settings.language.zhCN": {
+    "defaultMessage": "Chinese (Simplified)"
+  },
   "settings.menuBarIcon.description": {
     "defaultMessage": "Show goose in the menu bar"
   },
@@ -4054,6 +4171,9 @@
   },
   "settingsView.tabApp": {
     "defaultMessage": "App"
+  },
+  "settingsView.tabAuth": {
+    "defaultMessage": "Auth"
   },
   "settingsView.tabChat": {
     "defaultMessage": "Chat"
@@ -4578,10 +4698,16 @@
     "defaultMessage": "URL:"
   },
   "updateSection.autoDownload": {
-    "defaultMessage": "Update will be downloaded automatically in the background."
+    "defaultMessage": "Goose will download the update in the background and install it the next time you quit or restart."
+  },
+  "updateSection.autoDownloadDisabledByEnv": {
+    "defaultMessage": "Automatic downloads are disabled via the GOOSE_DISABLE_AUTO_DOWNLOAD environment variable."
+  },
+  "updateSection.autoDownloadDisabledNote": {
+    "defaultMessage": "Automatic download is disabled. Click \"Download Now\" to download manually."
   },
   "updateSection.autoInstallNote": {
-    "defaultMessage": "The update will be installed automatically when you quit the app."
+    "defaultMessage": "No manual install is needed."
   },
   "updateSection.checkForUpdates": {
     "defaultMessage": "Check for Updates"
@@ -4591,6 +4717,15 @@
   },
   "updateSection.currentVersion": {
     "defaultMessage": "Current version"
+  },
+  "updateSection.disableAutoDownload": {
+    "defaultMessage": "Disable automatic update downloads"
+  },
+  "updateSection.disableAutoDownloadDesc": {
+    "defaultMessage": "When enabled, Goose will notify you of new versions but will not download them automatically."
+  },
+  "updateSection.downloadNow": {
+    "defaultMessage": "Download Now"
   },
   "updateSection.downloadReady": {
     "defaultMessage": "Update downloaded and ready to install!"
@@ -4605,7 +4740,7 @@
     "defaultMessage": "Install & Restart"
   },
   "updateSection.installNowHint": {
-    "defaultMessage": "Or click \"Install & Restart\" to update now."
+    "defaultMessage": "Click \"Install & Restart\" to update now."
   },
   "updateSection.latestVersion": {
     "defaultMessage": "You are running the latest version!"
@@ -4620,7 +4755,7 @@
     "defaultMessage": "Manual installation required for this update method."
   },
   "updateSection.readyInstallAuto": {
-    "defaultMessage": "✓ Update is ready! It will be installed when you quit Goose."
+    "defaultMessage": "✓ Update is ready. Restart Goose to finish installing it, or quit when you're done."
   },
   "updateSection.readyInstallManual": {
     "defaultMessage": "✓ Update is ready! Click \"Install & Restart\" for installation instructions."

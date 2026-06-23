@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 
 use crate::context_mgmt::compact_messages;
-use crate::conversation::message::{Message, SystemNotificationType};
+use crate::conversation::message::Message;
 use crate::slash_commands::{recipe_slash_command, skill_slash_command};
 
 use super::Agent;
@@ -50,6 +50,10 @@ static COMMANDS: &[CommandDef] = &[
         description:
             "Set a goal the agent pursues relentlessly until max_turns, or clear with /grind off",
     },
+    CommandDef {
+        name: "status",
+        description: "Show session status: model, provider, mode, and token usage",
+    },
 ];
 
 pub struct ParsedSlashCommand<'a> {
@@ -84,6 +88,22 @@ pub fn list_commands() -> &'static [CommandDef] {
     COMMANDS
 }
 
+fn is_clear_goal_param(params_str: &str) -> bool {
+    matches!(params_str, "off" | "clear" | "none")
+}
+
+/// Whether a slash command should kick off an agent turn instead of just
+/// returning a confirmation. Setting a `/goal` or `/grind` (with a description,
+/// not the query or `off` forms) makes the agent start pursuing it immediately.
+pub fn command_starts_turn(message_text: &str) -> bool {
+    let Some(parsed) = parse_slash_command(message_text) else {
+        return false;
+    };
+    matches!(parsed.command, "goal" | "grind")
+        && !parsed.params_str.is_empty()
+        && !is_clear_goal_param(parsed.params_str)
+}
+
 impl Agent {
     pub async fn execute_command(
         &self,
@@ -110,6 +130,7 @@ impl Agent {
             "clear" => self.handle_clear_command(session_id).await,
             "skills" => self.handle_skills_command(session_id).await,
             "doctor" => Ok(Some(crate::doctor::run(self, session_id).await?)),
+            "status" => self.handle_status_command(session_id).await,
             "goal" => self.handle_goal_command(params_str).await,
             "grind" => self.handle_grind_command(params_str).await,
             _ => {
@@ -150,10 +171,7 @@ impl Agent {
         self.update_session_metrics(session_id, session.schedule_id, &usage, true)
             .await?;
 
-        Ok(Some(Message::assistant().with_system_notification(
-            SystemNotificationType::InlineMessage,
-            "Compaction complete",
-        )))
+        Ok(Some(user_only_assistant_text("Compaction complete")))
     }
 
     async fn handle_clear_command(&self, session_id: &str) -> Result<Option<Message>> {
@@ -166,16 +184,15 @@ impl Agent {
 
         manager
             .update(session_id)
-            .total_tokens(Some(0))
-            .input_tokens(Some(0))
-            .output_tokens(Some(0))
+            .usage(goose_providers::conversation::token_usage::Usage::new(
+                Some(0),
+                Some(0),
+                Some(0),
+            ))
             .apply()
             .await?;
 
-        Ok(Some(Message::assistant().with_system_notification(
-            SystemNotificationType::InlineMessage,
-            "Conversation cleared",
-        )))
+        Ok(Some(user_only_assistant_text("Conversation cleared")))
     }
 
     async fn handle_skills_command(&self, session_id: &str) -> Result<Option<Message>> {
@@ -188,6 +205,61 @@ impl Agent {
             .map(|s| s.working_dir);
         let output = skill_slash_command::format_installed_skills(working_dir.as_deref());
         Ok(Some(Message::assistant().with_text(output)))
+    }
+
+    async fn handle_status_command(&self, session_id: &str) -> Result<Option<Message>> {
+        let provider = self.provider().await?;
+        let model_config = provider.get_model_config();
+        let context_limit = model_config.context_limit();
+
+        let goose_mode = self.goose_mode().await;
+
+        let metadata = self
+            .config
+            .session_manager
+            .get_session(session_id, false)
+            .await
+            .ok();
+
+        // `usage` is the current context-window usage (reset by /compact);
+        // `accumulated_usage` is the lifetime sum across all responses. The context
+        // percentage must use the former, or it inflates and pegs at 100% in any
+        // long or post-compaction session.
+        let context_tokens = metadata
+            .as_ref()
+            .and_then(|s| s.usage.total_tokens)
+            .unwrap_or(0)
+            .max(0) as usize;
+        let lifetime_tokens = metadata
+            .as_ref()
+            .and_then(|s| s.accumulated_usage.total_tokens)
+            .unwrap_or(0)
+            .max(0) as usize;
+
+        let context_pct = if context_limit > 0 {
+            let pct = ((context_tokens as f64 / context_limit as f64) * 100.0).round() as usize;
+            format!("{}%", pct.min(100))
+        } else {
+            "N/A".to_string()
+        };
+
+        let text = format!(
+            "**Session status**\n\n\
+             - Model: {}\n\
+             - Provider: {}\n\
+             - Mode: {}\n\
+             - Tokens (lifetime): {}\n\
+             - Context: {} / {} tokens ({})",
+            model_config.model_name,
+            provider.get_name(),
+            goose_mode,
+            lifetime_tokens,
+            context_tokens,
+            context_limit,
+            context_pct,
+        );
+
+        Ok(Some(user_only_assistant_text(text)))
     }
 
     async fn handle_prompts_command(
@@ -386,7 +458,7 @@ impl Agent {
             return Ok(Some(Message::assistant().with_text(text)));
         }
 
-        if params_str == "off" || params_str == "clear" || params_str == "none" {
+        if is_clear_goal_param(params_str) {
             self.set_goal(None).await;
             return Ok(Some(
                 Message::assistant().with_text("Goal cleared. The agent will finish normally."),
@@ -410,7 +482,7 @@ impl Agent {
             return Ok(Some(Message::assistant().with_text(text)));
         }
 
-        if params_str == "off" || params_str == "clear" {
+        if is_clear_goal_param(params_str) {
             self.set_grind(None).await;
             return Ok(Some(
                 Message::assistant().with_text("Grind cleared. The agent will finish normally."),
@@ -425,9 +497,14 @@ impl Agent {
     }
 }
 
+fn user_only_assistant_text(text: impl Into<String>) -> Message {
+    Message::assistant().with_text(text).user_only()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::conversation::message::MessageContent;
 
     #[test]
     fn parse_slash_command_splits_on_literal_space() {
@@ -446,5 +523,43 @@ mod tests {
         let parsed = parse_slash_command("/speckit.plan\nhello").unwrap();
         assert_eq!(parsed.command, "speckit.plan\nhello");
         assert_eq!(parsed.params_str, "");
+    }
+
+    #[test]
+    fn command_starts_turn_only_for_goal_and_grind_with_description() {
+        assert!(command_starts_turn("/goal make all tests pass"));
+        assert!(command_starts_turn("/grind keep refactoring"));
+
+        // Query and clear forms must not start a turn.
+        assert!(!command_starts_turn("/goal"));
+        assert!(!command_starts_turn("/goal off"));
+        assert!(!command_starts_turn("/goal clear"));
+        assert!(!command_starts_turn("/goal none"));
+        assert!(!command_starts_turn("/grind"));
+        assert!(!command_starts_turn("/grind off"));
+
+        // Other commands and plain prompts never start a turn here.
+        assert!(!command_starts_turn("/compact"));
+        assert!(!command_starts_turn("just a normal message"));
+    }
+
+    #[test]
+    fn user_only_assistant_text_is_durable_text_not_system_notification() {
+        let message = user_only_assistant_text("Conversation cleared");
+
+        assert!(message.metadata.user_visible);
+        assert!(!message.metadata.agent_visible);
+        assert_eq!(message.role, rmcp::model::Role::Assistant);
+        assert!(matches!(
+            message.content.as_slice(),
+            [MessageContent::Text(text)] if text.text == "Conversation cleared"
+        ));
+    }
+
+    #[test]
+    fn status_is_registered_as_a_builtin_command() {
+        assert!(list_commands()
+            .iter()
+            .any(|command| command.name == "status"));
     }
 }

@@ -1,18 +1,19 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use goose_providers::images::ImageFormat;
 use serde_json::{json, Value};
 
 use super::api_client::{ApiClient, AuthMethod};
 use super::base::{ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata};
-use super::errors::ProviderError;
 use super::openai_compatible::{handle_status, stream_openai_compat};
 use super::retry::ProviderRetry;
-use super::utils::{ImageFormat, RequestLog};
 use crate::conversation::message::Message;
-use crate::model::ModelConfig;
-use crate::providers::formats::openai::create_request;
 use crate::providers::formats::openrouter as openrouter_format;
+use goose_providers::errors::ProviderError;
+use goose_providers::formats::openai::create_request;
+use goose_providers::model::ModelConfig;
+use goose_providers::request_log::{start_log, LoggerHandleExt};
 use rmcp::model::Tool;
 
 pub const OPENROUTER_PROVIDER_NAME: &str = "openrouter";
@@ -46,8 +47,15 @@ pub struct OpenRouterProvider {
 }
 
 impl OpenRouterProvider {
-    pub async fn from_env(model: ModelConfig) -> Result<Self> {
-        let model = model.with_fast(OPENROUTER_DEFAULT_FAST_MODEL, OPENROUTER_PROVIDER_NAME)?;
+    pub async fn from_env(
+        model: ModelConfig,
+        tls_config: Option<crate::providers::api_client::TlsConfig>,
+    ) -> Result<Self> {
+        let model = crate::model_config::with_configured_fast_model(
+            model,
+            OPENROUTER_PROVIDER_NAME,
+            OPENROUTER_DEFAULT_FAST_MODEL,
+        )?;
 
         let config = crate::config::Config::global();
         let api_key: String = config.get_secret("OPENROUTER_API_KEY")?;
@@ -56,7 +64,7 @@ impl OpenRouterProvider {
             .unwrap_or_else(|_| "https://openrouter.ai".to_string());
 
         let auth = AuthMethod::BearerToken(api_key);
-        let api_client = ApiClient::new(host, auth)?
+        let api_client = ApiClient::new_with_tls(host, auth, tls_config)?
             .with_header("HTTP-Referer", "https://goose-docs.ai")?
             .with_header("X-Title", "goose")?;
 
@@ -146,9 +154,7 @@ fn is_gemini_model(model_name: &str) -> bool {
     model_name.starts_with("google/")
 }
 
-impl ProviderDef for OpenRouterProvider {
-    type Provider = Self;
-
+impl goose_providers::base::ProviderDescriptor for OpenRouterProvider {
     fn metadata() -> ProviderMetadata {
         ProviderMetadata::new(
             OPENROUTER_PROVIDER_NAME,
@@ -174,12 +180,17 @@ impl ProviderDef for OpenRouterProvider {
             "Copy the key and paste it above",
         ])
     }
+}
+
+impl ProviderDef for OpenRouterProvider {
+    type Provider = Self;
 
     fn from_env(
         model: ModelConfig,
         _extensions: Vec<crate::config::ExtensionConfig>,
+        tls_config: Option<crate::providers::api_client::TlsConfig>,
     ) -> BoxFuture<'static, Result<Self::Provider>> {
-        Box::pin(Self::from_env(model))
+        Box::pin(Self::from_env(model, tls_config))
     }
 }
 
@@ -284,7 +295,7 @@ impl Provider for OpenRouterProvider {
             obj.insert("transforms".to_string(), json!(["middle-out"]));
         }
 
-        let mut log = RequestLog::start(model_config, &payload)?;
+        let mut log = start_log(model_config, &payload)?;
 
         let response = self
             .with_retry(|| async {

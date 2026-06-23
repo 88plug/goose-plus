@@ -8,23 +8,30 @@ impl GooseAcpAgent {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, agent_client_protocol::Error> {
+        if <SaveRecipeRequest as agent_client_protocol::JsonRpcMessage>::matches_method(method) {
+            let req = recipe::deserialize_save_recipe_request(params)?;
+            let result = self.on_save_recipe(req).await?;
+            return serde_json::to_value(&result)
+                .map_err(|e| agent_client_protocol::Error::internal_error().data(e.to_string()));
+        }
+
         self.handle_custom_request(method, params).await
     }
 
-    #[custom_method(AddExtensionRequest)]
-    async fn dispatch_add_extension(
+    #[custom_method(AddSessionExtensionRequest)]
+    async fn dispatch_add_session_extension(
         &self,
-        req: AddExtensionRequest,
+        req: AddSessionExtensionRequest,
     ) -> Result<EmptyResponse, agent_client_protocol::Error> {
-        self.on_add_extension(req).await
+        self.on_add_session_extension(req).await
     }
 
-    #[custom_method(RemoveExtensionRequest)]
-    async fn dispatch_remove_extension(
+    #[custom_method(RemoveSessionExtensionRequest)]
+    async fn dispatch_remove_session_extension(
         &self,
-        req: RemoveExtensionRequest,
+        req: RemoveSessionExtensionRequest,
     ) -> Result<EmptyResponse, agent_client_protocol::Error> {
-        self.on_remove_extension(req).await
+        self.on_remove_session_extension(req).await
     }
 
     #[custom_method(GetToolsRequest)]
@@ -67,6 +74,14 @@ impl GooseAcpAgent {
         self.on_set_session_system_prompt(req).await
     }
 
+    #[custom_method(SteerSessionRequest)]
+    async fn dispatch_steer_session(
+        &self,
+        req: SteerSessionRequest,
+    ) -> Result<SteerSessionResponse, agent_client_protocol::Error> {
+        self.on_steer_session(req).await
+    }
+
     #[custom_method(DeleteSessionRequest)]
     async fn dispatch_delete_session(
         &self,
@@ -75,11 +90,18 @@ impl GooseAcpAgent {
         self.on_delete_session(req).await
     }
 
-    #[custom_method(GetExtensionsRequest)]
-    async fn dispatch_get_extensions(
+    #[custom_method(GetConfigExtensionsRequest)]
+    async fn dispatch_get_config_extensions(
         &self,
-    ) -> Result<GetExtensionsResponse, agent_client_protocol::Error> {
-        self.on_get_extensions().await
+    ) -> Result<GetConfigExtensionsResponse, agent_client_protocol::Error> {
+        self.on_get_config_extensions().await
+    }
+
+    #[custom_method(GetAvailableExtensionsRequest)]
+    async fn dispatch_get_available_extensions(
+        &self,
+    ) -> Result<GetAvailableExtensionsResponse, agent_client_protocol::Error> {
+        self.on_get_available_extensions().await
     }
 
     #[custom_method(AddConfigExtensionRequest)]
@@ -98,12 +120,12 @@ impl GooseAcpAgent {
         self.on_remove_config_extension(req).await
     }
 
-    #[custom_method(ToggleConfigExtensionRequest)]
-    async fn dispatch_toggle_config_extension(
+    #[custom_method(SetConfigExtensionEnabledRequest)]
+    async fn dispatch_set_config_extension_enabled(
         &self,
-        req: ToggleConfigExtensionRequest,
+        req: SetConfigExtensionEnabledRequest,
     ) -> Result<EmptyResponse, agent_client_protocol::Error> {
-        self.on_toggle_config_extension(req).await
+        self.on_set_config_extension_enabled(req).await
     }
 
     #[custom_method(GetSessionExtensionsRequest)]
@@ -304,6 +326,102 @@ impl GooseAcpAgent {
         req: ImportSessionRequest,
     ) -> Result<ImportSessionResponse, agent_client_protocol::Error> {
         self.on_import_session(req).await
+    }
+
+    #[custom_method(EncodeRecipeRequest)]
+    async fn dispatch_encode_recipe(
+        &self,
+        req: EncodeRecipeRequest,
+    ) -> Result<EncodeRecipeResponse, agent_client_protocol::Error> {
+        self.on_encode_recipe(req).await
+    }
+
+    #[custom_method(DecodeRecipeRequest)]
+    async fn dispatch_decode_recipe(
+        &self,
+        req: DecodeRecipeRequest,
+    ) -> Result<DecodeRecipeResponse, agent_client_protocol::Error> {
+        self.on_decode_recipe(req).await
+    }
+
+    #[custom_method(ScanRecipeRequest)]
+    async fn dispatch_scan_recipe(
+        &self,
+        req: ScanRecipeRequest,
+    ) -> Result<ScanRecipeResponse, agent_client_protocol::Error> {
+        self.on_scan_recipe(req).await
+    }
+
+    #[custom_method(ListRecipesRequest)]
+    async fn dispatch_list_recipes(
+        &self,
+        req: ListRecipesRequest,
+    ) -> Result<ListRecipesResponse, agent_client_protocol::Error> {
+        self.on_list_recipes(req).await
+    }
+
+    #[custom_method(DeleteRecipeRequest)]
+    async fn dispatch_delete_recipe(
+        &self,
+        req: DeleteRecipeRequest,
+    ) -> Result<EmptyResponse, agent_client_protocol::Error> {
+        self.on_delete_recipe(req).await
+    }
+
+    #[custom_method(ScheduleRecipeRequest)]
+    async fn dispatch_schedule_recipe(
+        &self,
+        req: ScheduleRecipeRequest,
+    ) -> Result<EmptyResponse, agent_client_protocol::Error> {
+        self.on_schedule_recipe(req).await
+    }
+
+    #[custom_method(SetRecipeSlashCommandRequest)]
+    async fn dispatch_set_recipe_slash_command(
+        &self,
+        req: SetRecipeSlashCommandRequest,
+    ) -> Result<EmptyResponse, agent_client_protocol::Error> {
+        self.on_set_recipe_slash_command(req).await
+    }
+
+    #[custom_method(SaveRecipeRequest)]
+    async fn dispatch_save_recipe(
+        &self,
+        req: SaveRecipeRequest,
+    ) -> Result<SaveRecipeResponse, agent_client_protocol::Error> {
+        self.on_save_recipe(req).await
+    }
+
+    #[custom_method(ParseRecipeRequest)]
+    async fn dispatch_parse_recipe(
+        &self,
+        req: ParseRecipeRequest,
+    ) -> Result<ParseRecipeResponse, agent_client_protocol::Error> {
+        self.on_parse_recipe(req).await
+    }
+
+    #[custom_method(RecipeToYamlRequest)]
+    async fn dispatch_recipe_to_yaml(
+        &self,
+        req: RecipeToYamlRequest,
+    ) -> Result<RecipeToYamlResponse, agent_client_protocol::Error> {
+        self.on_recipe_to_yaml(req).await
+    }
+
+    #[custom_method(GetSessionInfoRequest)]
+    async fn dispatch_get_session_info(
+        &self,
+        req: GetSessionInfoRequest,
+    ) -> Result<GetSessionInfoResponse, agent_client_protocol::Error> {
+        self.on_get_session_info(req).await
+    }
+
+    #[custom_method(TruncateSessionConversationRequest)]
+    async fn dispatch_truncate_session_conversation(
+        &self,
+        req: TruncateSessionConversationRequest,
+    ) -> Result<EmptyResponse, agent_client_protocol::Error> {
+        self.on_truncate_session_conversation(req).await
     }
 
     #[custom_method(UpdateSessionProjectRequest)]
