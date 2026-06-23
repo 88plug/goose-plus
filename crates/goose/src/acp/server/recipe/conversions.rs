@@ -297,6 +297,7 @@ impl TryFrom<RecipeExtensionDto> for ExtensionConfig {
                 timeout,
                 bundled,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
             RecipeExtensionDto::Platform {
                 name,
@@ -309,6 +310,7 @@ impl TryFrom<RecipeExtensionDto> for ExtensionConfig {
                 display_name,
                 bundled,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
             RecipeExtensionDto::Stdio {
                 name,
@@ -331,6 +333,7 @@ impl TryFrom<RecipeExtensionDto> for ExtensionConfig {
                 cwd,
                 bundled,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
             RecipeExtensionDto::StreamableHttp {
                 name,
@@ -353,6 +356,7 @@ impl TryFrom<RecipeExtensionDto> for ExtensionConfig {
                 socket,
                 bundled,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
         })
     }
@@ -601,6 +605,7 @@ mod tests {
                 timeout: Some(30),
                 dependencies: None,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             }]),
             settings: None,
             activities: None,

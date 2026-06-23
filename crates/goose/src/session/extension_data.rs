@@ -164,6 +164,7 @@ mod tests {
             timeout: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
     }
 
@@ -277,6 +278,7 @@ mod tests {
                 display_name: None,
                 bundled: None,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
             ExtensionConfig::Builtin {
                 name: "developer".to_string(),
@@ -285,6 +287,7 @@ mod tests {
                 timeout: None,
                 bundled: None,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
         ]);
 

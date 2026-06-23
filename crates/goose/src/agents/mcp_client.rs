@@ -1293,7 +1293,7 @@ mod tests {
         assert_eq!(reconnect_backoff(100), RECONNECT_MAX_BACKOFF);
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn test_retry_with_backoff_succeeds_after_transient_failures() {
         let calls = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let calls_clone = calls.clone();
@@ -1318,7 +1318,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn test_retry_with_backoff_gives_up_after_max_attempts() {
         let calls = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let calls_clone = calls.clone();

@@ -322,6 +322,7 @@ impl CliSession {
             cwd: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         })
     }
 
@@ -358,6 +359,7 @@ impl CliSession {
             socket: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     }
 
@@ -374,6 +376,7 @@ impl CliSession {
                         display_name: None,
                         bundled: None,
                         available_tools: Vec::new(),
+                        blocked_tools: Vec::new(),
                     }
                 } else {
                     ExtensionConfig::Builtin {
@@ -383,6 +386,7 @@ impl CliSession {
                         bundled: None,
                         description: extension_name.to_string(),
                         available_tools: Vec::new(),
+                        blocked_tools: Vec::new(),
                     }
                 }
             })
@@ -2374,6 +2378,7 @@ mod tests {
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
         ; "name_from_cmd_basename"
     )]
@@ -2390,6 +2395,7 @@ mod tests {
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
         ; "env_prefix_name_from_cmd"
     )]
@@ -2406,6 +2412,7 @@ mod tests {
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
         ; "quoted_path_with_spaces"
     )]
@@ -2516,6 +2523,7 @@ mod tests {
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
         ; "name_from_host"
     )]
@@ -2532,6 +2540,7 @@ mod tests {
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
         ; "port_and_path"
     )]
@@ -2548,6 +2557,7 @@ mod tests {
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
         ; "different_port_and_path"
     )]

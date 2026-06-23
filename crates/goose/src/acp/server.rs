@@ -369,6 +369,7 @@ fn mcp_server_to_extension_config(mcp_server: McpServer) -> Result<ExtensionConf
                 cwd: None,
                 bundled: Some(false),
                 available_tools: vec![],
+                blocked_tools: Vec::new(),
             })
         }
         McpServer::Http(http) => {
@@ -388,6 +389,7 @@ fn mcp_server_to_extension_config(mcp_server: McpServer) -> Result<ExtensionConf
                 socket: None,
                 bundled: Some(false),
                 available_tools: vec![],
+                blocked_tools: Vec::new(),
             })
         }
         McpServer::Sse(_) => Err("SSE is unsupported, migrate to streamable_http".to_string()),
@@ -787,6 +789,7 @@ fn builtin_to_extension_config(name: &str) -> ExtensionConfig {
             display_name: Some(def.display_name.into()),
             bundled: Some(true),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
     } else {
         ExtensionConfig::Builtin {
@@ -796,6 +799,7 @@ fn builtin_to_extension_config(name: &str) -> ExtensionConfig {
             bundled: Some(true),
             description: name.into(),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
     }
 }
@@ -2995,6 +2999,7 @@ mod tests {
             cwd: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         })
     )]
     #[test_case(
@@ -3016,6 +3021,7 @@ mod tests {
             socket: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         })
     )]
     #[test_case(

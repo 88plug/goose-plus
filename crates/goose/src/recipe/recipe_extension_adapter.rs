@@ -25,6 +25,8 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     #[serde(rename = "builtin")]
     Builtin {
@@ -37,6 +39,8 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     #[serde(rename = "platform")]
     Platform {
@@ -49,6 +53,8 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     #[serde(rename = "streamable_http")]
     StreamableHttp {
@@ -69,6 +75,8 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     #[serde(rename = "frontend")]
     Frontend {
@@ -81,6 +89,8 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     #[serde(rename = "inline_python")]
     InlinePython {
@@ -93,6 +103,8 @@ enum RecipeExtensionConfigInternal {
         dependencies: Option<Vec<String>>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
 }
 
@@ -126,18 +138,21 @@ impl From<RecipeExtensionConfigInternal> for ExtensionConfig {
                 timeout,
                 cwd,
                 bundled,
-                available_tools
+                available_tools,
+                blocked_tools
             },
             Builtin {
                 display_name,
                 timeout,
                 bundled,
-                available_tools
+                available_tools,
+                blocked_tools
             },
             Platform {
                 display_name,
                 bundled,
-                available_tools
+                available_tools,
+                blocked_tools
             },
             StreamableHttp {
                 uri,
@@ -147,19 +162,22 @@ impl From<RecipeExtensionConfigInternal> for ExtensionConfig {
                 timeout,
                 socket,
                 bundled,
-                available_tools
+                available_tools,
+                blocked_tools
             },
             Frontend {
                 tools,
                 instructions,
                 bundled,
-                available_tools
+                available_tools,
+                blocked_tools
             },
             InlinePython {
                 code,
                 timeout,
                 dependencies,
-                available_tools
+                available_tools,
+                blocked_tools
             }
         )
     }
@@ -212,6 +230,7 @@ mod tests {
                 timeout,
                 bundled,
                 available_tools,
+                ..
             } => {
                 assert_eq!(name, "test-builtin");
                 assert_eq!(description, "");
@@ -221,6 +240,29 @@ mod tests {
                 assert_eq!(
                     available_tools,
                     &vec!["tool_a".to_string(), "tool_b".to_string()]
+                );
+            }
+            other => panic!("unexpected extension variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn builtin_extension_deserializes_blocked_tools() {
+        let wrapper: Wrapper = serde_json::from_value(json!({
+            "extensions": [{
+                "type": "builtin",
+                "name": "developer",
+                "blocked_tools": ["shell", "write_file"],
+            }]
+        }))
+        .expect("failed to deserialize extensions with blocked_tools");
+
+        let extensions = wrapper.extensions.expect("expected extensions");
+        match &extensions[0] {
+            ExtensionConfig::Builtin { blocked_tools, .. } => {
+                assert_eq!(
+                    blocked_tools,
+                    &vec!["shell".to_string(), "write_file".to_string()]
                 );
             }
             other => panic!("unexpected extension variant: {:?}", other),
@@ -249,6 +291,7 @@ mod tests {
                 timeout,
                 bundled,
                 available_tools,
+                ..
             } => {
                 assert_eq!(name, "null-description-builtin");
                 assert_eq!(description, "");

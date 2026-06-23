@@ -169,6 +169,7 @@ mod tests {
                     socket: None,
                     bundled: None,
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                     headers: HashMap::new(),
                 },
                 ExtensionConfig::Stdio {
@@ -182,6 +183,7 @@ mod tests {
                     description: "slack-mcp".to_string(),
                     bundled: None,
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 },
                 ExtensionConfig::Builtin {
                     name: "builtin-ext".to_string(),
@@ -190,6 +192,7 @@ mod tests {
                     timeout: None,
                     bundled: None,
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 },
             ]),
             settings: None,
@@ -267,6 +270,7 @@ mod tests {
                     socket: None,
                     bundled: None,
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                     headers: HashMap::new(),
                 },
                 ExtensionConfig::Stdio {
@@ -280,6 +284,7 @@ mod tests {
                     description: "service-b".to_string(),
                     bundled: None,
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 },
             ]),
             settings: None,
@@ -328,6 +333,7 @@ mod tests {
                 socket: None,
                 bundled: None,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
                 headers: HashMap::new(),
             }]),
             sub_recipes: Some(vec![SubRecipe {

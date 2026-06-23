@@ -196,6 +196,8 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     /// Built-in extension that is part of the bundled goose MCP server
     #[serde(rename = "builtin")]
@@ -212,6 +214,8 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     /// Platform extensions that have direct access to the agent etc and run in the agent process
     #[serde(rename = "platform")]
@@ -227,6 +231,8 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     /// Streamable HTTP client with a URI endpoint using MCP Streamable HTTP specification
     #[serde(rename = "streamable_http")]
@@ -257,6 +263,8 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     /// Frontend-provided tools that will be called through the frontend
     #[serde(rename = "frontend")]
@@ -275,6 +283,8 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
     /// Inline Python code that will be executed using uvx
     #[serde(rename = "inline_python")]
@@ -294,6 +304,8 @@ pub enum ExtensionConfig {
         dependencies: Option<Vec<String>>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        blocked_tools: Vec<String>,
     },
 }
 
@@ -306,6 +318,7 @@ impl Default for ExtensionConfig {
             timeout: Some(config::DEFAULT_EXTENSION_TIMEOUT),
             bundled: Some(true),
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     }
 }
@@ -328,6 +341,7 @@ impl ExtensionConfig {
             socket: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     }
 
@@ -348,6 +362,7 @@ impl ExtensionConfig {
             cwd: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     }
 
@@ -364,6 +379,7 @@ impl ExtensionConfig {
             timeout: Some(timeout.into()),
             dependencies: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     }
 
@@ -383,6 +399,7 @@ impl ExtensionConfig {
                 description,
                 bundled,
                 available_tools,
+                blocked_tools,
                 ..
             } => Self::Stdio {
                 name,
@@ -395,6 +412,7 @@ impl ExtensionConfig {
                 cwd,
                 bundled,
                 available_tools,
+                blocked_tools,
             },
             other => other,
         }
@@ -419,27 +437,45 @@ impl ExtensionConfig {
 
     /// Check if a tool should be available to the LLM
     pub fn is_tool_available(&self, tool_name: &str) -> bool {
-        let available_tools = match self {
+        let (available_tools, blocked_tools) = match self {
             Self::Sse { .. } => return false, // SSE is unsupported
             Self::StreamableHttp {
-                available_tools, ..
+                available_tools,
+                blocked_tools,
+                ..
             }
             | Self::Stdio {
-                available_tools, ..
+                available_tools,
+                blocked_tools,
+                ..
             }
             | Self::Builtin {
-                available_tools, ..
+                available_tools,
+                blocked_tools,
+                ..
             }
             | Self::Platform {
-                available_tools, ..
+                available_tools,
+                blocked_tools,
+                ..
             }
             | Self::InlinePython {
-                available_tools, ..
+                available_tools,
+                blocked_tools,
+                ..
             }
             | Self::Frontend {
-                available_tools, ..
-            } => available_tools,
+                available_tools,
+                blocked_tools,
+                ..
+            } => (available_tools, blocked_tools),
         };
+
+        // Denylist takes precedence: a blocked tool is never available, even if
+        // it also appears in the allowlist.
+        if blocked_tools.iter().any(|t| t == tool_name) {
+            return false;
+        }
 
         // If no tools are specified, all tools are available
         // If tools are specified, only those tools are available
@@ -461,6 +497,7 @@ impl ExtensionConfig {
                 cwd,
                 bundled,
                 available_tools,
+                blocked_tools,
             } => {
                 let merged = merge_environments(&envs, &env_keys, &name, config).await?;
                 Ok(Self::Stdio {
@@ -474,6 +511,7 @@ impl ExtensionConfig {
                     cwd: cwd.map(|s| substitute_env_vars(&s, &merged)),
                     bundled,
                     available_tools,
+                    blocked_tools,
                 })
             }
             Self::StreamableHttp {
@@ -487,6 +525,7 @@ impl ExtensionConfig {
                 socket,
                 bundled,
                 available_tools,
+                blocked_tools,
             } => {
                 let merged = merge_environments(&envs, &env_keys, &name, config).await?;
                 let headers = headers
@@ -508,6 +547,7 @@ impl ExtensionConfig {
                     socket,
                     bundled,
                     available_tools,
+                    blocked_tools,
                 })
             }
             other => Ok(other),
@@ -693,6 +733,7 @@ available_tools: []
             timeout: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::Builtin {
             name: "developer".into(),
@@ -701,6 +742,7 @@ available_tools: []
             timeout: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "builtin_unchanged"
     )]
@@ -725,6 +767,7 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::StreamableHttp {
             name: "test".into(),
@@ -746,6 +789,7 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "header_substitution"
     )]
@@ -761,6 +805,7 @@ available_tools: []
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::Stdio {
             name: "test".into(),
@@ -773,6 +818,7 @@ available_tools: []
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "env_keys_cleared"
     )]
@@ -788,6 +834,7 @@ available_tools: []
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::Stdio {
             name: "test".into(),
@@ -804,6 +851,7 @@ available_tools: []
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "env_key_resolved"
     )]
@@ -824,6 +872,7 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::StreamableHttp {
             name: "test".into(),
@@ -842,6 +891,7 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "http_env_key_and_header_substitution"
     )]
@@ -857,6 +907,7 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::StreamableHttp {
             name: "test".into(),
@@ -873,6 +924,7 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "http_env_key_uri_substitution"
     )]
@@ -892,6 +944,7 @@ available_tools: []
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         },
         ExtensionConfig::Stdio {
             name: "test".into(),
@@ -908,6 +961,7 @@ available_tools: []
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         }
         ; "env_key_skipped_when_already_in_envs"
     )]
@@ -936,6 +990,7 @@ available_tools: []
             socket: Some("@egress.sock".to_string()),
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         };
         assert_eq!(
             config.to_string(),
@@ -956,10 +1011,69 @@ available_tools: []
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: vec![],
         };
         assert_eq!(
             config.to_string(),
             "StreamableHttp(test: http://localhost:8080/mcp)"
         );
+    }
+
+    fn builtin_with_tools(available: Vec<&str>, blocked: Vec<&str>) -> ExtensionConfig {
+        ExtensionConfig::Builtin {
+            name: "developer".into(),
+            description: String::new(),
+            display_name: None,
+            timeout: None,
+            bundled: None,
+            available_tools: available.into_iter().map(Into::into).collect(),
+            blocked_tools: blocked.into_iter().map(Into::into).collect(),
+        }
+    }
+
+    #[test]
+    fn test_is_tool_available_blocked_tools() {
+        let no_restrictions = builtin_with_tools(vec![], vec![]);
+        assert!(no_restrictions.is_tool_available("shell"));
+        assert!(no_restrictions.is_tool_available("write_file"));
+
+        let denylist = builtin_with_tools(vec![], vec!["shell", "write_file"]);
+        assert!(!denylist.is_tool_available("shell"));
+        assert!(!denylist.is_tool_available("write_file"));
+        assert!(denylist.is_tool_available("read_file"));
+
+        let allowlist_only = builtin_with_tools(vec!["shell", "read_file"], vec![]);
+        assert!(allowlist_only.is_tool_available("shell"));
+        assert!(!allowlist_only.is_tool_available("write_file"));
+
+        let denylist_overrides_allowlist =
+            builtin_with_tools(vec!["shell", "read_file"], vec!["shell"]);
+        assert!(!denylist_overrides_allowlist.is_tool_available("shell"));
+        assert!(denylist_overrides_allowlist.is_tool_available("read_file"));
+    }
+
+    #[test]
+    fn test_deserialize_blocked_tools() {
+        let config: ExtensionConfig = serde_yaml::from_str(
+            "type: builtin
+name: developer
+display_name: Developer
+timeout: 300
+bundled: true
+blocked_tools:
+  - shell
+  - write_file
+",
+        )
+        .unwrap();
+        match config {
+            ExtensionConfig::Builtin { blocked_tools, .. } => {
+                assert_eq!(
+                    blocked_tools,
+                    vec!["shell".to_string(), "write_file".to_string()]
+                );
+            }
+            other => panic!("unexpected result of deserialization: {}", other),
+        }
     }
 }

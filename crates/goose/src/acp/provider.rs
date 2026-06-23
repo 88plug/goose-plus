@@ -1719,6 +1719,7 @@ mod tests {
             cwd: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         },
         vec![
             McpServer::Stdio(
@@ -1741,6 +1742,7 @@ mod tests {
             socket: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         },
         vec![
             McpServer::Http(
@@ -1795,6 +1797,7 @@ mod tests {
             socket: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
 
         let servers = extension_configs_to_mcp_servers(&[config]);

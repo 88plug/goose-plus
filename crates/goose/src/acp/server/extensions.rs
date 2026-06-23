@@ -236,6 +236,7 @@ fn goose_extension_to_config(
             timeout,
             bundled,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         },
         GooseExtension::Platform {
             name,
@@ -248,6 +249,7 @@ fn goose_extension_to_config(
             display_name,
             bundled,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         },
         GooseExtension::Mcp {
             server,
@@ -280,6 +282,7 @@ fn goose_extension_to_config(
                     cwd: None,
                     bundled,
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 }
             }
             McpServer::Http(http) => ExtensionConfig::StreamableHttp {
@@ -297,6 +300,7 @@ fn goose_extension_to_config(
                 socket,
                 bundled,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
             McpServer::Sse(_) => {
                 return Err(agent_client_protocol::Error::invalid_params()
@@ -374,6 +378,7 @@ mod tests {
             timeout: Some(30),
             bundled: Some(true),
             available_tools: vec!["shell".to_string()],
+            blocked_tools: Vec::new(),
         };
 
         let extension = config_to_goose_extension(&config)
@@ -406,6 +411,7 @@ mod tests {
             display_name: Some("Todo".to_string()),
             bundled: Some(true),
             available_tools: vec!["write_todos".to_string()],
+            blocked_tools: Vec::new(),
         };
 
         let extension = config_to_goose_extension(&config)
@@ -444,6 +450,7 @@ mod tests {
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
 
         let extension = config_to_goose_extension(&config)
@@ -497,6 +504,7 @@ mod tests {
             socket: Some("@egress.sock".to_string()),
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
 
         let extension = config_to_goose_extension(&config)
@@ -541,6 +549,7 @@ mod tests {
             timeout: Some(12),
             dependencies: Some(vec!["requests".to_string()]),
             available_tools: vec!["fetch".to_string()],
+            blocked_tools: Vec::new(),
         };
 
         let extension = config_to_goose_extension(&config).expect("conversion should succeed");
@@ -570,6 +579,7 @@ mod tests {
             instructions: Some("Use frontend tools carefully".to_string()),
             bundled: None,
             available_tools: vec!["pick_color".to_string()],
+            blocked_tools: Vec::new(),
         };
 
         let extension = config_to_goose_extension(&config).expect("conversion should succeed");
@@ -707,6 +717,7 @@ mod tests {
             socket,
             bundled,
             available_tools,
+            ..
         } = conversion.config
         else {
             panic!("expected streamable http config");
@@ -753,6 +764,7 @@ mod tests {
             timeout,
             bundled,
             available_tools,
+            ..
         } = conversion.config
         else {
             panic!("expected builtin config");
@@ -784,6 +796,7 @@ mod tests {
             display_name,
             bundled,
             available_tools,
+            ..
         } = conversion.config
         else {
             panic!("expected platform config");

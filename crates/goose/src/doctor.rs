@@ -129,6 +129,7 @@ async fn ensure_developer_extension(agent: &crate::agents::Agent, session_id: &s
         display_name: Some("Developer".to_string()),
         bundled: None,
         available_tools: vec![],
+        blocked_tools: Vec::new(),
     };
     if let Err(e) = agent.add_extension(config, session_id).await {
         tracing::warn!("Doctor: failed to load developer extension: {}", e);

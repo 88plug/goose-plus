@@ -234,6 +234,7 @@ pub fn get_available_extensions() -> Vec<ExtensionConfig> {
             timeout: None,
             bundled: Some(true),
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         })
         .chain(
             platform_definitions
@@ -244,6 +245,7 @@ pub fn get_available_extensions() -> Vec<ExtensionConfig> {
                     display_name: Some(definition.display_name.to_string()),
                     bundled: Some(true),
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 }),
         )
         .collect()
@@ -327,6 +329,7 @@ mod tests {
                 timeout: None,
                 bundled: None,
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
         }
     }
@@ -339,6 +342,7 @@ mod tests {
             display_name: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         };
 
         let builtin = ExtensionConfig::Builtin {
@@ -348,6 +352,7 @@ mod tests {
             timeout: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         };
 
         assert!(!is_extension_available(&unknown_platform));
@@ -485,6 +490,7 @@ extensions:
                 cwd: None,
                 bundled: None,
                 available_tools: vec!["run".to_string()],
+                blocked_tools: Vec::new(),
             },
         };
         let key = saved.config.key();

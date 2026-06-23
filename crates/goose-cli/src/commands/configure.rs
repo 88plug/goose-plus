@@ -1102,6 +1102,7 @@ fn configure_builtin_extension() -> anyhow::Result<()> {
             display_name: Some(display_name),
             bundled: Some(true),
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     } else {
         let timeout = prompt_extension_timeout()?;
@@ -1112,6 +1113,7 @@ fn configure_builtin_extension() -> anyhow::Result<()> {
             bundled: Some(true),
             description,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         }
     };
 
@@ -1164,6 +1166,7 @@ fn configure_stdio_extension() -> anyhow::Result<()> {
             cwd: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         },
     });
 
@@ -1208,6 +1211,7 @@ fn configure_streamable_http_extension() -> anyhow::Result<()> {
             socket: None,
             bundled: None,
             available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
         },
     });
 
@@ -1895,6 +1899,7 @@ pub async fn handle_openrouter_auth() -> anyhow::Result<()> {
                                 display_name: Some(goose::config::DEFAULT_DISPLAY_NAME.to_string()),
                                 bundled: Some(true),
                                 available_tools: Vec::new(),
+                                blocked_tools: Vec::new(),
                             },
                         });
                         println!("✓ Developer extension enabled");
@@ -1967,6 +1972,7 @@ pub async fn handle_tetrate_auth() -> anyhow::Result<()> {
                                 display_name: Some(goose::config::DEFAULT_DISPLAY_NAME.to_string()),
                                 bundled: Some(true),
                                 available_tools: Vec::new(),
+                                blocked_tools: Vec::new(),
                             },
                         });
                         println!("✓ Developer extension enabled");

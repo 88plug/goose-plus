@@ -230,6 +230,7 @@ impl ProviderFixture {
             timeout: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
 
         let provider = create_with_named_model(

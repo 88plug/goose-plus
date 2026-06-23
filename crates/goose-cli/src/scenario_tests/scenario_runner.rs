@@ -227,6 +227,7 @@ where
                 timeout: None,
                 bundled: None,
                 available_tools: vec![],
+                blocked_tools: Vec::new(),
             },
             Arc::new(mock_client),
             None,

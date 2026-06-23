@@ -785,6 +785,7 @@ mod tests {
                     display_name: Some("Todo".to_string()),
                     bundled: Some(true),
                     available_tools: vec![],
+                    blocked_tools: Vec::new(),
                 },
             };
             set_extension(todo_extension_entry);
@@ -821,6 +822,7 @@ mod tests {
                 display_name: Some("Extension Manager".to_string()),
                 bundled: Some(true),
                 available_tools: vec![],
+                blocked_tools: Vec::new(),
             };
 
             agent
@@ -1645,6 +1647,7 @@ mod tests {
                 instructions: Some(format!("Use the {tool_name} tool.")),
                 bundled: None,
                 available_tools: vec![],
+                blocked_tools: Vec::new(),
             }
         }
 

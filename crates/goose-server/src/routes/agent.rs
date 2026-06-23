@@ -1481,6 +1481,7 @@ mod tests {
             instructions: Some("Use the frontend echo tool.".to_string()),
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }
     }
 

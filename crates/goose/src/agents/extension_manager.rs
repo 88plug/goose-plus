@@ -2077,6 +2077,7 @@ mod tests {
                 timeout: None,
                 bundled: None,
                 available_tools,
+                blocked_tools: Vec::new(),
             };
             let extension = Extension::new(config.clone(), config.clone(), client, None, None);
             self.extensions
@@ -2298,7 +2299,10 @@ mod tests {
             .dispatch_tool_call(&ctx, unknown_tool_call, CancellationToken::default())
             .await;
 
-        let err = result.expect_err("Expected unknown tool to error");
+        let err = match result {
+            Ok(_) => panic!("Expected unknown tool to error"),
+            Err(e) => e,
+        };
         let tool_err = err.downcast_ref::<ErrorData>().expect("Expected ErrorData");
         assert_eq!(tool_err.code, ErrorCode::RESOURCE_NOT_FOUND);
         assert!(tool_err.message.contains("Tool 'read_file' not found"));
@@ -2703,6 +2707,7 @@ mod tests {
             instructions: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
 
         em.add_client(
@@ -2741,6 +2746,7 @@ mod tests {
             instructions: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
         let config_b = ExtensionConfig::Frontend {
             name: "test-ext".to_string(),
@@ -2749,6 +2755,7 @@ mod tests {
             instructions: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
 
         em.add_client(

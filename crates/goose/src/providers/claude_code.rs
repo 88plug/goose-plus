@@ -1192,6 +1192,7 @@ mod tests {
             cwd: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }],
         Some(json!({ "mcpServers": {
             "lookup": {
@@ -1215,6 +1216,7 @@ mod tests {
             socket: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }],
         Some(json!({ "mcpServers": {
             "lookup": {
@@ -1237,6 +1239,7 @@ mod tests {
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         }],
         Some(json!({ "mcpServers": {
             "mcp_kiwi_com": {

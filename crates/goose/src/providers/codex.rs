@@ -791,6 +791,7 @@ mod tests {
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         },
         &[
             r#"mcp_servers.lookup.command="node""#,
@@ -811,6 +812,7 @@ mod tests {
             socket: None,
             bundled: Some(false),
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         },
         &[
             r#"mcp_servers.lookup.url="http://localhost/mcp""#,
@@ -830,6 +832,7 @@ mod tests {
             socket: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         },
         &[
             r#"mcp_servers.mcp_kiwi_com.url="https://mcp.kiwi.com""#,
@@ -848,6 +851,7 @@ mod tests {
             cwd: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         },
         &[
             r#"mcp_servers.my-server.command="/usr/bin/my-server""#,

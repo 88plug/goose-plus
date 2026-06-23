@@ -691,6 +691,7 @@ mod tests {
                     instructions: None,
                     bundled: None,
                     available_tools: vec![],
+                    blocked_tools: Vec::new(),
                 },
                 &session.id,
             )

@@ -86,6 +86,7 @@ fn migrate_platform_extensions(config: &mut Mapping) -> bool {
                     timeout: None,
                     bundled: Some(true),
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 }
             } else {
                 ExtensionConfig::Platform {
@@ -94,6 +95,7 @@ fn migrate_platform_extensions(config: &mut Mapping) -> bool {
                     display_name: Some(def.display_name.to_string()),
                     bundled: Some(true),
                     available_tools: Vec::new(),
+                    blocked_tools: Vec::new(),
                 }
             };
 
@@ -285,6 +287,7 @@ mod tests {
                 display_name: Some("Old Name".to_string()),
                 bundled: Some(true),
                 available_tools: Vec::new(),
+                blocked_tools: Vec::new(),
             },
             enabled: false,
         };

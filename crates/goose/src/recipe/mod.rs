@@ -245,6 +245,7 @@ impl Recipe {
                 display_name: None,
                 bundled: None,
                 available_tools: vec![],
+                blocked_tools: Vec::new(),
             };
             if let Some(exts) = &mut self.extensions {
                 exts.push(analyze);
@@ -262,6 +263,7 @@ impl Recipe {
             display_name: None,
             bundled: None,
             available_tools: vec![],
+            blocked_tools: Vec::new(),
         };
         match &mut self.extensions {
             Some(exts) if !exts.iter().any(|e| e.name() == "summon") => exts.push(summon),
