@@ -1941,6 +1941,15 @@ impl Agent {
                 // reasoning without hiding final-only non-streaming thoughts.
                 let mut surfaced_thinking_in_turn = false;
 
+                // Accumulate Thinking across every streamed partial message in this
+                // provider turn. DeepSeek/openai-compatible reasoning models stream
+                // reasoning_content in chunks BEFORE the tool_call chunk, so the final
+                // tool_call response often carries no Thinking. Rebuilding history from
+                // only that final response loses the reasoning, and DeepSeek then
+                // rejects the next request with "The reasoning_content in the thinking
+                // mode must be passed back to the API." (#9397, #9675)
+                let mut accumulated_thinking: Vec<MessageContent> = Vec::new();
+
                 while let Some(next) = stream.next().await {
                     if is_token_cancelled(&cancel_token) || exit_chat {
                         break;
@@ -1987,6 +1996,12 @@ impl Agent {
                                                 | MessageContent::RedactedThinking(_)
                                         )
                                     },
+                                );
+
+                                accumulated_thinking.extend(
+                                    response.content.iter()
+                                        .filter(|c| matches!(c, MessageContent::Thinking(_)))
+                                        .cloned(),
                                 );
 
                                 yield AgentEvent::Message(filtered_response.clone());
@@ -2171,27 +2186,20 @@ impl Agent {
                                     }
                                 }
 
-                                // Preserve thinking/reasoning content from the original response
-                                // Gemini (and other thinking models) require thinking to be echoed back
-                                // Kimi/DeepSeek require reasoning_content on assistant tool call messages
-                                let thinking_content: Vec<MessageContent> = response.content.iter()
-                                    .filter(|c| matches!(c, MessageContent::Thinking(_)))
-                                    .cloned()
-                                    .collect();
-                                if !thinking_content.is_empty() {
+                                // Preserve thinking/reasoning content from the whole turn.
+                                // Gemini (and other thinking models) require thinking to be echoed back.
+                                // Kimi/DeepSeek require reasoning_content on assistant tool call messages.
+                                // Use thinking accumulated across all streamed partials, since the final
+                                // tool_call chunk often carries no Thinking of its own (#9397, #9675).
+                                let reasoning_content: Vec<MessageContent> = accumulated_thinking.clone();
+                                if !reasoning_content.is_empty() {
                                     let thinking_msg = Message::new(
                                         response.role.clone(),
                                         response.created,
-                                        thinking_content,
+                                        reasoning_content.clone(),
                                     ).with_id(format!("msg_{}", Uuid::new_v4()));
                                     messages_to_add.push(thinking_msg);
                                 }
-
-                                // Collect reasoning content to attach to tool request messages
-                                let reasoning_content: Vec<MessageContent> = response.content.iter()
-                                    .filter(|c| matches!(c, MessageContent::Thinking(_)))
-                                    .cloned()
-                                    .collect();
 
                                 for request in frontend_requests.iter().chain(remaining_requests.iter()) {
                                     if request.tool_call.is_ok() {
@@ -2235,6 +2243,11 @@ impl Agent {
                                         break;
                                     }
                                 }
+
+                                // Reasoning has been attached to this batch of tool-call
+                                // messages; reset so a later tool-call response in the same
+                                // stream does not replay the earlier turn's thinking.
+                                accumulated_thinking.clear();
 
                                 no_tools_called = false;
                                 // Agent is actively working — re-check goal when it next finishes
@@ -3468,6 +3481,128 @@ exit 0
             provider.call_count.load(Ordering::SeqCst),
             1,
             "a refused request must not be resent"
+        );
+        Ok(())
+    }
+
+    /// Streams reasoning across separate partial messages BEFORE a tool-call
+    /// message that carries no thinking of its own — the DeepSeek/openai-compatible
+    /// streaming pattern from #9397/#9675. The second turn returns plain text so the
+    /// agent loop terminates.
+    struct StreamingThinkingToolProvider {
+        call_count: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl crate::providers::base::Provider for StreamingThinkingToolProvider {
+        async fn stream(
+            &self,
+            _model_config: &goose_providers::model::ModelConfig,
+            _session_id: &str,
+            _system_prompt: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<MessageStream, ProviderError> {
+            let call = self.call_count.fetch_add(1, Ordering::SeqCst);
+            let usage = ProviderUsage::new("mock-model".to_string(), Usage::default());
+
+            if call == 0 {
+                let partials = vec![
+                    Message::assistant().with_content(MessageContent::thinking("Let me ", "")),
+                    Message::assistant().with_content(MessageContent::thinking("think.", "")),
+                    Message::assistant().with_tool_request(
+                        "call-1",
+                        Ok(CallToolRequestParams::new("nonexistent_tool")),
+                    ),
+                ];
+                let last = partials.len() - 1;
+                let items = partials.into_iter().enumerate().map(move |(i, msg)| {
+                    let usage = if i == last { Some(usage.clone()) } else { None };
+                    Ok((Some(msg), usage))
+                });
+                Ok(Box::pin(futures::stream::iter(items.collect::<Vec<_>>())))
+            } else {
+                let message = Message::assistant().with_text("done");
+                Ok(stream_from_single_message(message, usage))
+            }
+        }
+
+        fn get_model_config(&self) -> goose_providers::model::ModelConfig {
+            goose_providers::model::ModelConfig::new("mock-model").unwrap()
+        }
+
+        fn get_name(&self) -> &str {
+            "streaming-thinking-tool"
+        }
+    }
+
+    #[tokio::test]
+    async fn streamed_reasoning_is_attached_to_tool_call_message() -> Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let session_manager = Arc::new(SessionManager::new(temp_dir.path().join("data")));
+        let permission_manager = Arc::new(PermissionManager::new(temp_dir.path().join("perm")));
+        let config = AgentConfig::new(
+            session_manager.clone(),
+            permission_manager,
+            None,
+            GooseMode::Auto,
+            true,
+            GoosePlatform::GooseCli,
+        );
+        let mut agent = Agent::with_config(config);
+        agent.set_hook_manager_for_test(crate::hooks::HookManager::from_plugins_for_test(vec![]));
+        let session = session_manager
+            .create_session(
+                PathBuf::default(),
+                "test".to_string(),
+                SessionType::Hidden,
+                GooseMode::Auto,
+            )
+            .await?;
+        let provider = Arc::new(StreamingThinkingToolProvider {
+            call_count: AtomicUsize::new(0),
+        });
+        agent.update_provider(provider, &session.id).await?;
+
+        let session_config = SessionConfig {
+            id: session.id.clone(),
+            schedule_id: None,
+            max_turns: Some(4),
+            retry_config: None,
+        };
+        let reply_stream = agent
+            .reply(Message::user().with_text("hi"), session_config, None)
+            .await?;
+        tokio::pin!(reply_stream);
+        while let Some(event) = reply_stream.next().await {
+            event?;
+        }
+
+        let stored = session_manager.get_session(&session.id, true).await?;
+        let messages = stored.conversation.unwrap();
+        let tool_call_msg = messages
+            .messages()
+            .iter()
+            .find(|m| {
+                m.content
+                    .iter()
+                    .any(|c| matches!(c, MessageContent::ToolRequest(_)))
+            })
+            .expect("assistant tool-call message persisted in history");
+
+        let reasoning: String = tool_call_msg
+            .content
+            .iter()
+            .filter_map(|c| match c {
+                MessageContent::Thinking(t) => Some(t.thinking.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            reasoning, "Let me think.",
+            "reasoning streamed across partials before the tool_call chunk must be \
+             attached to the persisted tool-call message (#9397/#9675)"
         );
         Ok(())
     }
