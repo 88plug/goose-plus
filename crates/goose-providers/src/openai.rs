@@ -734,12 +734,10 @@ fn split_header_entries(s: &str) -> Vec<String> {
 }
 
 fn strip_quotes(s: &str) -> String {
-    let bytes = s.as_bytes();
-    if s.len() >= 2 {
-        let first = bytes[0];
-        let last = bytes[bytes.len() - 1];
-        if (first == b'"' || first == b'\'') && first == last {
-            return s[1..s.len() - 1].to_string();
+    let mut chars = s.chars();
+    if let (Some(first), Some(last)) = (chars.next(), chars.next_back()) {
+        if (first == '"' || first == '\'') && first == last {
+            return chars.as_str().to_string();
         }
     }
     s.to_string()

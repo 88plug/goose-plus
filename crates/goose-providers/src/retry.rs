@@ -461,7 +461,7 @@ mod tests {
         let absurd_retries = 10_000usize.min(MAX_RETRIES_CEILING);
         assert_eq!(absurd_retries, MAX_RETRIES_CEILING);
 
-        let initial = 5_000u64.max(1);
+        let initial = 5_000u64;
         let max_interval = 1_000u64.max(initial);
         assert_eq!(max_interval, initial);
 

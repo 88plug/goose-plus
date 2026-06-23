@@ -302,6 +302,18 @@
   "confirmationModal.processing": {
     "defaultMessage": "Procesando..."
   },
+  "conversationFilter.filterToMatches": {
+    "defaultMessage": "Show only matches"
+  },
+  "conversationFilter.matchSummary": {
+    "defaultMessage": "{matched} of {total} messages match"
+  },
+  "conversationFilter.noMatches": {
+    "defaultMessage": "No messages match \"{term}\""
+  },
+  "conversationFilter.showAll": {
+    "defaultMessage": "Show all messages"
+  },
   "conversationLimitsDropdown.conversationLimits": {
     "defaultMessage": "Límites de conversación"
   },
@@ -4046,6 +4058,24 @@
   "settings.dockIcon.title": {
     "defaultMessage": "Icono del dock"
   },
+  "settings.fontSize.description": {
+    "defaultMessage": "Increase the base text size for easier reading"
+  },
+  "settings.fontSize.large": {
+    "defaultMessage": "Large"
+  },
+  "settings.fontSize.normal": {
+    "defaultMessage": "Default"
+  },
+  "settings.fontSize.small": {
+    "defaultMessage": "Small"
+  },
+  "settings.fontSize.title": {
+    "defaultMessage": "Text size"
+  },
+  "settings.fontSize.xlarge": {
+    "defaultMessage": "Largest"
+  },
   "settings.help.description": {
     "defaultMessage": "Ayúdanos a mejorar goose reportando problemas o solicitando nuevas funciones"
   },
@@ -4373,6 +4403,9 @@
   "subRecipeModal.subtitle": {
     "defaultMessage": "Configura una subreceta que se pueda invocar como herramienta durante la ejecución de la receta"
   },
+  "switchModelModal.addFavorite": {
+    "defaultMessage": "Add to favorites"
+  },
   "switchModelModal.backToModelList": {
     "defaultMessage": "Volver a la lista de modelos"
   },
@@ -4444,6 +4477,9 @@
   },
   "switchModelModal.recommended": {
     "defaultMessage": "Recomendado"
+  },
+  "switchModelModal.removeFavorite": {
+    "defaultMessage": "Remove from favorites"
   },
   "switchModelModal.selectEffortLevel": {
     "defaultMessage": "Selecciona el nivel de esfuerzo"
@@ -4579,6 +4615,9 @@
   },
   "toolCallWithResponse.code": {
     "defaultMessage": "Código"
+  },
+  "toolCallWithResponse.diff": {
+    "defaultMessage": "Diff"
   },
   "toolCallWithResponse.loadingSpinner": {
     "defaultMessage": "Indicador de carga"

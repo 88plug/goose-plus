@@ -302,6 +302,18 @@
   "confirmationModal.processing": {
     "defaultMessage": "Processing..."
   },
+  "conversationFilter.filterToMatches": {
+    "defaultMessage": "Show only matches"
+  },
+  "conversationFilter.matchSummary": {
+    "defaultMessage": "{matched} of {total} messages match"
+  },
+  "conversationFilter.noMatches": {
+    "defaultMessage": "No messages match \"{term}\""
+  },
+  "conversationFilter.showAll": {
+    "defaultMessage": "Show all messages"
+  },
   "conversationLimitsDropdown.conversationLimits": {
     "defaultMessage": "Conversation Limits"
   },
@@ -4046,6 +4058,24 @@
   "settings.dockIcon.title": {
     "defaultMessage": "Dock icon"
   },
+  "settings.fontSize.description": {
+    "defaultMessage": "Increase the base text size for easier reading"
+  },
+  "settings.fontSize.large": {
+    "defaultMessage": "Large"
+  },
+  "settings.fontSize.normal": {
+    "defaultMessage": "Default"
+  },
+  "settings.fontSize.small": {
+    "defaultMessage": "Small"
+  },
+  "settings.fontSize.title": {
+    "defaultMessage": "Text size"
+  },
+  "settings.fontSize.xlarge": {
+    "defaultMessage": "Largest"
+  },
   "settings.help.description": {
     "defaultMessage": "Help us improve goose by reporting issues or requesting new features"
   },
@@ -4373,6 +4403,9 @@
   "subRecipeModal.subtitle": {
     "defaultMessage": "Configure a subrecipe that can be called as a tool during recipe execution"
   },
+  "switchModelModal.addFavorite": {
+    "defaultMessage": "Add to favorites"
+  },
   "switchModelModal.backToModelList": {
     "defaultMessage": "Back to model list"
   },
@@ -4444,6 +4477,9 @@
   },
   "switchModelModal.recommended": {
     "defaultMessage": "Recommended"
+  },
+  "switchModelModal.removeFavorite": {
+    "defaultMessage": "Remove from favorites"
   },
   "switchModelModal.selectEffortLevel": {
     "defaultMessage": "Select effort level"
@@ -4579,6 +4615,9 @@
   },
   "toolCallWithResponse.code": {
     "defaultMessage": "Code"
+  },
+  "toolCallWithResponse.diff": {
+    "defaultMessage": "Diff"
   },
   "toolCallWithResponse.loadingSpinner": {
     "defaultMessage": "Loading spinner"

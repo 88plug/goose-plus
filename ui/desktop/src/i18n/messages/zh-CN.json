@@ -302,6 +302,18 @@
   "confirmationModal.processing": {
     "defaultMessage": "处理中…"
   },
+  "conversationFilter.filterToMatches": {
+    "defaultMessage": "Show only matches"
+  },
+  "conversationFilter.matchSummary": {
+    "defaultMessage": "{matched} of {total} messages match"
+  },
+  "conversationFilter.noMatches": {
+    "defaultMessage": "No messages match \"{term}\""
+  },
+  "conversationFilter.showAll": {
+    "defaultMessage": "Show all messages"
+  },
   "conversationLimitsDropdown.conversationLimits": {
     "defaultMessage": "对话限制"
   },
@@ -4046,6 +4058,24 @@
   "settings.dockIcon.title": {
     "defaultMessage": "Dock 图标"
   },
+  "settings.fontSize.description": {
+    "defaultMessage": "Increase the base text size for easier reading"
+  },
+  "settings.fontSize.large": {
+    "defaultMessage": "Large"
+  },
+  "settings.fontSize.normal": {
+    "defaultMessage": "Default"
+  },
+  "settings.fontSize.small": {
+    "defaultMessage": "Small"
+  },
+  "settings.fontSize.title": {
+    "defaultMessage": "Text size"
+  },
+  "settings.fontSize.xlarge": {
+    "defaultMessage": "Largest"
+  },
   "settings.help.description": {
     "defaultMessage": "通过报告问题或请求新功能帮助我们改进 goose"
   },
@@ -4373,6 +4403,9 @@
   "subRecipeModal.subtitle": {
     "defaultMessage": "配置一个可在配方执行过程中作为工具调用的子配方"
   },
+  "switchModelModal.addFavorite": {
+    "defaultMessage": "Add to favorites"
+  },
   "switchModelModal.backToModelList": {
     "defaultMessage": "返回模型列表"
   },
@@ -4444,6 +4477,9 @@
   },
   "switchModelModal.recommended": {
     "defaultMessage": "推荐"
+  },
+  "switchModelModal.removeFavorite": {
+    "defaultMessage": "Remove from favorites"
   },
   "switchModelModal.selectEffortLevel": {
     "defaultMessage": "选择努力级别"
@@ -4579,6 +4615,9 @@
   },
   "toolCallWithResponse.code": {
     "defaultMessage": "代码"
+  },
+  "toolCallWithResponse.diff": {
+    "defaultMessage": "Diff"
   },
   "toolCallWithResponse.loadingSpinner": {
     "defaultMessage": "加载转圈"

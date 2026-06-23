@@ -618,9 +618,13 @@ export const SwitchModelModal = ({
     };
   }, [provider, activeProvidersList, usePredefinedModels, intl]);
 
-  const filteredModelOptions = provider
-    ? modelOptions.filter((group) => group.options[0]?.provider === provider)
-    : [];
+  const filteredModelOptions = useMemo(
+    () =>
+      provider
+        ? modelOptions.filter((group) => group.options[0]?.provider === provider)
+        : [],
+    [provider, modelOptions]
+  );
 
   const sortedModelOptions = useMemo(
     () =>

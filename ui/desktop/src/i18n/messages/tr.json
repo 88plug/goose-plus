@@ -302,6 +302,18 @@
   "confirmationModal.processing": {
     "defaultMessage": "İşleniyor..."
   },
+  "conversationFilter.filterToMatches": {
+    "defaultMessage": "Show only matches"
+  },
+  "conversationFilter.matchSummary": {
+    "defaultMessage": "{matched} of {total} messages match"
+  },
+  "conversationFilter.noMatches": {
+    "defaultMessage": "No messages match \"{term}\""
+  },
+  "conversationFilter.showAll": {
+    "defaultMessage": "Show all messages"
+  },
   "conversationLimitsDropdown.conversationLimits": {
     "defaultMessage": "Konuşma Sınırları"
   },
@@ -4046,6 +4058,24 @@
   "settings.dockIcon.title": {
     "defaultMessage": "Bağlantı noktası simgesi"
   },
+  "settings.fontSize.description": {
+    "defaultMessage": "Increase the base text size for easier reading"
+  },
+  "settings.fontSize.large": {
+    "defaultMessage": "Large"
+  },
+  "settings.fontSize.normal": {
+    "defaultMessage": "Default"
+  },
+  "settings.fontSize.small": {
+    "defaultMessage": "Small"
+  },
+  "settings.fontSize.title": {
+    "defaultMessage": "Text size"
+  },
+  "settings.fontSize.xlarge": {
+    "defaultMessage": "Largest"
+  },
   "settings.help.description": {
     "defaultMessage": "Sorunları bildirerek veya yeni özellikler talep ederek goose'yi geliştirmemize yardımcı olun"
   },
@@ -4373,6 +4403,9 @@
   "subRecipeModal.subtitle": {
     "defaultMessage": "Tarif yürütme sırasında araç olarak çağrılabilecek bir alt tarif yapılandırın"
   },
+  "switchModelModal.addFavorite": {
+    "defaultMessage": "Add to favorites"
+  },
   "switchModelModal.backToModelList": {
     "defaultMessage": "Model listesine geri dön"
   },
@@ -4444,6 +4477,9 @@
   },
   "switchModelModal.recommended": {
     "defaultMessage": "Önerilen"
+  },
+  "switchModelModal.removeFavorite": {
+    "defaultMessage": "Remove from favorites"
   },
   "switchModelModal.selectEffortLevel": {
     "defaultMessage": "Çaba düzeyini seçin"
@@ -4579,6 +4615,9 @@
   },
   "toolCallWithResponse.code": {
     "defaultMessage": "Kod"
+  },
+  "toolCallWithResponse.diff": {
+    "defaultMessage": "Diff"
   },
   "toolCallWithResponse.loadingSpinner": {
     "defaultMessage": "Döndürücü yükleniyor"

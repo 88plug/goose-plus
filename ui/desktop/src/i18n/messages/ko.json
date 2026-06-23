@@ -302,6 +302,18 @@
   "confirmationModal.processing": {
     "defaultMessage": "처리 중..."
   },
+  "conversationFilter.filterToMatches": {
+    "defaultMessage": "Show only matches"
+  },
+  "conversationFilter.matchSummary": {
+    "defaultMessage": "{matched} of {total} messages match"
+  },
+  "conversationFilter.noMatches": {
+    "defaultMessage": "No messages match \"{term}\""
+  },
+  "conversationFilter.showAll": {
+    "defaultMessage": "Show all messages"
+  },
   "conversationLimitsDropdown.conversationLimits": {
     "defaultMessage": "대화 제한"
   },
@@ -4046,6 +4058,24 @@
   "settings.dockIcon.title": {
     "defaultMessage": "Dock 아이콘"
   },
+  "settings.fontSize.description": {
+    "defaultMessage": "Increase the base text size for easier reading"
+  },
+  "settings.fontSize.large": {
+    "defaultMessage": "Large"
+  },
+  "settings.fontSize.normal": {
+    "defaultMessage": "Default"
+  },
+  "settings.fontSize.small": {
+    "defaultMessage": "Small"
+  },
+  "settings.fontSize.title": {
+    "defaultMessage": "Text size"
+  },
+  "settings.fontSize.xlarge": {
+    "defaultMessage": "Largest"
+  },
   "settings.help.description": {
     "defaultMessage": "문제를 신고하거나 새 기능을 요청하여 goose 개선에 도움을 주세요."
   },
@@ -4373,6 +4403,9 @@
   "subRecipeModal.subtitle": {
     "defaultMessage": "레시피 실행 시 도구로 호출할 수 있는 서브레시피를 구성합니다."
   },
+  "switchModelModal.addFavorite": {
+    "defaultMessage": "Add to favorites"
+  },
   "switchModelModal.backToModelList": {
     "defaultMessage": "모델 목록으로 돌아가기"
   },
@@ -4444,6 +4477,9 @@
   },
   "switchModelModal.recommended": {
     "defaultMessage": "추천"
+  },
+  "switchModelModal.removeFavorite": {
+    "defaultMessage": "Remove from favorites"
   },
   "switchModelModal.selectEffortLevel": {
     "defaultMessage": "추론 강도 선택"
@@ -4579,6 +4615,9 @@
   },
   "toolCallWithResponse.code": {
     "defaultMessage": "코드"
+  },
+  "toolCallWithResponse.diff": {
+    "defaultMessage": "Diff"
   },
   "toolCallWithResponse.loadingSpinner": {
     "defaultMessage": "로딩 스피너"
