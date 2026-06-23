@@ -365,11 +365,9 @@ mod tests {
             unescape_path("/a/back\\\\slash.png").as_deref(),
             Some("/a/back\\slash.png")
         );
-        // A trailing lone backslash is kept verbatim.
-        assert_eq!(
-            unescape_path("/a/trailing\\").as_deref(),
-            Some("/a/trailing\\")
-        );
+        // A trailing lone backslash escapes nothing, so no unescaping occurs
+        // (None => caller keeps the raw path verbatim).
+        assert_eq!(unescape_path("/a/trailing\\"), None);
         // Backslash before an alphanumeric is preserved (not a shell escape).
         assert_eq!(unescape_path("/a/\\name.png"), None);
     }
