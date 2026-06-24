@@ -47,7 +47,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # Errors-only (rustflags: "") to match the real release build, which does
+      # NOT use -D warnings. The gate catches hard Windows compile errors fast
+      # without false-failing on benign platform-conditional warnings.
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+        with:
+          rustflags: ""
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - run: cargo check -p goose-cli -p goose-server --no-default-features --features rustls-tls
 

@@ -119,3 +119,28 @@ remaining space for dynamic text.
 - Server: crates/goose-server/src/main.rs
 - UI: ui/desktop/src/main.ts
 - Agent: crates/goose/src/agents/agent.rs
+
+## goose-plus maintenance (88plug fork — we are the maintainer)
+
+- Cross-platform: `#[cfg(windows)]` / macOS-only code is NEVER compiled in
+  Linux dev. Before a release, verify Windows with `cargo check -p goose-cli
+  -p goose-server --no-default-features --features rustls-tls` against a Windows
+  runner (the release pipeline's `preflight-windows` job does this). The CLI
+  release job builds llama-cpp first, so a trivial Windows error otherwise
+  surfaces ~40 min in — the preflight catches it in ~2.
+- Do NOT set manifest `[workspace.lints.rust] unused_imports/unused_must_use =
+  "deny"`. A manifest-level deny turns a platform-conditional unused import
+  (used only on non-Windows, etc.) into a hard cross-platform BUILD failure.
+  Keep them at "warn"; CI's `-D warnings` on Linux is the strict gate. Match
+  that in CI gates: enforce `-D warnings` only on the Linux/host check; run the
+  Windows check errors-only (`setup-rust-toolchain` `with: rustflags: ""`) so it
+  fails on real compile errors, not benign per-platform warnings.
+- winapi: each `winapi::um::*` / `shared::*` module needs its matching feature
+  in the `winapi` workspace dep features list, or it's an unresolved-import
+  error on Windows only.
+- Release: tag `plus-v*` to trigger `.github/workflows/release-plus.yml` (CLI +
+  unsigned desktop bundles + keyless build-provenance attestation, published to
+  88plug/goose-plus). Distinct from upstream `release.yml` (`v1.*`, signed). OS
+  signing is opt-in via repo var `DESKTOP_SIGNING=true` (+ signing secrets).
+- a2a-rs: goose pins the 88plug/a2a-rs fork by git rev; fix the fork first, push
+  main+88plug-plus, then bump the pinned rev in the workspace `Cargo.toml`.
