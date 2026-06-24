@@ -175,7 +175,7 @@ tokenizers = { version = "0.23", default-features = false, features = ["onig"], 
 symphonia = { version = "0.5", default-features = false, features = ["aac", "adpcm", "alac", "isomp4", "mkv", "mp3", "pcm", "vorbis", "wav"], optional = true }
 # Pinned to 0.16: rubato 3.0 redesigned the resampler API; migrate together with
 # the symphonia 0.6 audio-pipeline rewrite above.
-rubato = { version = "0.16", default-features = false, optional = true }
+rubato = { version = "3.0", default-features = false, optional = true }
 zip = { workspace = true }
 sys-info = { version = "0.9", default-features = false }
 
