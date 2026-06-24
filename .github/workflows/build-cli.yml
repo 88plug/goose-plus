@@ -4,11 +4,16 @@
 #  - canary.yml
 #
 # Platform Build Strategy:
-#  - Linux standard (x86_64 + aarch64): Builds inside manylinux_2_28 container for glibc 2.28+ compat
-#  - Linux Vulkan: Uses native Ubuntu 24.04 runners for newer Vulkan headers/tooling
-#  - Linux musl: Uses native Ubuntu 22.04 runners with reduced features for musl compatibility
-#  - macOS: Uses native macOS runners for each architecture
-#  - Windows: Uses Windows runner with native MSVC build
+#  - Linux standard (x86_64 + aarch64): Builds inside the manylinux_2_28 container
+#    (glibc 2.28 floor) so the primary CLI runs on a wide range of distros. The
+#    HOST runner (now ubuntu-26.04) is irrelevant to the binary's glibc — the
+#    container provides it — so bumping the host LTS does NOT narrow compat here.
+#  - Linux Vulkan: native ubuntu-26.04 (latest LTS) for newest Vulkan tooling.
+#    NOTE: native builds link the host glibc, so vulkan artifacts require a
+#    26.04-era glibc (newer distros only) — acceptable for the GPU variant.
+#  - Linux musl: native ubuntu-26.04, fully static (glibc-independent).
+#  - macOS: native macOS runners for each architecture (incl. Intel).
+#  - Windows: Windows runner with native MSVC build.
 on:
   workflow_call:
     inputs:
@@ -39,36 +44,36 @@ jobs:
           - platform: linux
             architecture: x86_64
             target-suffix: unknown-linux-gnu
-            build-on: ubuntu-22.04
+            build-on: ubuntu-26.04
             # Pinned by digest for reproducible builds; bump explicitly when newer manylinux_2_28 images ship.
             container: quay.io/pypa/manylinux_2_28_x86_64@sha256:441c35fdc6ee809ff9260894f8468ab4fea8c15dc880f8700a3f81b7922c1cda
             variant: standard
           - platform: linux
             architecture: aarch64
             target-suffix: unknown-linux-gnu
-            build-on: ubuntu-22.04-arm
+            build-on: ubuntu-26.04-arm
             # Pinned by digest for reproducible builds; bump explicitly when newer manylinux_2_28 images ship.
             container: quay.io/pypa/manylinux_2_28_aarch64@sha256:8b5f2b4e8c072ae5aefeb659f22c03e1ff46e6a82f154b6c904b106c87e65ff7
             variant: standard
           - platform: linux
             architecture: x86_64
             target-suffix: unknown-linux-musl
-            build-on: ubuntu-22.04
+            build-on: ubuntu-26.04
             variant: musl
           - platform: linux
             architecture: aarch64
             target-suffix: unknown-linux-musl
-            build-on: ubuntu-22.04-arm
+            build-on: ubuntu-26.04-arm
             variant: musl
           - platform: linux
             architecture: x86_64
             target-suffix: unknown-linux-gnu
-            build-on: ubuntu-24.04
+            build-on: ubuntu-26.04
             variant: vulkan
           - platform: linux
             architecture: aarch64
             target-suffix: unknown-linux-gnu
-            build-on: ubuntu-24.04-arm
+            build-on: ubuntu-26.04-arm
             variant: vulkan
           - platform: macos
             architecture: x86_64

@@ -33,9 +33,9 @@ jobs:
       matrix:
         include:
           - variant: standard
-            build-on: ubuntu-22.04
+            build-on: ubuntu-26.04
           - variant: vulkan
-            build-on: ubuntu-24.04
+            build-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
