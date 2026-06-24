@@ -7,9 +7,10 @@ updates:
     directory: "/ui"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     groups:
-      ui-minor-and-patch:
+      ui:
+        patterns: ["*"]
         update-types:
           - "minor"
           - "patch"
@@ -19,15 +20,32 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     groups:
-      cargo-minor-and-patch:
+      cargo:
+        patterns: ["*"]
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Exact-pinned in Cargo.toml on purpose: llama-cpp-2/-sys-2 ship breaking
+      # changes in PATCH releases, and icu_* are pinned to satisfy temporal_rs.
+      - dependency-name: "llama-cpp-2"
+      - dependency-name: "llama-cpp-sys-2"
+      - dependency-name: "icu_calendar"
+      - dependency-name: "icu_locale"
+      # Coupled to the ACP SDK version we ship — bump deliberately, not via auto-PR.
+      - dependency-name: "agent-client-protocol"
+      - dependency-name: "agent-client-protocol-schema"
 
-  # GitHub Actions used by workflows in .github/workflows.
+  # GitHub Actions used by workflows in .github/workflows. Grouped into ONE PR
+  # per run so action bumps don't each open a separate PR (the prior behavior
+  # that produced the #1-#5 spam).
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
