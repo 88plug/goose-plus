@@ -2279,11 +2279,7 @@ mod tests {
             ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
 
         extension_manager
-            .add_mock_extension_with_tools(
-                "test_client".to_string(),
-                Arc::new(MockClient {}),
-                vec!["real_tool".to_string()],
-            )
+            .add_mock_extension("test_client".to_string(), Arc::new(MockClient {}))
             .await;
 
         let ctx = ToolCallContext::new(
