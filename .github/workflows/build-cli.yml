@@ -30,6 +30,8 @@ jobs:
     container: ${{ matrix.container }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "12.0"
+      # Silence the GitHub macOS image's "untrusted taps" (aws/tap) brew warning.
+      HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -141,8 +143,10 @@ jobs:
             git \
             tar
 
-      - name: Cache Cargo artifacts (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: Cache Cargo artifacts (Linux/macOS host runners)
+        # Host runners only. In the manylinux container rustup isn't installed
+        # until the build step, so rust-cache's `rustc -vV` probe errors here.
+        if: matrix.platform != 'windows' && matrix.container == ''
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ matrix.architecture }}-${{ matrix.target-suffix }}-${{ matrix.build-on }}-${{ matrix.container || 'native' }}-macos-deployment-target-12

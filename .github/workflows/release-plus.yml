@@ -45,6 +45,9 @@ jobs:
     name: Preflight (${{ matrix.os }})
     if: github.repository == '88plug/goose-plus'
     runs-on: ${{ matrix.os }}
+    env:
+      # Silence the macOS image's untrusted-taps (aws/tap) brew warning.
+      HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -180,8 +183,12 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/check-runs/${jid}/annotations" \
               --jq '.[] | select(.annotation_level=="warning" or .annotation_level=="failure") | .message' 2>/dev/null >> "$tmp" || true
           done
-          # Drop allowlisted external / transient annotations.
-          grep -vaE 'Node\.js 20 is deprecated|taps are not trusted|Homebrew will ignore|was canceled|operation was canceled|hit a rate limit|Command failed: rustc -vV' "$tmp" > "$tmp.f" || true
+          # Drop allowlisted annotations. Only genuinely external/transient ones
+          # remain: ilammy/msvc-dev-cmd has no Node-24 release (CUDA leg only),
+          # and run-cancellation / API rate-limit noise. The rustc -vV (container
+          # rust-cache) and Homebrew untrusted-taps annotations are now fixed at
+          # the source, so they are NOT allowlisted — they must fail if they recur.
+          grep -vaE 'Node\.js 20 is deprecated|was canceled|operation was canceled|hit a rate limit' "$tmp" > "$tmp.f" || true
           if [ -s "$tmp.f" ]; then
             echo "::error::Zero-annotation policy violated — the following annotations must be fixed:"
             sort -u "$tmp.f"
