@@ -236,6 +236,7 @@ jobs:
             *.deb
             *.rpm
             *.AppImage
+            *.flatpak
             download_cli.sh
 
       # Versioned release for this tag.
@@ -251,6 +252,7 @@ jobs:
             *.deb
             *.rpm
             *.AppImage
+            *.flatpak
             latest-mac.yml
             download_cli.sh
           allowUpdates: true
@@ -278,6 +280,7 @@ jobs:
             *.deb
             *.rpm
             *.AppImage
+            *.flatpak
             latest-mac.yml
             download_cli.sh
           allowUpdates: true
