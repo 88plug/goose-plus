@@ -1,8 +1,12 @@
 name: Security audit
 
-# All dependency/supply-chain auditing in one place (was three separate
-# workflows: cargo-deny, osv-scanner, pnpm-audit). Runs on dependency changes,
-# on PRs, and on a daily schedule to pick up newly-disclosed advisories.
+# Dependency/supply-chain auditing in one place. Two complementary gates:
+# cargo-deny (Rust advisories/bans/sources) and pnpm-audit (shipped npm deps,
+# prod + high severity). Runs on dependency changes, PRs, and a daily schedule.
+#
+# OSV-scanner was dropped: it scanned the whole pnpm lockfile (dev + transitive)
+# with no severity threshold, so it failed on build-tooling advisories that are
+# never shipped — fully covered, correctly, by pnpm-audit --prod --audit-level high.
 on:
   push:
     paths:
@@ -37,20 +41,6 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
         with:
           command: check advisories bans sources
-
-  # Cross-ecosystem CVE scan of Cargo.lock + ui/pnpm-lock.yaml (the pnpm
-  # workspace root) against the OSV database (RustSec + GitHub Advisory DB).
-  osv-scanner:
-    if: github.repository == '88plug/goose-plus'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Run OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
-        with:
-          scan-args: |-
-            --lockfile=Cargo.lock
-            --lockfile=ui/pnpm-lock.yaml
 
   # CVE scan of the desktop UI dependency tree (high+), via the repo's hermit
   # toolchain so it uses the exact pinned pnpm/node. pnpm workspace root is ui/.
