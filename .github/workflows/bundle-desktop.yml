@@ -116,6 +116,7 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: macos-deployment-target-12
+          cache-on-failure: true
 
       # Build the project
       - name: Build goosed

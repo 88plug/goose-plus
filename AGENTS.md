@@ -123,18 +123,27 @@ remaining space for dynamic text.
 ## goose-plus maintenance (88plug fork — we are the maintainer)
 
 - Cross-platform: `#[cfg(windows)]` / macOS-only code is NEVER compiled in
-  Linux dev. Before a release, verify Windows with `cargo check -p goose-cli
-  -p goose-server --no-default-features --features rustls-tls` against a Windows
-  runner (the release pipeline's `preflight-windows` job does this). The CLI
-  release job builds llama-cpp first, so a trivial Windows error otherwise
-  surfaces ~40 min in — the preflight catches it in ~2.
-- Do NOT set manifest `[workspace.lints.rust] unused_imports/unused_must_use =
-  "deny"`. A manifest-level deny turns a platform-conditional unused import
-  (used only on non-Windows, etc.) into a hard cross-platform BUILD failure.
-  Keep them at "warn"; CI's `-D warnings` on Linux is the strict gate. Match
-  that in CI gates: enforce `-D warnings` only on the Linux/host check; run the
-  Windows check errors-only (`setup-rust-toolchain` `with: rustflags: ""`) so it
-  fails on real compile errors, not benign per-platform warnings.
+  Linux dev. The fix for a platform-conditional unused item is to cfg-gate it
+  properly (gate the `use`, or call the macro fully-qualified at its one site) —
+  NOT to relax the lint. We keep `[workspace.lints.rust] unused_imports /
+  unused_must_use = "deny"` AND enforce `-D warnings` on every OS preflight
+  (host/Windows/macOS). A warning IS a release blocker; the answer is always to
+  fix the code, never to allow the warning.
+- Preflight feature surface: the preflights must compile the SAME feature-gated
+  modules the real build does, or a platform-only error in a `#[cfg(feature =
+  "...")]` module (e.g. `commands/tui.rs`, `commands/update.rs`) sails through
+  the fast gate and fails ~25 min into the matrix. So the CLI preflight enables
+  the full `default` set MINUS `local-inference` (the only feature that pulls
+  llama-cpp's C++): `cargo check -p goose-cli --no-default-features --features
+  code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls
+  --all-targets`, with `goose-server` checked separately. `--no-default-features`
+  ALONE is a blind spot — it skips every default-but-gated module.
+- flatpak is best-effort in the Linux desktop bundle: its maker needs the
+  freedesktop runtime + Electron BaseApp published for `runtimeVersion`
+  (external availability flake). deb/rpm build first and are the guaranteed
+  installers — `bundle-desktop-linux.yml` hard-fails only if deb or rpm is
+  missing and uploads flatpak with `if-no-files-found: warn`. Never block the
+  whole multi-platform release on flatpak.
 - winapi: each `winapi::um::*` / `shared::*` module needs its matching feature
   in the `winapi` workspace dep features list, or it's an unresolved-import
   error on Windows only.

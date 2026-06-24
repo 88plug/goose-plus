@@ -146,12 +146,16 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ matrix.architecture }}-${{ matrix.target-suffix }}-${{ matrix.build-on }}-${{ matrix.container || 'native' }}-macos-deployment-target-12
+          # Persist the dep cache (incl. llama-cpp's cmake/C++ build) even when
+          # the job fails, so a retry doesn't recompile everything from scratch.
+          cache-on-failure: true
 
       - name: Cache Cargo artifacts (Windows)
         if: matrix.platform == 'windows'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: windows-msvc-cli-${{ matrix.variant }}
+          cache-on-failure: true
 
       - name: Build CLI (Linux/macOS host runner)
         if: matrix.platform != 'windows' && matrix.container == ''

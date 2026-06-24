@@ -46,6 +46,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-on-failure: true
       - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
       - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
 
@@ -57,6 +59,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-on-failure: true
       - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
       - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
 
@@ -70,6 +74,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-on-failure: true
       - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
       - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
 
