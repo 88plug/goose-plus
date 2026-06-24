@@ -16,7 +16,7 @@ jobs:
     if: github.repository == '88plug/goose-plus'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.0
       # Use hermit (bin/activate-hermit) for pnpm + node — same toolchain the
       # bundle-desktop workflows build with, so the audit sees the exact pinned
       # pnpm/node versions. The pnpm workspace root is ui/ (lockfile lives at
