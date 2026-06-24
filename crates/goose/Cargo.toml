@@ -208,7 +208,7 @@ mlx-rs = { version = "0.25.3", default-features = false, features = ["accelerate
 mlx-lm = { git = "https://github.com/jh-block/mlx-lm", optional = true }
 mlx-lm-utils = { git = "https://github.com/jh-block/mlx-lm", optional = true }
 
-pctx_code_mode = { version = "0.3", default-features = false, optional = true }
+pctx_code_mode = { version = "0.4", default-features = false, optional = true }
 
 # These are needed because temporal_rs 0.1 (a transitive dep via PCTX) enables unstable features on icu_calendar without pinning the dependency version
 # A fix is available in temporal_rs 0.2 but PCTX has not updated
