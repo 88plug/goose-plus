@@ -52,8 +52,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    # Opt-in OS signing: set repo variable DESKTOP_SIGNING=true and provide an
+    # Apple Developer signing environment (DESKTOP_SIGNING_ENVIRONMENT) with the
+    # notarization secrets. Defaults to unsigned when those are absent.
     with:
-      signing: false
+      signing: ${{ vars.DESKTOP_SIGNING == 'true' }}
+      environment: ${{ vars.DESKTOP_SIGNING_ENVIRONMENT }}
+    secrets: inherit
 
   bundle-desktop-intel:
     if: github.repository == '88plug/goose-plus'
@@ -62,7 +67,9 @@ jobs:
       id-token: write
       contents: read
     with:
-      signing: false
+      signing: ${{ vars.DESKTOP_SIGNING == 'true' }}
+      environment: ${{ vars.DESKTOP_SIGNING_ENVIRONMENT }}
+    secrets: inherit
 
   bundle-desktop-linux:
     if: github.repository == '88plug/goose-plus'
@@ -75,8 +82,11 @@ jobs:
       id-token: write
       contents: read
       actions: read
+    # Opt-in Windows signing: set repo variable DESKTOP_SIGNING=true and provide
+    # the Authenticode / Azure Trusted Signing secrets. Unsigned otherwise.
     with:
-      signing: false
+      signing: ${{ vars.DESKTOP_SIGNING == 'true' }}
+    secrets: inherit
 
   release:
     name: Release (goose-plus)
@@ -91,6 +101,8 @@ jobs:
       - bundle-desktop-windows
     permissions:
       contents: write
+      id-token: write # keyless Sigstore signing for build-provenance attestation
+      attestations: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -101,6 +113,21 @@ jobs:
 
       - name: Generate macOS update manifest
         run: node ui/desktop/scripts/generate-mac-update-manifest.js --version "${GITHUB_REF_NAME}" --directory . || true
+
+      # Keyless (Sigstore, GitHub OIDC) signing of every shipped artifact — no
+      # certs required. Verify with: gh attestation verify <file> --repo 88plug/goose-plus
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            goose-*.tar.bz2
+            goose-*.tar.gz
+            goose-*.zip
+            Goose*.zip
+            *.deb
+            *.rpm
+            *.flatpak
+            download_cli.sh
 
       # Versioned release for this tag.
       - name: Release versioned
