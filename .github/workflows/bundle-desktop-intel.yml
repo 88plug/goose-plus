@@ -114,12 +114,9 @@ jobs:
         run: source ../../bin/activate-hermit && pnpm install --frozen-lockfile
         working-directory: ui/desktop
 
-      # Configure Electron builder for Intel architecture
-      - name: Configure for Intel build
-        run: |
-          # Set the architecture to x64 for Intel Mac build
-          jq '.build.mac.target[0].arch = "x64"' package.json > package.json.tmp && mv package.json.tmp package.json
-        working-directory: ui/desktop
+      # Intel arch is selected by `bundle:intel` (electron-forge `make --arch=x64`,
+      # plus the goosed binary cross-compiled to x86_64-apple-darwin above). No
+      # electron-builder config is involved — this project uses electron-forge.
 
       - name: Import Apple signing certificate
         if: ${{ inputs.signing }}
