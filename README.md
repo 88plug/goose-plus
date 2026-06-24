@@ -1,4 +1,4 @@
-> **🦆 goose has moved!** This project has moved from `block/goose` to the [Agentic AI Foundation (AAIF)](https://aaif.io/) at the Linux Foundation. Some links and references are still being updated — please bear with us during the transition.
+> **🦆 goose-plus** — the community **[88plug/goose-plus](https://github.com/88plug/goose-plus)** fork of [aaif-goose/goose](https://github.com/aaif-goose/goose): every dependency on its latest version, first-class **A2A (Agent2Agent)** support (JSON-RPC + REST + WebSocket), native **NATS** event publishing, and a self-maintaining CI/CD + supply-chain pipeline. The install instructions below pull from goose-plus releases. See **[GOOSE_PLUS.md](GOOSE_PLUS.md)** for what's added.
 
 <div align="center">
 
@@ -28,12 +28,14 @@ goose is part of the [Agentic AI Foundation (AAIF)](https://aaif.io/) at the Lin
 
 # Get started
 
-**[Download the desktop app](https://goose-docs.ai/docs/getting-started/installation)** for macOS, Linux, and Windows.
+**[Download the goose-plus desktop app](https://github.com/88plug/goose-plus/releases/latest)** for macOS, Linux, and Windows.
 
-Or install the CLI:
+> goose-plus desktop bundles are **unsigned** (community fork, no signing certs): on macOS right-click → **Open** to pass Gatekeeper; on Windows choose **More info → Run anyway** at the SmartScreen prompt.
+
+Or install the CLI from goose-plus:
 
 ```bash
-curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash
+curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/download_cli.sh | bash
 ```
 
 # Quick links
