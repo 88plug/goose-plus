@@ -337,8 +337,10 @@ fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
 }
 
 /// Validate that an archive entry path is safe (no absolute paths, no `..`).
-/// Used by the tar extractor; the Windows zip path uses `enclosed_name()` instead.
-#[cfg(not(target_os = "windows"))]
+/// Used by the tar extractor (non-Windows) and by unit tests on every platform;
+/// the Windows zip path uses `enclosed_name()`, so it is dead code in a non-test
+/// Windows build only.
+#[cfg_attr(target_os = "windows", allow(dead_code))]
 fn validate_entry_path(path: &Path) -> Result<()> {
     if path.is_absolute() {
         bail!("Tar entry has absolute path: {}", path.display());

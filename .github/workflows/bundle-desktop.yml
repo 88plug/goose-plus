@@ -117,6 +117,21 @@ jobs:
         with:
           key: macos-deployment-target-12
           cache-on-failure: true
+          # sccache caches compiled outputs; the post-build step here deletes
+          # target/release/{deps,build} anyway, so only cache the registry.
+          cache-targets: false
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@1583d6b38d7be47f593cb472781bbb21cab4321e  # v0.0.10
+      - name: Enable sccache wrappers
+        shell: bash
+        run: |
+          {
+            echo "SCCACHE_GHA_ENABLED=true"
+            echo "RUSTC_WRAPPER=sccache"
+            echo "CMAKE_C_COMPILER_LAUNCHER=sccache"
+            echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache"
+          } >> "$GITHUB_ENV"
 
       # Build the project
       - name: Build goosed
