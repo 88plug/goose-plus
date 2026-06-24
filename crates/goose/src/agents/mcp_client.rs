@@ -483,16 +483,19 @@ impl ClientHandler for GooseClient {
     fn get_info(&self) -> ClientInfo {
         let extensions = self.resolved_extensions();
 
-        InitializeRequestParams::new(
-            ClientCapabilities::builder()
-                .enable_roots()
-                .enable_extensions_with(extensions)
-                .enable_sampling()
-                .enable_elicitation()
-                .build(),
-            self.resolved_client_info(),
-        )
-        .with_protocol_version(ProtocolVersion::V_2025_03_26)
+        // rmcp 1.8 deprecates roots+sampling capability advertisement (SEP-2577).
+        // Keep advertising them for now to preserve behavior with existing MCP
+        // servers; migrating off these capabilities is a separate protocol change.
+        #[allow(deprecated)]
+        let capabilities = ClientCapabilities::builder()
+            .enable_roots()
+            .enable_extensions_with(extensions)
+            .enable_sampling()
+            .enable_elicitation()
+            .build();
+
+        InitializeRequestParams::new(capabilities, self.resolved_client_info())
+            .with_protocol_version(ProtocolVersion::V_2025_03_26)
     }
 }
 

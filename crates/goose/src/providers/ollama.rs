@@ -83,8 +83,12 @@ const OLLAMA_DEFAULT_KEEP_ALIVE: &str = "30m";
 /// Configurable via OLLAMA_KEEP_ALIVE; defaults to OLLAMA_DEFAULT_KEEP_ALIVE.
 fn resolve_ollama_keep_alive() -> String {
     let config = crate::config::Config::global();
-    match config.get_param::<String>("OLLAMA_KEEP_ALIVE") {
-        Ok(val) if !val.trim().is_empty() => val,
+    // Read as a raw JSON value: Ollama's keep_alive accepts a duration string
+    // ("30m") or a number ("-1" indefinite, "0" unload now), and get_param's
+    // typed String deserialization rejects numeric-looking values.
+    match config.get_param::<serde_json::Value>("OLLAMA_KEEP_ALIVE") {
+        Ok(serde_json::Value::String(val)) if !val.trim().is_empty() => val,
+        Ok(serde_json::Value::Number(num)) => num.to_string(),
         _ => OLLAMA_DEFAULT_KEEP_ALIVE.to_string(),
     }
 }
