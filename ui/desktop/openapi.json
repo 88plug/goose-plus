@@ -3344,11 +3344,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of messages to return (default: all)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of messages to skip from the start (default: 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Session history retrieved successfully",
+            "description": "Session history retrieved successfully. Pagination metadata is returned in the x-total-messages, x-limit and x-offset response headers.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4896,6 +4918,12 @@
                   "type": "string"
                 }
               },
+              "blocked_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "bundled": {
                 "type": "boolean",
                 "nullable": true
@@ -4952,6 +4980,12 @@
                   "type": "string"
                 }
               },
+              "blocked_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "bundled": {
                 "type": "boolean",
                 "nullable": true
@@ -4996,6 +5030,12 @@
                   "type": "string"
                 }
               },
+              "blocked_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "bundled": {
                 "type": "boolean",
                 "nullable": true
@@ -5030,6 +5070,12 @@
             ],
             "properties": {
               "available_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocked_tools": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -5099,6 +5145,12 @@
                   "type": "string"
                 }
               },
+              "blocked_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "bundled": {
                 "type": "boolean",
                 "nullable": true
@@ -5141,6 +5193,12 @@
             ],
             "properties": {
               "available_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocked_tools": {
                 "type": "array",
                 "items": {
                   "type": "string"

@@ -20,6 +20,12 @@
   "appsView.customApp": {
     "defaultMessage": "कस्टम ऐप"
   },
+  "appsView.delete": {
+    "defaultMessage": "Delete"
+  },
+  "appsView.deleteConfirm": {
+    "defaultMessage": "Delete \"{name}\"? This cannot be undone."
+  },
   "appsView.description": {
     "defaultMessage": "आपके MCP सर्वर से एप्लिकेशन और goose द्वारा निर्मित ऐप्स। आप इसे चैट इंटरफ़ेस के माध्यम से नए ऐप्स बनाने के लिए कह सकते हैं और वे यहां दिखाई देंगे।"
   },

@@ -375,6 +375,7 @@ export type ExtensionConfig = {
 } | {
     args: Array<string>;
     available_tools?: Array<string>;
+    blocked_tools?: Array<string>;
     bundled?: boolean | null;
     cmd: string;
     cwd?: string | null;
@@ -389,6 +390,7 @@ export type ExtensionConfig = {
     type: 'stdio';
 } | {
     available_tools?: Array<string>;
+    blocked_tools?: Array<string>;
     bundled?: boolean | null;
     description: string;
     display_name?: string | null;
@@ -400,6 +402,7 @@ export type ExtensionConfig = {
     type: 'builtin';
 } | {
     available_tools?: Array<string>;
+    blocked_tools?: Array<string>;
     bundled?: boolean | null;
     description: string;
     display_name?: string | null;
@@ -410,6 +413,7 @@ export type ExtensionConfig = {
     type: 'platform';
 } | {
     available_tools?: Array<string>;
+    blocked_tools?: Array<string>;
     bundled?: boolean | null;
     description: string;
     env_keys?: Array<string>;
@@ -433,6 +437,7 @@ export type ExtensionConfig = {
     uri: string;
 } | {
     available_tools?: Array<string>;
+    blocked_tools?: Array<string>;
     bundled?: boolean | null;
     description: string;
     /**
@@ -450,6 +455,7 @@ export type ExtensionConfig = {
     type: 'frontend';
 } | {
     available_tools?: Array<string>;
+    blocked_tools?: Array<string>;
     /**
      * The Python code to execute
      */
@@ -4340,7 +4346,16 @@ export type GetSessionData = {
          */
         session_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Maximum number of messages to return (default: all)
+         */
+        limit?: number | null;
+        /**
+         * Number of messages to skip from the start (default: 0)
+         */
+        offset?: number | null;
+    };
     url: '/sessions/{session_id}';
 };
 
@@ -4361,7 +4376,7 @@ export type GetSessionErrors = {
 
 export type GetSessionResponses = {
     /**
-     * Session history retrieved successfully
+     * Session history retrieved successfully. Pagination metadata is returned in the x-total-messages, x-limit and x-offset response headers.
      */
     200: Session;
 };

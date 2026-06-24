@@ -20,6 +20,12 @@
   "appsView.customApp": {
     "defaultMessage": "自定义应用"
   },
+  "appsView.delete": {
+    "defaultMessage": "Delete"
+  },
+  "appsView.deleteConfirm": {
+    "defaultMessage": "Delete \"{name}\"? This cannot be undone."
+  },
   "appsView.description": {
     "defaultMessage": "来自你 MCP 服务器的应用，以及 goose 自己构建的应用。你可以通过聊天界面让它创建新应用，新应用会显示在这里。"
   },

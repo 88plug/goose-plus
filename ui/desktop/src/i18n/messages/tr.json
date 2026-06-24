@@ -20,6 +20,12 @@
   "appsView.customApp": {
     "defaultMessage": "Özel uygulama"
   },
+  "appsView.delete": {
+    "defaultMessage": "Delete"
+  },
+  "appsView.deleteConfirm": {
+    "defaultMessage": "Delete \"{name}\"? This cannot be undone."
+  },
   "appsView.description": {
     "defaultMessage": "MCP sunucularınızdaki uygulamalar ve goose tarafından oluşturulan Uygulamalar. Sohbet arayüzü aracılığıyla yeni uygulamalar oluşturmasını isteyebilirsiniz; bunlar burada görünecektir."
   },

@@ -7,11 +7,24 @@ import { AppEvents } from '../constants/events';
 import type { Session } from '../api';
 import { acpListRecentSessions, type SessionListItem } from '../acp/sessions';
 
-const MAX_RECENT_SESSIONS = 25;
+export const DEFAULT_RECENT_SESSIONS_LIMIT = 25;
+export const RECENT_SESSIONS_LIMIT_STORAGE_KEY = 'goose.sidebarSessionLimit';
+
+export function getRecentSessionsLimit(): number {
+  try {
+    const stored = localStorage.getItem(RECENT_SESSIONS_LIMIT_STORAGE_KEY);
+    if (stored === null) return DEFAULT_RECENT_SESSIONS_LIMIT;
+    const parsed = Number.parseInt(stored, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_RECENT_SESSIONS_LIMIT;
+    return parsed;
+  } catch {
+    return DEFAULT_RECENT_SESSIONS_LIMIT;
+  }
+}
 
 export function prependUnique(prev: SessionListItem[], session: SessionListItem): SessionListItem[] {
   if (prev.some((s) => s.id === session.id)) return prev;
-  return [session, ...prev].slice(0, MAX_RECENT_SESSIONS);
+  return [session, ...prev].slice(0, getRecentSessionsLimit());
 }
 
 function mergeWithEmptyLocals(
@@ -21,7 +34,7 @@ function mergeWithEmptyLocals(
   const emptyLocals = prev.filter(
     (local) => local.messageCount === 0 && !listed.some((s) => s.id === local.id)
   );
-  return [...emptyLocals, ...listed].slice(0, MAX_RECENT_SESSIONS);
+  return [...emptyLocals, ...listed].slice(0, getRecentSessionsLimit());
 }
 
 export function sessionToListItem(s: Session): SessionListItem {
@@ -62,7 +75,7 @@ export function useNavigationSessions() {
 
   const fetchSessions = useCallback(async () => {
     try {
-      const sessions = await acpListRecentSessions(MAX_RECENT_SESSIONS);
+      const sessions = await acpListRecentSessions(getRecentSessionsLimit());
       setRecentSessions(sessions);
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
@@ -101,7 +114,7 @@ export function useNavigationSessions() {
       const pollForUpdates = async () => {
         pollCount++;
         try {
-          const listed = await acpListRecentSessions(MAX_RECENT_SESSIONS);
+          const listed = await acpListRecentSessions(getRecentSessionsLimit());
           setRecentSessions((prev) => mergeWithEmptyLocals(prev, listed));
         } catch (error) {
           console.error('Failed to poll sessions:', error);
@@ -137,7 +150,7 @@ export function useNavigationSessions() {
         lastSessionIdRef.current = null;
       }
       const version = ++fetchVersion;
-      acpListRecentSessions(MAX_RECENT_SESSIONS)
+      acpListRecentSessions(getRecentSessionsLimit())
         .then((sessions) => {
           if (version !== fetchVersion) return;
           setRecentSessions(sessions.filter((session) => session.id !== sessionId));

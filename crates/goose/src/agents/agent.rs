@@ -67,6 +67,12 @@ use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_MAX_TURNS: u32 = 1000;
 const DEFAULT_STOP_HOOK_BLOCK_CAP: u32 = 8;
+/// Number of back-to-back turns where the model produces no tool calls and the
+/// same (or empty) assistant text before the loop gives up. Weak/local models can
+/// otherwise re-announce intent ("Actually, I'll write the schema.") indefinitely
+/// when a goal/grind/final-output nudge keeps the loop alive, spinning up to
+/// GOOSE_MAX_TURNS with no real progress (#9082, #9640).
+const NO_PROGRESS_TURN_CAP: u32 = 3;
 const COMPACTION_THINKING_TEXT: &str = "goose is compacting the conversation...";
 const DEFAULT_FRONTEND_INSTRUCTIONS: &str = "The following tools are provided directly by the frontend and will be executed by the frontend when called.";
 
@@ -1803,6 +1809,8 @@ impl Agent {
             });
             let mut compaction_attempts = 0;
             let mut last_assistant_text = String::new();
+            let mut consecutive_no_progress_turns = 0u32;
+            let mut last_no_progress_text: Option<String> = None;
             let mut goal_check_pending = false;
             let mut tool_pair_summarization_done = false;
             let mut stop_hook_handled_for_exit = false;
@@ -2250,6 +2258,9 @@ impl Agent {
                                 accumulated_thinking.clear();
 
                                 no_tools_called = false;
+                                // Real progress (tool calls) resets the no-progress guard.
+                                consecutive_no_progress_turns = 0;
+                                last_no_progress_text = None;
                                 // Agent is actively working — re-check goal when it next finishes
                                 goal_check_pending = false;
                             }
@@ -2402,6 +2413,33 @@ impl Agent {
                         let mut guard = self.final_output_tool.lock().await;
                         guard.as_mut().map(|fot| fot.final_output.take())
                     };
+
+                    // A final-output tool waiting on a call is legitimately driven by the
+                    // continuation nudge, so it manages its own progress and is exempt here.
+                    let final_output_pending = matches!(final_output, Some(None));
+                    if !final_output_pending {
+                        let current_text = last_assistant_text.trim().to_string();
+                        if last_no_progress_text.as_deref() == Some(current_text.as_str()) {
+                            consecutive_no_progress_turns += 1;
+                        } else {
+                            consecutive_no_progress_turns = 1;
+                            last_no_progress_text = Some(current_text);
+                        }
+                        if consecutive_no_progress_turns >= NO_PROGRESS_TURN_CAP {
+                            warn!(
+                                "Ending turn after {} consecutive no-progress responses (no tool calls, repeated text)",
+                                consecutive_no_progress_turns
+                            );
+                            self.set_goal(None).await;
+                            self.set_grind(None).await;
+                            yield AgentEvent::Message(
+                                Message::assistant().with_text(
+                                    "I seem to be repeating myself without making progress. Stopping here — please rephrase or give me a more specific instruction to continue."
+                                )
+                            );
+                            break;
+                        }
+                    }
 
                     match final_output {
                         Some(None) => {
@@ -3481,6 +3519,79 @@ exit 0
             provider.call_count.load(Ordering::SeqCst),
             1,
             "a refused request must not be resent"
+        );
+        Ok(())
+    }
+
+    /// Always returns the same text with no tool calls, mimicking a weak/local
+    /// model that re-announces intent ("Actually, I'll write the schema.") without
+    /// ever acting (#9082, #9640).
+    struct RepeatingTextProvider {
+        call_count: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl crate::providers::base::Provider for RepeatingTextProvider {
+        async fn stream(
+            &self,
+            _model_config: &goose_providers::model::ModelConfig,
+            _session_id: &str,
+            _system_prompt: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<MessageStream, ProviderError> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            let message = Message::assistant().with_text("Actually, I'll write the schema.");
+            let usage = ProviderUsage::new("mock-model".to_string(), Usage::default());
+            Ok(stream_from_single_message(message, usage))
+        }
+
+        fn get_model_config(&self) -> goose_providers::model::ModelConfig {
+            goose_providers::model::ModelConfig::new("mock-model").unwrap()
+        }
+
+        fn get_name(&self) -> &str {
+            "repeating-text"
+        }
+    }
+
+    #[tokio::test]
+    async fn no_progress_text_loop_breaks_before_max_turns() -> Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let provider = Arc::new(RepeatingTextProvider {
+            call_count: AtomicUsize::new(0),
+        });
+        let hook_manager = crate::hooks::HookManager::from_plugins_for_test(vec![]);
+        let (agent, session_id) =
+            create_test_agent(temp_dir.path().join("data"), hook_manager, provider.clone()).await?;
+
+        // A grind keeps re-nudging the loop on every no-tool turn, so without the
+        // no-progress guard this would spin up to max_turns.
+        agent.set_grind(Some("create the schema".to_string())).await;
+
+        let session_config = SessionConfig {
+            id: session_id,
+            schedule_id: None,
+            max_turns: Some(1000),
+            retry_config: None,
+        };
+
+        let reply_stream = agent
+            .reply(Message::user().with_text("build it"), session_config, None)
+            .await?;
+        tokio::pin!(reply_stream);
+        while let Some(event) = reply_stream.next().await {
+            event?;
+        }
+
+        let calls = provider.call_count.load(Ordering::SeqCst);
+        assert!(
+            calls <= NO_PROGRESS_TURN_CAP as usize + 1,
+            "a model repeating the same no-tool text must not spin to max_turns; got {calls} provider calls"
+        );
+        assert!(
+            agent.get_grind().await.is_none(),
+            "the grind goal should be cleared when the no-progress guard ends the turn"
         );
         Ok(())
     }

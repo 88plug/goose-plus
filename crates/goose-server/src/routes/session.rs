@@ -1,15 +1,17 @@
 use crate::routes::errors::ErrorResponse;
 use crate::routes::recipe_utils::{apply_recipe_to_agent, build_recipe_with_parameter_values};
 use crate::state::AppState;
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{DefaultBodyLimit, Query, State};
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{
     extract::Path,
-    http::StatusCode,
+    http::{header::HeaderName, HeaderValue, StatusCode},
     routing::{get, put},
     Json, Router,
 };
 use goose::agents::ExtensionConfig;
+use goose::conversation::Conversation;
 use goose::recipe::Recipe;
 #[cfg(feature = "nostr")]
 use goose::session::nostr_share;
@@ -80,14 +82,49 @@ pub struct ForkResponse {
 
 const MAX_NAME_LENGTH: usize = 200;
 
+/// Default page size when only an offset is supplied. Large enough that the
+/// endpoint keeps returning the full conversation when no pagination params
+/// are given, preserving backwards-compatible behavior.
+const DEFAULT_MESSAGE_LIMIT: usize = usize::MAX;
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSessionQuery {
+    /// Maximum number of messages to return. Omit to return all messages.
+    limit: Option<usize>,
+    /// Number of messages to skip from the start of the conversation.
+    offset: Option<usize>,
+}
+
+fn paginate_conversation(
+    conversation: Conversation,
+    offset: usize,
+    limit: usize,
+) -> (Conversation, usize) {
+    let messages = conversation.messages();
+    let total = messages.len();
+    if offset == 0 && limit == DEFAULT_MESSAGE_LIMIT {
+        return (conversation, total);
+    }
+    let page = messages
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect::<Vec<_>>();
+    (Conversation::new_unvalidated(page), total)
+}
+
 #[utoipa::path(
     get,
     path = "/sessions/{session_id}",
     params(
-        ("session_id" = String, Path, description = "Unique identifier for the session")
+        ("session_id" = String, Path, description = "Unique identifier for the session"),
+        ("limit" = Option<usize>, Query, description = "Maximum number of messages to return (default: all)"),
+        ("offset" = Option<usize>, Query, description = "Number of messages to skip from the start (default: 0)")
     ),
     responses(
-        (status = 200, description = "Session history retrieved successfully", body = Session),
+        (status = 200, description = "Session history retrieved successfully. Pagination metadata is returned in the x-total-messages, x-limit and x-offset response headers.", body = Session),
         (status = 401, description = "Unauthorized - Invalid or missing API key"),
         (status = 404, description = "Session not found"),
         (status = 500, description = "Internal server error")
@@ -100,14 +137,40 @@ const MAX_NAME_LENGTH: usize = 200;
 async fn get_session(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
-) -> Result<Json<Session>, StatusCode> {
-    let session = state
+    Query(query): Query<GetSessionQuery>,
+) -> Result<Response, StatusCode> {
+    let mut session = state
         .session_manager()
         .get_session(&session_id, true)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(Json(session))
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(DEFAULT_MESSAGE_LIMIT);
+
+    let total = if let Some(conversation) = session.conversation.take() {
+        let (page, total) = paginate_conversation(conversation, offset, limit);
+        session.conversation = Some(page);
+        total
+    } else {
+        0
+    };
+
+    let mut response = Json(session).into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        HeaderName::from_static("x-total-messages"),
+        HeaderValue::from(total),
+    );
+    headers.insert(
+        HeaderName::from_static("x-offset"),
+        HeaderValue::from(offset),
+    );
+    if limit != DEFAULT_MESSAGE_LIMIT {
+        headers.insert(HeaderName::from_static("x-limit"), HeaderValue::from(limit));
+    }
+
+    Ok(response)
 }
 
 #[utoipa::path(
@@ -472,4 +535,58 @@ pub fn routes(state: Arc<AppState>) -> Router {
             get(get_session_extensions),
         )
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use goose::conversation::message::Message;
+
+    fn conversation_with(n: usize) -> Conversation {
+        Conversation::new_unvalidated((0..n).map(|i| Message::user().with_id(format!("m{i}"))))
+    }
+
+    fn ids(conversation: &Conversation) -> Vec<String> {
+        conversation
+            .messages()
+            .iter()
+            .map(|m| m.id.clone().unwrap_or_default())
+            .collect()
+    }
+
+    #[test]
+    fn no_params_returns_full_conversation() {
+        let (page, total) = paginate_conversation(conversation_with(5), 0, DEFAULT_MESSAGE_LIMIT);
+        assert_eq!(total, 5);
+        assert_eq!(page.len(), 5);
+        assert_eq!(ids(&page), vec!["m0", "m1", "m2", "m3", "m4"]);
+    }
+
+    #[test]
+    fn limit_caps_returned_messages() {
+        let (page, total) = paginate_conversation(conversation_with(5), 0, 2);
+        assert_eq!(total, 5);
+        assert_eq!(ids(&page), vec!["m0", "m1"]);
+    }
+
+    #[test]
+    fn offset_skips_leading_messages() {
+        let (page, total) = paginate_conversation(conversation_with(5), 2, 2);
+        assert_eq!(total, 5);
+        assert_eq!(ids(&page), vec!["m2", "m3"]);
+    }
+
+    #[test]
+    fn offset_past_end_returns_empty_page_with_full_total() {
+        let (page, total) = paginate_conversation(conversation_with(3), 10, 5);
+        assert_eq!(total, 3);
+        assert!(page.messages().is_empty());
+    }
+
+    #[test]
+    fn limit_larger_than_remaining_returns_tail() {
+        let (page, total) = paginate_conversation(conversation_with(4), 3, 100);
+        assert_eq!(total, 4);
+        assert_eq!(ids(&page), vec!["m3"]);
+    }
 }

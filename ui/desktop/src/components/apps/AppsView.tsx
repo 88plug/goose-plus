@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MainPanelLayout } from '../Layout/MainPanelLayout';
 import { Button } from '../ui/button';
-import { Download, Play, Upload } from 'lucide-react';
-import { exportApp, GooseApp, importApp, listApps } from '../../api';
+import { Download, Play, Trash2, Upload } from 'lucide-react';
+import { callTool, exportApp, GooseApp, importApp, listApps } from '../../api';
 import { useChatContext } from '../../contexts/ChatContext';
 import { formatAppName } from '../../utils/conversionUtils';
 import { errorMessage } from '../../utils/conversionUtils';
@@ -50,6 +50,14 @@ const i18n = defineMessages({
   launch: {
     id: 'appsView.launch',
     defaultMessage: 'Launch',
+  },
+  delete: {
+    id: 'appsView.delete',
+    defaultMessage: 'Delete',
+  },
+  deleteConfirm: {
+    id: 'appsView.deleteConfirm',
+    defaultMessage: 'Delete "{name}"? This cannot be undone.',
   },
 });
 
@@ -206,6 +214,40 @@ export default function AppsView() {
     }
   };
 
+  const handleDeleteApp = async (app: GooseApp) => {
+    if (!sessionId) return;
+
+    const confirmed = window.confirm(
+      intl.formatMessage(i18n.deleteConfirm, { name: formatAppName(app.name) })
+    );
+    if (!confirmed) return;
+
+    try {
+      const response = await callTool({
+        throwOnError: true,
+        body: {
+          session_id: sessionId,
+          name: 'apps__delete_app',
+          arguments: { name: app.name },
+        },
+      });
+
+      if (response.data?.isError) {
+        const text = response.data.content
+          ?.map((c) => (c as { text?: string }).text ?? '')
+          .join(' ')
+          .trim();
+        throw new Error(text || 'Failed to delete app');
+      }
+
+      setApps((prev) => prev.filter((a) => a.uri !== app.uri || a.name !== app.name));
+      setError(null);
+    } catch (err) {
+      console.error('Failed to delete app:', err);
+      setError(errorMessage(err, 'Failed to delete app'));
+    }
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportClick = () => {
@@ -337,6 +379,18 @@ export default function AppsView() {
                           className="flex items-center gap-2"
                         >
                           <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {isCustomApp && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteApp(app)}
+                          aria-label={intl.formatMessage(i18n.delete)}
+                          title={intl.formatMessage(i18n.delete)}
+                          className="flex items-center gap-2"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </div>

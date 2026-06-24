@@ -292,7 +292,13 @@ if (started) app.quit();
 // net.fetch) pin to the exact cert fingerprint. For locally-spawned goosed the
 // fingerprint comes from its stdout; for external backends we use Trust-On-First-Use
 // (TOFU) — the first TLS handshake pins the cert for the lifetime of the process.
-let pinnedCertFingerprint: string | null = null;
+//
+// Pins are scoped per-host so that multiple windows pointing at different
+// backends do not clobber each other's pin (#7554). Each host keeps a set of
+// accepted fingerprints: a cert is trusted for a host if it matches any pin for
+// that host, so two local goosed instances on 127.0.0.1 with distinct
+// self-signed certs both verify instead of last-one-wins.
+const pinnedCertFingerprintsByHost = new Map<string, Set<string>>();
 
 // Cached hostname of the configured external goosed server, updated when a
 // chat is created so we don't hit the filesystem on every TLS handshake.
@@ -319,6 +325,34 @@ function normalizeFingerprint(fp: string): string {
   return fp.toUpperCase();
 }
 
+function pinCertFingerprintForHost(hostname: string, fingerprint: string): void {
+  const normalized = normalizeFingerprint(fingerprint);
+  let pins = pinnedCertFingerprintsByHost.get(hostname);
+  if (!pins) {
+    pins = new Set<string>();
+    pinnedCertFingerprintsByHost.set(hostname, pins);
+  }
+  pins.add(normalized);
+}
+
+function setCertFingerprintForHost(hostname: string, fingerprint: string): void {
+  pinnedCertFingerprintsByHost.set(hostname, new Set([normalizeFingerprint(fingerprint)]));
+}
+
+function clearPinnedCertsForHost(hostname: string): void {
+  pinnedCertFingerprintsByHost.delete(hostname);
+}
+
+function hasPinnedCertsForHost(hostname: string): boolean {
+  const pins = pinnedCertFingerprintsByHost.get(hostname);
+  return pins !== undefined && pins.size > 0;
+}
+
+function isCertPinnedForHost(hostname: string, fingerprint: string): boolean {
+  const pins = pinnedCertFingerprintsByHost.get(hostname);
+  return pins !== undefined && pins.has(normalizeFingerprint(fingerprint));
+}
+
 // Renderer requests: pin to the exact cert goosed generated once known.
 // Before the fingerprint is available (during the health-check bootstrap
 // window) any localhost cert is accepted so the server can come up.
@@ -328,14 +362,13 @@ app.on('certificate-error', (event, _webContents, url, _error, certificate, call
     callback(false);
     return;
   }
-  if (pinnedCertFingerprint) {
-    const match =
-      normalizeFingerprint(certificate.fingerprint) === pinnedCertFingerprint.toUpperCase();
+  if (hasPinnedCertsForHost(parsed.hostname)) {
+    const match = isCertPinnedForHost(parsed.hostname, certificate.fingerprint);
     event.preventDefault();
     callback(match);
   } else {
-    // TOFU: pin the certificate from the first successful handshake.
-    pinnedCertFingerprint = normalizeFingerprint(certificate.fingerprint);
+    // TOFU: pin the certificate from the first successful handshake for this host.
+    pinCertFingerprintForHost(parsed.hostname, certificate.fingerprint);
     event.preventDefault();
     callback(true);
   }
@@ -352,14 +385,13 @@ app.whenReady().then(() => {
       callback(-3);
       return;
     }
-    if (!pinnedCertFingerprint) {
-      // TOFU: pin the certificate from the first successful handshake.
-      pinnedCertFingerprint = normalizeFingerprint(request.certificate.fingerprint);
+    if (!hasPinnedCertsForHost(request.hostname)) {
+      // TOFU: pin the certificate from the first successful handshake for this host.
+      pinCertFingerprintForHost(request.hostname, request.certificate.fingerprint);
       callback(0);
       return;
     }
-    const match =
-      normalizeFingerprint(request.certificate.fingerprint) === pinnedCertFingerprint.toUpperCase();
+    const match = isCertPinnedForHost(request.hostname, request.certificate.fingerprint);
     callback(match ? 0 : -2);
   });
 });
@@ -914,11 +946,15 @@ const createChat = async (app: App, options: CreateChatOptions = {}) => {
   }
 
   // If the user provided a cert fingerprint for the external backend, pin it
-  // directly (skips TOFU). Otherwise reset so the first handshake pins via TOFU.
-  if (settings.externalGoosed?.enabled && settings.externalGoosed.certFingerprint) {
-    pinnedCertFingerprint = normalizeFingerprint(settings.externalGoosed.certFingerprint);
-  } else {
-    pinnedCertFingerprint = null;
+  // for that host (skips TOFU). Otherwise reset that host so the first handshake
+  // pins via TOFU. Pins for other hosts (e.g. another window's backend) are left
+  // untouched (#7554).
+  if (settings.externalGoosed?.enabled && trustedExternalHostname) {
+    if (settings.externalGoosed.certFingerprint) {
+      setCertFingerprintForHost(trustedExternalHostname, settings.externalGoosed.certFingerprint);
+    } else {
+      clearPinnedCertsForHost(trustedExternalHostname);
+    }
   }
 
   const goosedResult = await startGoosed({
@@ -934,13 +970,6 @@ const createChat = async (app: App, options: CreateChatOptions = {}) => {
     diagnosticsDir: STARTUP_LOGS_DIR,
   });
 
-  // For locally-spawned goosed, pin using the fingerprint from stdout.
-  // For external backends the TOFU path in the cert handlers will pin
-  // the fingerprint on the first successful TLS handshake.
-  if (goosedResult.certFingerprint) {
-    pinnedCertFingerprint = goosedResult.certFingerprint;
-  }
-
   const {
     baseUrl,
     workingDir,
@@ -950,6 +979,18 @@ const createChat = async (app: App, options: CreateChatOptions = {}) => {
     getStartupDiagnostics,
     recordStartupEvent,
   } = goosedResult;
+
+  // For locally-spawned goosed, pin using the fingerprint from stdout, keyed by
+  // this backend's host so it doesn't clobber another window's pin (#7554).
+  // For external backends the TOFU path in the cert handlers will pin the
+  // fingerprint on the first successful TLS handshake.
+  if (goosedResult.certFingerprint) {
+    try {
+      pinCertFingerprintForHost(new URL(baseUrl).hostname, goosedResult.certFingerprint);
+    } catch (error) {
+      log.error('Failed to pin goosed cert fingerprint for host:', error);
+    }
+  }
 
   const mainWindowState = windowStateKeeper({
     defaultWidth: 940,
