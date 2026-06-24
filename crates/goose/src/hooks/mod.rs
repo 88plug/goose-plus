@@ -631,6 +631,7 @@ async fn resolve_hook_path() -> Option<String> {
     }
 }
 
+#[cfg(not(windows))]
 fn merge_paths(first: &str, second: &str) -> String {
     let mut seen = std::collections::HashSet::new();
     let mut merged = Vec::new();
@@ -763,6 +764,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn merge_paths_keeps_login_entries_first() {
         assert_eq!(

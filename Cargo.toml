@@ -30,13 +30,13 @@ repository = "https://github.com/aaif-goose/goose"
 description = "An AI agent"
 
 [workspace.lints.rust]
-# Surface these in plain `cargo build` + rust-analyzer, but only as warnings:
-# a manifest-level "deny" turns a platform-conditional unused import into a hard
-# cross-platform build failure (e.g. an import used only on non-Windows breaks
-# the Windows release build). CI's blanket `-D warnings` (on Linux) remains the
-# strict gate; the release builds tolerate benign per-platform warnings.
-unused_imports = "warn"
-unused_must_use = "warn"
+# Deny in plain `cargo build` + rust-analyzer too (not just CI). This is safe
+# only because the code is kept warning-clean on EVERY target: platform-specific
+# items must be cfg-gated, never left dangling on another platform. The release
+# pipeline's host/Windows/macOS preflights enforce this (-D warnings) before the
+# build matrix, so a per-platform unused item fails fast rather than mid-release.
+unused_imports = "deny"
+unused_must_use = "deny"
 
 [workspace.lints.clippy]
 uninlined_format_args = "allow"

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::http::{HeaderMap, HeaderName, HeaderValue};
+use axum::http::{HeaderMap, HeaderName};
 use chrono::{DateTime, Utc};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures::{future, FutureExt};
@@ -745,6 +745,7 @@ async fn create_unix_socket_http_client(
     capabilities: GooseMcpClientCapabilities,
     roots_dir: &std::path::Path,
 ) -> ExtensionResult<Box<dyn McpClientTrait>> {
+    use axum::http::HeaderValue;
     use rmcp::transport::UnixSocketHttpClient;
 
     let unix_client = UnixSocketHttpClient::new(socket_path, uri);

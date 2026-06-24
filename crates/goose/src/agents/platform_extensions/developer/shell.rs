@@ -320,6 +320,9 @@ pub struct ShellTool {
 
 impl ShellTool {
     pub fn new(use_login_shell_path: bool) -> std::io::Result<Self> {
+        // login_path is cfg'd out on Windows, so the flag is unused there.
+        #[cfg(windows)]
+        let _ = use_login_shell_path;
         Ok(Self {
             output_dir: tempfile::tempdir()?,
             call_index: AtomicUsize::new(0),
