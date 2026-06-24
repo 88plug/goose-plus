@@ -12,6 +12,7 @@
     "postinstall": "pnpm --filter @aaif/goose-sdk run build",
     "typecheck": "tsc --noEmit",
     "generate-api": "openapi-ts",
+    "build:web": "vite build --config vite.web.config.mts",
     "start-gui": "pnpm run generate-api && pnpm run i18n:compile && electron-forge start",
     "start-gui-debug": "pnpm run generate-api && pnpm run i18n:compile && electron-forge start -- --inspect=9229",
     "start": "cd ../.. && just run-ui",

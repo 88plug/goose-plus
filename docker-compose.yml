@@ -35,3 +35,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Browser UI for goosed (optional). The same desktop renderer served as a web
+  # app; open http://localhost:8080. GOOSE_API_HOST is the backend URL as seen
+  # from your browser (the host-published goosed port), not the compose network.
+  goose-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: ghcr.io/88plug/goose-plus-web:latest
+    ports:
+      - "${GOOSE_WEB_PORT:-8080}:80"
+    environment:
+      GOOSE_API_HOST: ${GOOSE_API_HOST:-http://localhost:3000}
+      GOOSE_SERVER__SECRET_KEY: "${GOOSE_SERVER__SECRET_KEY:?set GOOSE_SERVER__SECRET_KEY first}"
+    depends_on:
+      - goosed
+    restart: unless-stopped

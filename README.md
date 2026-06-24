@@ -42,16 +42,28 @@ curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/downloa
 `.zip` and a portable Linux `.AppImage` on the [releases page](https://github.com/88plug/goose-plus/releases/latest) —
 unzip / `chmod +x` and run, nothing to install.
 
-**Run the server headless in Docker:** drive goose from a browser front-end,
-scripts, or your own tooling via the `goosed` HTTP API — no desktop app needed:
+**Run goose in the browser (no install) via Docker:** `docker compose up` starts
+the `goosed` backend **and** a web build of the desktop UI — the same renderer,
+served as a web app through a browser shim for the Electron APIs:
 
 ```bash
 echo "GOOSE_SERVER__SECRET_KEY=$(openssl rand -hex 32)" > .env
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env        # or your provider's key
-docker compose up --build                          # API on http://localhost:3000
+docker compose up --build
+#  → API:  http://localhost:3000   (goosed)
+#  → UI:   http://localhost:8080   (open in your browser)
 ```
 
-See [`Dockerfile.server`](Dockerfile.server) and [`docker-compose.yml`](docker-compose.yml).
+You can also drive `goosed` directly from scripts/tooling over its HTTP API, or
+build just the web bundle with `cd ui/desktop && pnpm build:web` (output in
+`dist-web/`, servable by any static file server pointed at a goosed backend).
+
+> Intended for local/trusted use: the desktop bundles are unsigned and the Docker
+> stack binds to localhost. Put authentication in front of `goosed` before
+> exposing it on a network.
+
+See [`Dockerfile.server`](Dockerfile.server), [`Dockerfile.web`](Dockerfile.web),
+and [`docker-compose.yml`](docker-compose.yml).
 
 # Quick links
 - [Quickstart](https://goose-docs.ai/docs/quickstart)

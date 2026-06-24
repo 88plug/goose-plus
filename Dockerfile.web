@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1.4
+# Browser/web build of the goose desktop UI. The same renderer that ships in the
+# Electron app, served as a plain web app via a web shim (ui/desktop/src/web)
+# that implements the window.electron / window.appConfig surface in the browser.
+#
+# It talks to a goosed backend over HTTP (goosed sends CORS allow-origin: *), so
+# run this alongside the `goosed` service (see docker-compose.yml) and open it in
+# a browser. The backend URL + secret are injected at container start into
+# goose-web-config.js (no rebuild needed) from GOOSE_API_HOST / GOOSE_SERVER__SECRET_KEY.
+
+# ---- build stage ------------------------------------------------------------
+FROM node:24-bookworm AS build
+WORKDIR /app
+COPY . .
+RUN corepack enable \
+    && cd ui \
+    && pnpm install --frozen-lockfile \
+    && cd desktop \
+    && pnpm run build:web
+
+# ---- runtime stage (static file server) -------------------------------------
+FROM nginx:1.27-alpine
+COPY --from=build /app/ui/desktop/dist-web /usr/share/nginx/html
+# Inject the backend URL + secret into goose-web-config.js at container start.
+COPY docker/web-entrypoint.sh /docker-entrypoint.d/40-goose-web-config.sh
+RUN chmod +x /docker-entrypoint.d/40-goose-web-config.sh
+EXPOSE 80
+LABEL org.opencontainers.image.title="goose-web" \
+      org.opencontainers.image.description="goose desktop UI served for the browser" \
+      org.opencontainers.image.vendor="88plug" \
+      org.opencontainers.image.source="https://github.com/88plug/goose-plus"
