@@ -3,7 +3,7 @@ name: pnpm audit
 # CVE scan of the desktop UI dependency tree (GitHub Advisory DB).
 on:
   pull_request:
-    paths: ["ui/desktop/**"]
+    paths: ["ui/**"]
   schedule:
     - cron: "23 6 * * *"
   workflow_dispatch:
@@ -15,19 +15,16 @@ jobs:
   audit:
     if: github.repository == '88plug/goose-plus'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ui/desktop
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: ui/desktop/pnpm-lock.yaml
-      # Fail the lockfile if it drifts from package.json (supply-chain integrity).
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level high --prod
+      # Use hermit (bin/activate-hermit) for pnpm + node — same toolchain the
+      # bundle-desktop workflows build with, so the audit sees the exact pinned
+      # pnpm/node versions. The pnpm workspace root is ui/ (lockfile lives at
+      # ui/pnpm-lock.yaml); pnpm resolves it from ui/desktop.
+      - name: Audit desktop dependencies
+        run: |
+          source ./bin/activate-hermit
+          cd ui/desktop
+          # Fail if the lockfile drifts from the manifests (supply-chain integrity).
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level high --prod
