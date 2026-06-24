@@ -12,28 +12,19 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == '88plug/goose-plus'
     steps:
-      - name: Fetch Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Approve patch and minor PRs
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' &&
-           steps.metadata.outputs.dependency-type != 'direct:production')
+      # Auto-merge EVERY Dependabot PR that passes CI — approve + enable
+      # auto-merge regardless of semver bump. Safety comes from the required
+      # checks (Security audit, CI build/test/lint): GitHub only completes the
+      # merge once they're green, so a breaking bump simply stays open (failing,
+      # visible) instead of merging. The goal is a hands-off, PR-noise-free fork.
+      - name: Approve
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for patch and minor PRs
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' &&
-           steps.metadata.outputs.dependency-type != 'direct:production')
-        run: gh pr merge --auto --merge "$PR_URL"
+      - name: Enable auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
