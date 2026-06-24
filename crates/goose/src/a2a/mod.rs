@@ -1,33 +1,46 @@
 //! A2A (Agent2Agent) protocol support.
 //!
-//! - [`types`] — the v0.3 JSON-RPC wire types.
-//! - This module — the Agent Card builder and A2A <-> goose message conversion.
-//!
-//! The HTTP server (Agent Card endpoint + JSON-RPC handler) lives in
-//! `goose-server` (`routes::a2a`); the outbound client lives in [`client`].
+//! Built entirely on our fork crate [`a2a`] (88plug/a2a-rs, 88plug-plus — A2A
+//! v1.0 + WebSocket transport + spec fixes). This module is only the irreducible
+//! bridge between A2A's data model and goose's: the Agent Card describing goose,
+//! and the message conversion. The HTTP/WebSocket server (built from the crate's
+//! routers) lives in `goose-server` (`routes::a2a`); the outbound client wrapper
+//! lives in [`client`].
 
 pub mod client;
-pub mod types;
 
 use crate::conversation::message::{Message as GooseMessage, MessageContent};
-use types::{AgentCapabilities, AgentCard, AgentSkill, Message as A2aMessage, Part, Role};
+use a2a::{
+    AgentCapabilities, AgentCard, AgentInterface, AgentProvider, AgentSkill, Message as A2aMessage,
+    PartContent, Role, TRANSPORT_PROTOCOL_HTTP_JSON, TRANSPORT_PROTOCOL_JSONRPC,
+    TRANSPORT_PROTOCOL_WEBSOCKET,
+};
+use base64::Engine;
 
-/// Build goose's Agent Card. `base_url` is the externally reachable JSON-RPC
-/// endpoint (e.g. `http://host:port/a2a`).
-pub fn build_agent_card(base_url: &str, version: &str) -> AgentCard {
+/// Build goose's Agent Card. `origin` is the externally reachable HTTP origin
+/// (e.g. `http://host:port`); the JSON-RPC, REST, and WebSocket interfaces are
+/// derived from it to match how [`crate::a2a`]'s server router mounts them.
+pub fn build_agent_card(origin: &str, version: &str) -> AgentCard {
+    let origin = origin.trim_end_matches('/');
+    let ws_origin = origin
+        .replacen("https://", "wss://", 1)
+        .replacen("http://", "ws://", 1);
     AgentCard {
-        protocol_version: types::A2A_PROTOCOL_VERSION.to_string(),
         name: "goose".to_string(),
         description:
             "goose — an open-source AI agent for code, workflows, and everything in between."
                 .to_string(),
-        url: base_url.to_string(),
         version: version.to_string(),
+        supported_interfaces: vec![
+            AgentInterface::new(format!("{origin}/jsonrpc"), TRANSPORT_PROTOCOL_JSONRPC),
+            AgentInterface::new(format!("{origin}/rest"), TRANSPORT_PROTOCOL_HTTP_JSON),
+            AgentInterface::new(format!("{ws_origin}/a2a/ws"), TRANSPORT_PROTOCOL_WEBSOCKET),
+        ],
         capabilities: AgentCapabilities {
-            // Streaming (message/stream) is not yet implemented; advertise honestly.
-            streaming: Some(false),
+            streaming: Some(true),
             push_notifications: Some(false),
-            state_transition_history: Some(false),
+            extensions: None,
+            extended_agent_card: None,
         },
         default_input_modes: vec!["text/plain".to_string()],
         default_output_modes: vec!["text/plain".to_string()],
@@ -49,47 +62,55 @@ pub fn build_agent_card(base_url: &str, version: &str) -> AgentCard {
             ]),
             input_modes: None,
             output_modes: None,
+            security_requirements: None,
         }],
-        preferred_transport: Some(types::TRANSPORT_JSONRPC.to_string()),
-        provider: None,
+        provider: Some(AgentProvider {
+            organization: "goose".to_string(),
+            url: "https://block.github.io/goose/".to_string(),
+        }),
         documentation_url: Some("https://block.github.io/goose/".to_string()),
+        icon_url: None,
+        security_schemes: None,
+        security_requirements: None,
+        signatures: None,
     }
 }
 
 /// Convert an inbound A2A message into a goose user message.
 ///
-/// Text parts map directly. File parts carrying image bytes map to an image;
-/// other file/data parts are flattened to a textual note (goose has no native
-/// File/Data message content — see the A2A research notes).
+/// Text parts map directly. Raw image parts map to a goose image; other raw,
+/// url, and data parts are flattened to a textual note (goose has no native
+/// binary/file/structured message content).
 pub fn a2a_message_to_goose(msg: &A2aMessage) -> GooseMessage {
     let mut goose = match msg.role {
-        Role::User => GooseMessage::user(),
         Role::Agent => GooseMessage::assistant(),
+        Role::User | Role::Unspecified => GooseMessage::user(),
     };
     for part in &msg.parts {
-        match part {
-            Part::Text { text, .. } => {
+        match &part.content {
+            PartContent::Text(text) => {
                 goose = goose.with_text(text);
             }
-            Part::File { file, .. } => {
-                let is_image = file
-                    .mime_type
+            PartContent::Raw(bytes) => {
+                let is_image = part
+                    .media_type
                     .as_deref()
                     .map(|m| m.starts_with("image/"))
                     .unwrap_or(false);
-                match (&file.bytes, is_image) {
-                    (Some(bytes), true) => {
-                        let mime = file.mime_type.clone().unwrap_or_default();
-                        goose = goose.with_image(bytes.clone(), mime);
-                    }
-                    _ => {
-                        let name = file.name.as_deref().unwrap_or("file");
-                        let loc = file.uri.as_deref().unwrap_or("inline");
-                        goose = goose.with_text(format!("[attached file: {name} ({loc})]"));
-                    }
+                if is_image {
+                    let mime = part.media_type.clone().unwrap_or_default();
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    goose = goose.with_image(b64, mime);
+                } else {
+                    let name = part.filename.as_deref().unwrap_or("file");
+                    goose = goose.with_text(format!("[attached binary: {name}]"));
                 }
             }
-            Part::Data { data, .. } => {
+            PartContent::Url(url) => {
+                let name = part.filename.as_deref().unwrap_or("file");
+                goose = goose.with_text(format!("[attached file: {name} ({url})]"));
+            }
+            PartContent::Data(data) => {
                 goose = goose.with_text(format!("[structured data]\n{data}"));
             }
         }
@@ -114,28 +135,26 @@ pub fn goose_text(msg: &GooseMessage) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use a2a::Part;
 
     #[test]
-    fn agent_card_is_valid_v03() {
-        let card = build_agent_card("http://localhost:3000/a2a", "1.0.0");
-        let j = serde_json::to_value(&card).unwrap();
-        assert_eq!(j["protocolVersion"], "0.3");
-        assert_eq!(j["url"], "http://localhost:3000/a2a");
-        assert!(!j["skills"].as_array().unwrap().is_empty());
-        assert_eq!(j["capabilities"]["streaming"], false);
+    fn agent_card_advertises_v1_interfaces() {
+        let card = build_agent_card("http://localhost:3000", "1.0.0");
+        assert_eq!(card.version, "1.0.0");
+        let bindings: Vec<&str> = card
+            .supported_interfaces
+            .iter()
+            .map(|i| i.protocol_binding.as_str())
+            .collect();
+        assert!(bindings.contains(&TRANSPORT_PROTOCOL_JSONRPC));
+        assert!(bindings.contains(&TRANSPORT_PROTOCOL_WEBSOCKET));
+        assert!(!card.skills.is_empty());
+        assert_eq!(card.capabilities.streaming, Some(true));
     }
 
     #[test]
     fn a2a_text_message_converts_to_goose_user_text() {
-        let m = A2aMessage {
-            kind: "message".into(),
-            message_id: "m1".into(),
-            role: Role::User,
-            parts: vec![Part::text("hello goose")],
-            context_id: None,
-            task_id: None,
-            metadata: None,
-        };
+        let m = A2aMessage::new(Role::User, vec![Part::text("hello goose")]);
         let g = a2a_message_to_goose(&m);
         assert_eq!(g.role, rmcp::model::Role::User);
         assert_eq!(goose_text(&g), "hello goose");

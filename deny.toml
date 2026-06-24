@@ -21,6 +21,8 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/jbg/cudaforge",
     "https://github.com/jh-block/mlx-lm",
+    # Our app-plus'd A2A protocol fork (pinned by rev in Cargo.toml).
+    "https://github.com/88plug/a2a-rs",
 ]
 
 # Supply-chain: forbid wildcard version requirements; surface duplicate versions.

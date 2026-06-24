@@ -96,11 +96,11 @@ pub async fn run() -> Result<()> {
         .get_param::<bool>("GOOSE_A2A_ENABLE")
         .unwrap_or(false);
     let app = if a2a_enabled {
-        let base_url = goose::config::Config::global()
+        let origin = goose::config::Config::global()
             .get_param::<String>("GOOSE_A2A_URL")
-            .unwrap_or_else(|_| format!("http://{}/a2a", settings.socket_addr()));
-        info!("A2A server enabled, Agent Card advertises {}", base_url);
-        let a2a_router = crate::routes::a2a::router(app_state.clone(), base_url);
+            .unwrap_or_else(|_| format!("http://{}", settings.socket_addr()));
+        info!("A2A server enabled, Agent Card origin {}", origin);
+        let a2a_router = crate::routes::a2a::router(app_state.clone(), origin);
         rest_router.merge(acp_router).merge(a2a_router).layer(cors)
     } else {
         rest_router.merge(acp_router).layer(cors)

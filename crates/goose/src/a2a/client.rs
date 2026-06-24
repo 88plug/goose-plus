@@ -1,164 +1,98 @@
-//! Minimal outbound A2A client: discover a remote agent and send it a message.
+//! Outbound A2A client: discover a remote agent and send it a message.
 //!
 //! Used by the `a2a__call_remote_agent` platform tool so goose can delegate to
-//! other A2A agents. Speaks the v0.3 JSON-RPC `message/send` method.
+//! other A2A agents. Built on our fork's [`a2a_client`] factory, which resolves
+//! the remote Agent Card and negotiates the best transport — JSON-RPC and REST
+//! by default, plus WebSocket which we register explicitly.
 
-use super::types::AgentCard;
+use a2a::{Message, Part, Role, SendMessageRequest, SendMessageResponse};
+use a2a_client::{agent_card::AgentCardResolver, A2AClientFactory};
+use a2a_websocket::{WebSocketTransportFactory, TRANSPORT_PROTOCOL_WEBSOCKET};
 use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+use std::sync::Arc;
 
-pub struct A2aClient {
-    http: reqwest::Client,
-}
-
-impl Default for A2aClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+#[derive(Default)]
+pub struct A2aClient;
 
 impl A2aClient {
     pub fn new() -> Self {
-        A2aClient {
-            http: reqwest::Client::new(),
-        }
+        A2aClient
     }
 
-    /// Fetch the Agent Card from `{base}/.well-known/agent-card.json`, falling
-    /// back to the legacy `/.well-known/agent.json` path.
-    pub async fn fetch_agent_card(&self, base: &str) -> Result<AgentCard> {
-        let base = base.trim_end_matches('/');
-        let primary = format!("{base}{}", super::types::AGENT_CARD_WELL_KNOWN_PATH);
-        match self.try_fetch_card(&primary).await {
-            Ok(card) => Ok(card),
-            Err(_) => {
-                let legacy = format!("{base}{}", super::types::AGENT_CARD_LEGACY_PATH);
-                self.try_fetch_card(&legacy).await
-            }
-        }
-    }
-
-    async fn try_fetch_card(&self, url: &str) -> Result<AgentCard> {
-        let card = self
-            .http
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<AgentCard>()
-            .await?;
-        Ok(card)
-    }
-
-    /// Discover the agent at `agent_base`, send `text` via `message/send`, and
-    /// return the agent's reply text. Blocking semantics (no streaming).
+    /// Discover the agent at `agent_base`, send `text`, and return its reply
+    /// text. Blocking semantics (`message:send`, no streaming).
     pub async fn send_text(&self, agent_base: &str, text: &str) -> Result<String> {
-        let card = self.fetch_agent_card(agent_base).await?;
-        let rpc_url = card.url;
+        let card = AgentCardResolver::new(None)
+            .resolve(agent_base)
+            .await
+            .map_err(|e| anyhow!("failed to resolve A2A agent card: {e}"))?;
 
-        let request = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "message/send",
-            "params": {
-                "message": {
-                    "kind": "message",
-                    "role": "user",
-                    "messageId": uuid::Uuid::now_v7().to_string(),
-                    "parts": [{ "kind": "text", "text": text }]
-                }
-            }
-        });
+        let factory = A2AClientFactory::builder()
+            .register(Arc::new(WebSocketTransportFactory))
+            .preferred_bindings(vec![
+                a2a::TRANSPORT_PROTOCOL_JSONRPC.to_string(),
+                a2a::TRANSPORT_PROTOCOL_HTTP_JSON.to_string(),
+                TRANSPORT_PROTOCOL_WEBSOCKET.to_string(),
+            ])
+            .build();
 
-        let resp: Value = self
-            .http
-            .post(&rpc_url)
-            .json(&request)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let client = factory
+            .create_from_card(&card)
+            .await
+            .map_err(|e| anyhow!("no compatible A2A transport: {e}"))?;
 
-        if let Some(err) = resp.get("error") {
-            return Err(anyhow!("remote A2A agent returned error: {err}"));
-        }
-        let result = resp
-            .get("result")
-            .ok_or_else(|| anyhow!("A2A response missing result"))?;
-        Ok(extract_reply_text(result))
+        let request = SendMessageRequest {
+            message: Message::new(Role::User, vec![Part::text(text)]),
+            configuration: None,
+            metadata: None,
+            tenant: None,
+        };
+
+        let response = client
+            .send_message(&request)
+            .await
+            .map_err(|e| anyhow!("remote A2A agent error: {e}"))?;
+
+        Ok(extract_reply_text(response))
     }
 }
 
-/// Extract human-readable text from a `message/send` result, which is a `Task`
-/// or a `Message` (a2a.json). Prefers, in order: a `Message` result's text; a
-/// Task's `status.message`; the last agent message in `history`; artifact text.
-fn extract_reply_text(result: &Value) -> String {
-    let kind = result.get("kind").and_then(|k| k.as_str());
-
-    if kind == Some("message") {
-        return parts_text(result.get("parts"));
-    }
-
-    // Task
-    if let Some(msg) = result.get("status").and_then(|s| s.get("message")) {
-        let t = parts_text(msg.get("parts"));
-        if !t.is_empty() {
-            return t;
-        }
-    }
-    if let Some(history) = result.get("history").and_then(|h| h.as_array()) {
-        if let Some(last_agent) = history
-            .iter()
-            .rev()
-            .find(|m| m.get("role").and_then(|r| r.as_str()) == Some("agent"))
-        {
-            let t = parts_text(last_agent.get("parts"));
-            if !t.is_empty() {
-                return t;
-            }
-        }
-    }
-    if let Some(artifacts) = result.get("artifacts").and_then(|a| a.as_array()) {
-        let mut out = String::new();
-        for art in artifacts {
-            let t = parts_text(art.get("parts"));
-            if !t.is_empty() {
-                if !out.is_empty() {
-                    out.push('\n');
+/// Pull human-readable text out of a `message:send` response (a `Message` or a
+/// terminal `Task`).
+fn extract_reply_text(response: SendMessageResponse) -> String {
+    match response {
+        SendMessageResponse::Message(m) => parts_text(&m),
+        SendMessageResponse::Task(task) => {
+            if let Some(msg) = task.status.message.as_ref() {
+                let t = parts_text(msg);
+                if !t.is_empty() {
+                    return t;
                 }
-                out.push_str(&t);
             }
-        }
-        if !out.is_empty() {
-            return out;
+            if let Some(last_agent) = task
+                .history
+                .as_ref()
+                .and_then(|h| h.iter().rev().find(|m| m.role == Role::Agent))
+            {
+                let t = parts_text(last_agent);
+                if !t.is_empty() {
+                    return t;
+                }
+            }
+            format!(
+                "(remote agent returned a task in state {:?} with no text)",
+                task.status.state
+            )
         }
     }
-    // Fall back to the task state so the caller learns *something* happened.
-    let state = result
-        .get("status")
-        .and_then(|s| s.get("state"))
-        .and_then(|s| s.as_str())
-        .unwrap_or("unknown");
-    format!("(remote agent returned a task in state '{state}' with no text)")
 }
 
-fn parts_text(parts: Option<&Value>) -> String {
-    let Some(arr) = parts.and_then(|p| p.as_array()) else {
-        return String::new();
-    };
-    let mut out = String::new();
-    for p in arr {
-        if p.get("kind").and_then(|k| k.as_str()) == Some("text") {
-            if let Some(t) = p.get("text").and_then(|t| t.as_str()) {
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(t);
-            }
-        }
-    }
-    out
+fn parts_text(msg: &Message) -> String {
+    msg.parts
+        .iter()
+        .filter_map(|p| p.as_text())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]
@@ -166,35 +100,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_text_from_message_result() {
-        let r = json!({"kind":"message","role":"agent","parts":[{"kind":"text","text":"hi back"}]});
-        assert_eq!(extract_reply_text(&r), "hi back");
-    }
-
-    #[test]
-    fn extracts_text_from_task_status_message() {
-        let r = json!({
-            "kind":"task","id":"t","contextId":"c",
-            "status":{"state":"completed","message":{"kind":"message","role":"agent","parts":[{"kind":"text","text":"done"}]}}
-        });
-        assert_eq!(extract_reply_text(&r), "done");
-    }
-
-    #[test]
-    fn extracts_text_from_task_history() {
-        let r = json!({
-            "kind":"task","id":"t","contextId":"c","status":{"state":"completed"},
-            "history":[
-                {"role":"user","parts":[{"kind":"text","text":"q"}]},
-                {"role":"agent","parts":[{"kind":"text","text":"a"}]}
-            ]
-        });
-        assert_eq!(extract_reply_text(&r), "a");
-    }
-
-    #[test]
-    fn falls_back_to_state_when_no_text() {
-        let r = json!({"kind":"task","id":"t","contextId":"c","status":{"state":"working"}});
-        assert!(extract_reply_text(&r).contains("working"));
+    fn extracts_text_from_message_response() {
+        let resp =
+            SendMessageResponse::Message(Message::new(Role::Agent, vec![Part::text("hi back")]));
+        assert_eq!(extract_reply_text(resp), "hi back");
     }
 }

@@ -72,6 +72,9 @@ nostr = ["dep:nostr", "dep:nostr-sdk"]
 workspace = true
 
 [dependencies]
+a2a = { workspace = true }
+a2a-client = { workspace = true }
+a2a-websocket = { workspace = true }
 lru = { workspace = true }
 rmcp = { workspace = true, features = [
     "client",

@@ -57,6 +57,9 @@ native-tls = [
 goose = { path = "../goose", default-features = false }
 goose-mcp = { path = "../goose-mcp", default-features = false }
 goose-providers = { path = "../goose-providers", default-features = false }
+a2a = { workspace = true }
+a2a-server = { workspace = true }
+a2a-websocket = { workspace = true }
 rmcp = { workspace = true }
 axum = { workspace = true, features = ["ws", "macros"] }
 tokio = { workspace = true }
