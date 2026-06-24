@@ -44,10 +44,10 @@ string_slice = "warn"
 # A2A (Agent2Agent) protocol — our app-plus'd fork 88plug/a2a-rs (88plug-plus
 # branch): upstream a2aproject/a2a-rs v1.0 + WebSocket transport + spec fixes.
 # Pinned by rev for supply-chain reproducibility (deny.toml [sources] allow-git).
-a2a = { package = "a2a-lf", git = "https://github.com/88plug/a2a-rs", rev = "07ccab69a297de63d90d786e8a55fdc9136c2c80", default-features = false }
-a2a-client = { package = "a2a-client-lf", git = "https://github.com/88plug/a2a-rs", rev = "07ccab69a297de63d90d786e8a55fdc9136c2c80", default-features = false, features = ["rustls-tls"] }
-a2a-server = { package = "a2a-server-lf", git = "https://github.com/88plug/a2a-rs", rev = "07ccab69a297de63d90d786e8a55fdc9136c2c80", default-features = false, features = ["rustls-tls"] }
-a2a-websocket = { git = "https://github.com/88plug/a2a-rs", rev = "07ccab69a297de63d90d786e8a55fdc9136c2c80", default-features = false }
+a2a = { package = "a2a-lf", git = "https://github.com/88plug/a2a-rs", rev = "9e2cfa59881dfa2ce25dc668b5d17b60f9ad3f1b", default-features = false }
+a2a-client = { package = "a2a-client-lf", git = "https://github.com/88plug/a2a-rs", rev = "9e2cfa59881dfa2ce25dc668b5d17b60f9ad3f1b", default-features = false, features = ["rustls-tls"] }
+a2a-server = { package = "a2a-server-lf", git = "https://github.com/88plug/a2a-rs", rev = "9e2cfa59881dfa2ce25dc668b5d17b60f9ad3f1b", default-features = false, features = ["rustls-tls"] }
+a2a-websocket = { git = "https://github.com/88plug/a2a-rs", rev = "9e2cfa59881dfa2ce25dc668b5d17b60f9ad3f1b", default-features = false }
 rmcp = { version = "1.4", default-features = false, features = ["schemars", "auth"] }
 agent-client-protocol-schema = { version = "0.12", default-features = false, features = ["unstable"] }
 agent-client-protocol = { version = "0.11", default-features = false }
