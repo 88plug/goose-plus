@@ -32,7 +32,7 @@ jobs:
     if: github.repository == '88plug/goose-plus'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.0
       # EmbarkStudios/cargo-deny-action v2.0.15
       - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
         with:
@@ -44,9 +44,9 @@ jobs:
     if: github.repository == '88plug/goose-plus'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.0
       - name: Run OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             --lockfile=Cargo.lock
@@ -58,7 +58,7 @@ jobs:
     if: github.repository == '88plug/goose-plus'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.0
       - name: Audit desktop dependencies
         run: |
           source ./bin/activate-hermit
