@@ -23,7 +23,9 @@ use crate::agents::extension_manager::{
 };
 use crate::agents::final_output_tool::{FINAL_OUTPUT_CONTINUATION_MESSAGE, FINAL_OUTPUT_TOOL_NAME};
 use crate::agents::platform_extensions::MANAGE_EXTENSIONS_TOOL_NAME_COMPLETE;
-use crate::agents::platform_tools::PLATFORM_MANAGE_SCHEDULE_TOOL_NAME;
+use crate::agents::platform_tools::{
+    PLATFORM_A2A_CALL_TOOL_NAME, PLATFORM_MANAGE_SCHEDULE_TOOL_NAME,
+};
 use crate::agents::prompt_manager::PromptManager;
 use crate::agents::retry::{RetryManager, RetryResult};
 use crate::agents::types::{FrontendTool, SessionConfig, SharedProvider, ToolResultReceiver};
@@ -1046,6 +1048,49 @@ impl Agent {
             );
         }
 
+        if tool_call.name == PLATFORM_A2A_CALL_TOOL_NAME {
+            let args = tool_call.arguments.clone().unwrap_or_default();
+            let agent_url = args
+                .get("agent_url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let message = args
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let result: Result<Vec<Content>, ErrorData> =
+                if agent_url.is_empty() || message.is_empty() {
+                    Err(ErrorData::new(
+                        ErrorCode::INVALID_PARAMS,
+                        "both 'agent_url' and 'message' are required".to_string(),
+                        None,
+                    ))
+                } else {
+                    match crate::a2a::client::A2aClient::new()
+                        .send_text(&agent_url, &message)
+                        .await
+                    {
+                        Ok(text) => Ok(vec![Content::text(text)]),
+                        Err(e) => Err(ErrorData::new(
+                            ErrorCode::INTERNAL_ERROR,
+                            format!("A2A call to {agent_url} failed: {e}"),
+                            None,
+                        )),
+                    }
+                };
+            let wrapped_result = result.map(CallToolResult::success);
+            return (
+                request_id,
+                Ok(self.with_post_tool_hook(
+                    ToolCallResult::from(wrapped_result),
+                    &tool_call,
+                    session,
+                )),
+            );
+        }
+
         if tool_call.name == FINAL_OUTPUT_TOOL_NAME {
             return if let Some(final_output_tool) = self.final_output_tool.lock().await.as_mut() {
                 let result = final_output_tool.execute_tool_call(tool_call.clone()).await;
@@ -1373,6 +1418,14 @@ impl Agent {
             && self.config.scheduler_service.is_some()
         {
             prefixed_tools.push(platform_tools::manage_schedule_tool());
+        }
+
+        if (extension_name.is_none() || extension_name.as_deref() == Some("platform"))
+            && crate::config::Config::global()
+                .get_param::<bool>("GOOSE_A2A_CLIENT_ENABLE")
+                .unwrap_or(false)
+        {
+            prefixed_tools.push(platform_tools::a2a_call_remote_agent_tool());
         }
 
         if extension_name.is_none() {

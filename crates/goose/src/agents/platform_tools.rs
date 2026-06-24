@@ -39,3 +39,35 @@ pub fn manage_schedule_tool() -> Tool {
         }),
     ).annotate(ToolAnnotations::with_title("Manage scheduled recipes".to_string()).read_only(false).destructive(true).idempotent(false).open_world(false))
 }
+
+pub const PLATFORM_A2A_CALL_TOOL_NAME: &str = "platform__a2a_call_remote_agent";
+
+pub fn a2a_call_remote_agent_tool() -> Tool {
+    Tool::new(
+        PLATFORM_A2A_CALL_TOOL_NAME.to_string(),
+        indoc! {r#"
+            Delegate a task to a remote agent that speaks the A2A (Agent2Agent) protocol
+            and return its reply.
+
+            Provide the remote agent's base URL — its Agent Card is fetched from
+            <base>/.well-known/agent-card.json — and the message to send. The call is
+            blocking (no streaming) and returns the remote agent's text response.
+        "#}
+        .to_string(),
+        object!({
+            "type": "object",
+            "required": ["agent_url", "message"],
+            "properties": {
+                "agent_url": {"type": "string", "description": "Base URL of the remote A2A agent, e.g. https://host or https://host/a2a"},
+                "message": {"type": "string", "description": "The message or task to send to the remote agent"}
+            }
+        }),
+    )
+    .annotate(
+        ToolAnnotations::with_title("Call a remote A2A agent".to_string())
+            .read_only(false)
+            .destructive(false)
+            .idempotent(false)
+            .open_world(true),
+    )
+}

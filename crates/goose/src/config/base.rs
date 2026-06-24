@@ -1139,6 +1139,9 @@ config_value!(GOOSE_DISABLE_SESSION_NAMING, bool);
 config_value!(GOOSE_DISABLE_TOOL_CALL_SUMMARY, bool);
 config_value!(GOOSE_NATS_URL, Option<String>);
 config_value!(GOOSE_NATS_SUBJECT, Option<String>);
+config_value!(GOOSE_A2A_ENABLE, bool);
+config_value!(GOOSE_A2A_CLIENT_ENABLE, bool);
+config_value!(GOOSE_A2A_URL, Option<String>);
 
 impl Config {
     pub fn get_goose_context_limit(&self) -> Result<Option<usize>, ConfigError> {
