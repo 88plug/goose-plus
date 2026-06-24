@@ -3,6 +3,7 @@ use crate::session::session_manager::SessionType;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use sqlx::AssertSqlSafe;
 use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
 
@@ -96,7 +97,7 @@ impl<'a> ChatHistorySearch<'a> {
 
     async fn fetch_rows(&self, keywords: &[String]) -> Result<Vec<SqlQueryRow>> {
         let sql = self.build_sql(keywords);
-        let mut query_builder = sqlx::query_as::<_, SqlQueryRow>(&sql);
+        let mut query_builder = sqlx::query_as::<_, SqlQueryRow>(AssertSqlSafe(sql));
 
         for keyword in keywords {
             query_builder = query_builder.bind(keyword);

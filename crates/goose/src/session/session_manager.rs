@@ -15,6 +15,7 @@ use goose_providers::model::ModelConfig;
 use rmcp::model::Role;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::AssertSqlSafe;
 use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
 use std::fs;
@@ -1277,7 +1278,7 @@ impl SessionStorage {
                     .await?
                         > 0;
                     if !has_column {
-                        sqlx::query(&format!("ALTER TABLE sessions ADD COLUMN {column} INTEGER"))
+                        sqlx::query(AssertSqlSafe(format!("ALTER TABLE sessions ADD COLUMN {column} INTEGER")))
                             .execute(&mut **tx)
                             .await?;
                     }
@@ -1302,7 +1303,7 @@ impl SessionStorage {
         let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
 
         let today = chrono::Utc::now().format("%Y%m%d").to_string();
-        let session = sqlx::query_as::<_, Session>(&format!(
+        let session = sqlx::query_as::<_, Session>(AssertSqlSafe(format!(
             r#"
                 INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
                 VALUES (
@@ -1320,7 +1321,7 @@ impl SessionStorage {
                 )
                 RETURNING {SESSION_TABLE_COLUMNS}
                 "#
-        ))
+        )))
             .bind(&today)
             .bind(&today)
             .bind(&name)
@@ -1338,13 +1339,13 @@ impl SessionStorage {
 
     async fn get_session(&self, id: &str, include_messages: bool) -> Result<Session> {
         let pool = self.pool().await?;
-        let mut session = sqlx::query_as::<_, Session>(&format!(
+        let mut session = sqlx::query_as::<_, Session>(AssertSqlSafe(format!(
             r#"
         SELECT {SESSION_TABLE_COLUMNS}
         FROM sessions
         WHERE id = ?
     "#
-        ))
+        )))
         .bind(id)
         .fetch_optional(pool)
         .await?
@@ -1417,7 +1418,7 @@ impl SessionStorage {
         query.push_str(", ");
         query.push_str("updated_at = datetime('now') WHERE id = ?");
 
-        let mut q = sqlx::query(&query);
+        let mut q = sqlx::query(AssertSqlSafe(query));
 
         if let Some(name) = builder.name {
             q = q.bind(name);
@@ -1686,7 +1687,7 @@ impl SessionStorage {
             message_join, where_clause, order_by, limit_clause
         );
 
-        let mut q = sqlx::query_as::<_, Session>(&sql);
+        let mut q = sqlx::query_as::<_, Session>(AssertSqlSafe(sql));
         if let Some(types) = filters.types {
             for session_type in types {
                 q = q.bind(session_type.to_string());
@@ -1821,7 +1822,7 @@ impl SessionStorage {
         );
 
         let pool = self.pool().await?;
-        let mut q = sqlx::query_as::<_, (i64, Option<i64>)>(&query);
+        let mut q = sqlx::query_as::<_, (i64, Option<i64>)>(AssertSqlSafe(query));
         for t in types {
             q = q.bind(t.to_string());
         }
@@ -3295,7 +3296,7 @@ mod tests {
             "accumulated_cache_read_tokens",
             "accumulated_cache_write_tokens",
         ] {
-            sqlx::query(&format!("ALTER TABLE sessions DROP COLUMN {column}"))
+            sqlx::query(AssertSqlSafe(format!("ALTER TABLE sessions DROP COLUMN {column}")))
                 .execute(&pool)
                 .await
                 .unwrap();
@@ -3368,7 +3369,7 @@ mod tests {
             "accumulated_cache_read_tokens",
             "accumulated_cache_write_tokens",
         ] {
-            sqlx::query(&format!("ALTER TABLE sessions DROP COLUMN {column}"))
+            sqlx::query(AssertSqlSafe(format!("ALTER TABLE sessions DROP COLUMN {column}")))
                 .execute(&pool)
                 .await
                 .unwrap();

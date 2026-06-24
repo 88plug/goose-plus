@@ -47,7 +47,7 @@ rustls-tls = [
     "reqwest/rustls",
     "rmcp/reqwest",
     "smithy-transport-reqwest?/rustls",
-    "sqlx/runtime-tokio-rustls",
+    "sqlx/tls-rustls-aws-lc-rs",
     "jsonwebtoken/aws_lc_rs",
     "oauth2/reqwest",
     "oauth2/rustls-tls",
@@ -58,7 +58,7 @@ native-tls = [
     "reqwest/native-tls",
     "rmcp/reqwest-native-tls",
     "smithy-transport-reqwest?/native-tls",
-    "sqlx/runtime-tokio-native-tls",
+    "sqlx/tls-native-tls",
     "jsonwebtoken/rust_crypto",
     "oauth2/reqwest",
     "oauth2/native-tls",
@@ -134,12 +134,16 @@ utoipa = { workspace = true, features = ["chrono"] }
 tokio-cron-scheduler = { version = "0.15", default-features = false }
 urlencoding = { workspace = true }
 v_htmlescape = { version = "0.17", default-features = false, features = ["std"] }
-sqlx = { version = "0.8.5", default-features = false, features = [
+sqlx = { version = "0.9", default-features = false, features = [
     "sqlite",
     "chrono",
     "json",
     "macros",
     "migrate",
+    # Always provide a Tokio runtime so plain `cargo test -p goose` (default
+    # features, no TLS feature) doesn't panic in sqlx-core; the rustls-tls /
+    # native-tls features add the matching TLS variant on top.
+    "runtime-tokio",
 ] }
 
 # For Bedrock provider (optional, behind "aws-providers" feature)

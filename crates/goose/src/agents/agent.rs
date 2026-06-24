@@ -2291,10 +2291,9 @@ impl Agent {
                                         yield AgentEvent::Message(final_response.clone());
                                         messages_to_add.push(final_response);
                                     } else {
-                                        error!(
-                                            "Tool call could not be parsed: {}",
-                                            request.tool_call.as_ref().unwrap_err(),
-                                        );
+                                        if let Err(tool_call_err) = request.tool_call.as_ref() {
+                                            error!("Tool call could not be parsed: {tool_call_err}");
+                                        }
                                         yield AgentEvent::Message(
                                             Message::assistant().with_text(
                                                 "A tool call could not be parsed — the response may have been truncated. Try breaking the task into smaller steps or resending your message."
