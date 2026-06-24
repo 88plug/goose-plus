@@ -9,6 +9,9 @@ name: Security audit
 # never shipped — fully covered, correctly, by pnpm-audit --prod --audit-level high.
 on:
   push:
+    # Branches only — never on release tags (plus-v*); the release pipeline owns
+    # tags, and a tag predating a workflow fix would re-run a stale audit.
+    branches: [goose-plus, main]
     paths:
       - ".github/workflows/security-audit.yml"
       - "**/Cargo.toml"
