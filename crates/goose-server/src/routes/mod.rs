@@ -1,3 +1,4 @@
+pub mod a2a;
 pub mod action_required;
 pub mod agent;
 pub mod config_management;
