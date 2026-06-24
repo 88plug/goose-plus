@@ -403,6 +403,7 @@ impl SessionManager {
     }
 
     pub async fn add_message(&self, id: &str, message: &Message) -> Result<()> {
+        crate::nats::publish_message(id, message);
         self.storage.add_message(id, message).await
     }
 

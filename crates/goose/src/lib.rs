@@ -25,6 +25,7 @@ pub mod instance_id;
 pub mod logging;
 pub mod mcp_utils;
 pub mod model_config;
+pub mod nats;
 pub mod oauth;
 #[cfg(feature = "otel")]
 pub mod otel;
