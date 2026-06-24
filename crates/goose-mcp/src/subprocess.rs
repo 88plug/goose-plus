@@ -1,4 +1,3 @@
-use std::sync::OnceLock;
 use tokio::process::Command;
 
 #[cfg(windows)]
@@ -90,6 +89,7 @@ fn resolve_login_shell_path() -> Option<String> {
 /// full PATH rather than the restricted one from the desktop app launcher.
 #[cfg(not(windows))]
 pub fn user_login_path() -> Option<&'static str> {
+    use std::sync::OnceLock;
     static CACHED: OnceLock<Option<String>> = OnceLock::new();
     CACHED.get_or_init(resolve_login_shell_path).as_deref()
 }
