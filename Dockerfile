@@ -3,7 +3,10 @@
 # Multi-stage build for minimal final image size
 
 # Build stage
-FROM rust:1.82-bookworm AS builder
+# rust-toolchain.toml pins the exact channel (>=1.94, required by sqlx 0.9); the
+# floating rust:1 tag stays current so that pin always resolves (1.82 could no
+# longer build the workspace).
+FROM rust:1-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && \
@@ -73,4 +76,4 @@ CMD ["--help"]
 LABEL org.opencontainers.image.title="goose"
 LABEL org.opencontainers.image.description="goose CLI"
 LABEL org.opencontainers.image.vendor="AAIF"
-LABEL org.opencontainers.image.source="https://github.com/aaif-goose/goose"
+LABEL org.opencontainers.image.source="https://github.com/88plug/goose-plus"

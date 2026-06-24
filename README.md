@@ -38,6 +38,21 @@ Or install the CLI from goose-plus:
 curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/download_cli.sh | bash
 ```
 
+**Portable builds (no installer):** every release also ships a portable Windows
+`.zip` and a portable Linux `.AppImage` on the [releases page](https://github.com/88plug/goose-plus/releases/latest) —
+unzip / `chmod +x` and run, nothing to install.
+
+**Run the server headless in Docker:** drive goose from a browser front-end,
+scripts, or your own tooling via the `goosed` HTTP API — no desktop app needed:
+
+```bash
+echo "GOOSE_SERVER__SECRET_KEY=$(openssl rand -hex 32)" > .env
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env        # or your provider's key
+docker compose up --build                          # API on http://localhost:3000
+```
+
+See [`Dockerfile.server`](Dockerfile.server) and [`docker-compose.yml`](docker-compose.yml).
+
 # Quick links
 - [Quickstart](https://goose-docs.ai/docs/quickstart)
 - [Installation](https://goose-docs.ai/docs/getting-started/installation)

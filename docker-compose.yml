@@ -1,0 +1,37 @@
+# Run the goose agent server (goosed) headless in a container and drive it over
+# its HTTP API from a browser front-end, scripts, or your own tooling.
+#
+#   1. echo "GOOSE_SERVER__SECRET_KEY=$(openssl rand -hex 32)" > .env
+#   2. echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env   # or your provider's key
+#   3. docker compose up --build
+#   4. curl -s -H "X-Secret-Key: $(grep SECRET_KEY .env | cut -d= -f2)" \
+#        http://localhost:3000/agent/versions
+#
+# Local model inference is not included in this image (see Dockerfile.server);
+# use a cloud provider via GOOSE_PROVIDER / GOOSE_MODEL.
+services:
+  goosed:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: ghcr.io/88plug/goose-plus-goosed:latest
+    ports:
+      - "${GOOSE_PORT:-3000}:3000"
+    environment:
+      GOOSE_HOST: 0.0.0.0
+      GOOSE_PORT: "3000"
+      # Required. Clients must send this as the X-Secret-Key header.
+      # Generate one with: openssl rand -hex 32  (put it in a .env file)
+      GOOSE_SERVER__SECRET_KEY: "${GOOSE_SERVER__SECRET_KEY:?set GOOSE_SERVER__SECRET_KEY first}"
+      # Cloud provider config (Anthropic shown; override for others).
+      GOOSE_PROVIDER: ${GOOSE_PROVIDER:-anthropic}
+      GOOSE_MODEL: ${GOOSE_MODEL:-claude-opus-4-8}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
