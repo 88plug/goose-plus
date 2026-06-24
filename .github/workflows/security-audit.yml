@@ -1,0 +1,68 @@
+name: Security audit
+
+# All dependency/supply-chain auditing in one place (was three separate
+# workflows: cargo-deny, osv-scanner, pnpm-audit). Runs on dependency changes,
+# on PRs, and on a daily schedule to pick up newly-disclosed advisories.
+on:
+  push:
+    paths:
+      - ".github/workflows/security-audit.yml"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "deny.toml"
+      - "ui/**"
+  pull_request:
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "deny.toml"
+      - "ui/**"
+  schedule:
+    # Daily re-scan (off-peak minute).
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Rust dependency policy: advisories (CVEs/yanked) + bans (wildcards/dupes) +
+  # sources (unexpected registry/git). License allow-listing lives in deny.toml.
+  cargo-deny:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # EmbarkStudios/cargo-deny-action v2.0.15
+      - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
+        with:
+          command: check advisories bans sources
+
+  # Cross-ecosystem CVE scan of Cargo.lock + ui/pnpm-lock.yaml (the pnpm
+  # workspace root) against the OSV database (RustSec + GitHub Advisory DB).
+  osv-scanner:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
+        with:
+          scan-args: |-
+            --lockfile=Cargo.lock
+            --lockfile=ui/pnpm-lock.yaml
+
+  # CVE scan of the desktop UI dependency tree (high+), via the repo's hermit
+  # toolchain so it uses the exact pinned pnpm/node. pnpm workspace root is ui/.
+  pnpm-audit:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Audit desktop dependencies
+        run: |
+          source ./bin/activate-hermit
+          cd ui/desktop
+          # Fail if the lockfile drifts from the manifests (supply-chain integrity).
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level high --prod
