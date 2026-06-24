@@ -18,7 +18,7 @@ on:
 jobs:
   deny:
     runs-on: ubuntu-latest
-    if: github.repository == 'aaif-goose/goose'
+    if: github.repository == '88plug/goose-plus'
     permissions:
       contents: read
     steps:
@@ -26,4 +26,7 @@ jobs:
       # https://github.com/EmbarkStudios/cargo-deny-action v2.0.15
       - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
         with:
-          command: check advisories
+          # advisories (CVEs/yanked) + bans (wildcards/dupes) + sources
+          # (unexpected registry/git). License allow-listing is configured in
+          # deny.toml for manual `cargo deny check licenses` but not gated here.
+          command: check advisories bans sources

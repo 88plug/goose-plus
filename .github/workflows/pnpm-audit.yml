@@ -1,0 +1,31 @@
+name: pnpm audit
+
+# CVE scan of the desktop UI dependency tree (GitHub Advisory DB).
+on:
+  pull_request:
+    paths: ["ui/desktop/**"]
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui/desktop
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/desktop/pnpm-lock.yaml
+      # Fail the lockfile if it drifts from package.json (supply-chain integrity).
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high --prod

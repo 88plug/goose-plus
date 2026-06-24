@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# goose-plus local quality gate — mirrors CI so warnings never reach the remote.
+# Runs on push (not every commit) since a full clippy on this workspace is slow.
+# Bypass once with: git push --no-verify
+set -euo pipefail
+
+if [ -f bin/activate-hermit ]; then
+  # shellcheck disable=SC1091
+  source bin/activate-hermit 2>/dev/null || true
+fi
+
+echo "[pre-push] cargo fmt --check"
+cargo fmt --check
+
+echo "[pre-push] cargo clippy --workspace --all-targets -- -D warnings"
+cargo clippy --workspace --all-targets -- -D warnings
+
+if git diff --quiet HEAD -- ui/desktop 2>/dev/null; then
+  : # no UI changes vs HEAD; skip the (slow) UI gate
+else
+  echo "[pre-push] ui/desktop pnpm lint:check"
+  ( cd ui/desktop && pnpm run lint:check )
+fi
+
+echo "[pre-push] all gates passed"

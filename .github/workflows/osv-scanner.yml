@@ -1,0 +1,27 @@
+name: OSV-Scanner
+
+# Cross-ecosystem CVE scanning of Cargo.lock AND ui/desktop/pnpm-lock.yaml
+# against the OSV database (aggregates RustSec + GitHub Advisory DB).
+on:
+  pull_request:
+    branches: [goose-plus, main]
+  schedule:
+    # Daily re-scan to pick up newly-disclosed advisories (off-peak minute).
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
+        with:
+          scan-args: |-
+            --lockfile=Cargo.lock
+            --lockfile=ui/desktop/pnpm-lock.yaml

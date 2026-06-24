@@ -4,6 +4,20 @@ members = [
     # Mainly for cargo-machete to not error out during inspection.
     "vendor/v8",
 ]
+# Scope the default `cargo build`/`cargo test` to the product crates. Without
+# this, a bare build also compiles the goose crate's eval bins (analyze_cli,
+# build_canonical_models) and vendor/v8, which normal dev never runs. Use
+# `--workspace` or `-p <crate>` to reach everything else.
+default-members = [
+    "crates/goose",
+    "crates/goose-cli",
+    "crates/goose-server",
+    "crates/goose-mcp",
+    "crates/goose-providers",
+    "crates/goose-sdk",
+    "crates/goose-sdk-types",
+    "crates/goose-acp-macros",
+]
 resolver = "2"
 
 [workspace.package]
@@ -14,6 +28,13 @@ authors = ["AAIF <ai-oss-tools@block.xyz>"]
 license = "Apache-2.0"
 repository = "https://github.com/aaif-goose/goose"
 description = "An AI agent"
+
+[workspace.lints.rust]
+# Deny at the manifest level so plain `cargo build` and rust-analyzer flag these,
+# not just CI's `-D warnings`. Kept narrow + stable to avoid toolchain-bump churn
+# (no blanket warnings="deny"); CI remains the blanket gate.
+unused_imports = "deny"
+unused_must_use = "deny"
 
 [workspace.lints.clippy]
 uninlined_format_args = "allow"
