@@ -149,10 +149,6 @@ jobs:
           # Persist the dep cache (incl. llama-cpp's cmake/C++ build) even when
           # the job fails, so a retry doesn't recompile everything from scratch.
           cache-on-failure: true
-          # On host runners sccache caches the compiled outputs, so rust-cache
-          # only needs the registry. In the manylinux container sccache isn't
-          # available (installed on the host), so keep caching the target dir.
-          cache-targets: ${{ matrix.container != '' }}
 
       - name: Cache Cargo artifacts (Windows)
         if: matrix.platform == 'windows'
@@ -160,26 +156,6 @@ jobs:
         with:
           key: windows-msvc-cli-${{ matrix.variant }}
           cache-on-failure: true
-          cache-targets: false
-
-      # sccache caches compiled Rust + llama-cpp C/C++ objects content-addressed
-      # in the GitHub Actions cache, surviving Cargo.lock bumps (which invalidate
-      # rust-cache's target dir). Host runners only — the manylinux container
-      # can't see a host-installed binary.
-      - name: Setup sccache
-        if: matrix.container == ''
-        uses: mozilla-actions/sccache-action@1583d6b38d7be47f593cb472781bbb21cab4321e  # v0.0.10
-
-      - name: Enable sccache wrappers
-        if: matrix.container == ''
-        shell: bash
-        run: |
-          {
-            echo "SCCACHE_GHA_ENABLED=true"
-            echo "RUSTC_WRAPPER=sccache"
-            echo "CMAKE_C_COMPILER_LAUNCHER=sccache"
-            echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache"
-          } >> "$GITHUB_ENV"
 
       - name: Build CLI (Linux/macOS host runner)
         if: matrix.platform != 'windows' && matrix.container == ''
