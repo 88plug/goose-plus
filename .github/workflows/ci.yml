@@ -203,7 +203,7 @@ jobs:
 
   desktop-lint:
     name: Test and Lint Electron Desktop App
-    runs-on: macos-latest
+    runs-on: macos-15
     needs: changes
     if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
     steps:

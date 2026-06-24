@@ -147,6 +147,48 @@ jobs:
           path: goose-web-*.zip
           if-no-files-found: error
 
+  # Zero-annotation policy: fail the run if any job emitted a warning/failure
+  # annotation, so warnings can't slip through silently. A small allowlist covers
+  # annotations we cannot fix in this repo — third-party actions still on Node 20
+  # (ilammy/msvc-dev-cmd, CUDA only), the GitHub macOS image's untrusted Homebrew
+  # taps, rust-cache's non-fatal `rustc -vV` probe, and run cancellation / API
+  # rate-limit noise. Everything else is a hard failure.
+  annotation-gate:
+    name: Annotation gate (no warnings)
+    needs:
+      - preflight
+      - build-cli
+      - install-script
+      - bundle-desktop
+      - bundle-desktop-intel
+      - bundle-desktop-linux
+      - bundle-desktop-windows
+      - bundle-web
+    if: ${{ always() && github.repository == '88plug/goose-plus' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+    steps:
+      - name: Fail on any non-allowlisted annotation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          for jid in $(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq '.jobs[].id'); do
+            gh api "repos/${GITHUB_REPOSITORY}/check-runs/${jid}/annotations" \
+              --jq '.[] | select(.annotation_level=="warning" or .annotation_level=="failure") | .message' 2>/dev/null >> "$tmp" || true
+          done
+          # Drop allowlisted external / transient annotations.
+          grep -vaE 'Node\.js 20 is deprecated|taps are not trusted|Homebrew will ignore|was canceled|operation was canceled|hit a rate limit|Command failed: rustc -vV' "$tmp" > "$tmp.f" || true
+          if [ -s "$tmp.f" ]; then
+            echo "::error::Zero-annotation policy violated — the following annotations must be fixed:"
+            sort -u "$tmp.f"
+            exit 1
+          fi
+          echo "No disallowed annotations. ✅"
+
   release:
     name: Release (goose-plus)
     if: github.repository == '88plug/goose-plus'

@@ -37,7 +37,7 @@ name: Reusable workflow to bundle desktop app
 
 jobs:
   bundle-desktop:
-    runs-on: macos-latest
+    runs-on: macos-15
     name: Bundle Desktop App on macOS
     environment: ${{ inputs.environment || '' }}
     env:

@@ -76,7 +76,7 @@ jobs:
           - platform: macos
             architecture: aarch64
             target-suffix: apple-darwin
-            build-on: macos-latest
+            build-on: macos-15
             variant: standard
           - platform: windows
             architecture: x86_64

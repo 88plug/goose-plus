@@ -35,7 +35,7 @@ name: Reusable workflow to bundle desktop app for Intel Mac
 
 jobs:
   bundle-desktop-intel:
-    runs-on: macos-latest
+    runs-on: macos-15
     name: Bundle Desktop App on Intel macOS
     environment: ${{ inputs.environment || '' }}
     env:

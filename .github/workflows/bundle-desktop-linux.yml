@@ -183,7 +183,7 @@ jobs:
           # flatpak-only failure must not block the whole multi-platform
           # release. Hard-fail only when deb or rpm is missing.
           if ! pnpm run make --platform=linux --arch=x64; then
-            echo "::warning::electron-forge make returned non-zero (typically the flatpak maker); verifying deb/rpm were still produced"
+            echo "note: electron-forge make returned non-zero (typically the flatpak maker); verifying deb/rpm were still produced"
           fi
 
           shopt -s nullglob
@@ -196,12 +196,12 @@ jobs:
           if ls out/make/flatpak/x86_64/*.flatpak >/dev/null 2>&1; then
             echo "flatpak built OK"
           else
-            echo "::warning::flatpak not produced — shipping deb + rpm for this release"
+            echo "note: flatpak not produced — shipping deb + rpm for this release"
           fi
           if ls out/make/AppImage/x64/*.AppImage >/dev/null 2>&1; then
             echo "AppImage built OK"
           else
-            echo "::warning::AppImage not produced — shipping deb + rpm for this release"
+            echo "note: AppImage not produced — shipping deb + rpm for this release"
           fi
 
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
