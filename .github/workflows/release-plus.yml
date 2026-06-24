@@ -235,7 +235,6 @@ jobs:
             Goose*.zip
             *.deb
             *.rpm
-            *.flatpak
             *.AppImage
             download_cli.sh
 
@@ -251,7 +250,6 @@ jobs:
             Goose*.zip
             *.deb
             *.rpm
-            *.flatpak
             *.AppImage
             latest-mac.yml
             download_cli.sh
@@ -279,7 +277,6 @@ jobs:
             Goose*.zip
             *.deb
             *.rpm
-            *.flatpak
             *.AppImage
             latest-mac.yml
             download_cli.sh

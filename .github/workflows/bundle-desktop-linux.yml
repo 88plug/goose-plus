@@ -90,8 +90,6 @@ jobs:
             fakeroot \
             dpkg-dev \
             protobuf-compiler \
-            flatpak \
-            flatpak-builder \
             squashfs-tools \
             elfutils
 
@@ -109,10 +107,6 @@ jobs:
         run: |
           echo '%_build_id_links none' > ~/.rpmmacros
           test "$(rpm --eval '%{_build_id_links}')" = "none"
-
-      - name: Setup Flatpak Runtimes
-        run: |
-          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
       - name: Activate hermit and set CARGO_HOME
         run: |
@@ -174,38 +168,22 @@ jobs:
         run: |
           source ./bin/activate-hermit
           cd ui/desktop
-          echo "Building Linux packages (.deb, .rpm, and .flatpak) for ${{ matrix.variant }}..."
+          echo "Building Linux packages (.deb, .rpm, .AppImage) for ${{ matrix.variant }}..."
 
-          # Build all configured packages. The flatpak maker needs the
-          # freedesktop runtime + Electron BaseApp published for its
-          # runtimeVersion; that availability is an external flake. deb/rpm are
-          # produced first and are the primary Linux installers, so a
-          # flatpak-only failure must not block the whole multi-platform
-          # release. Hard-fail only when deb or rpm is missing.
-          if ! pnpm run make --platform=linux --arch=x64; then
-            echo "note: electron-forge make returned non-zero (typically the flatpak maker); verifying deb/rpm were still produced"
-          fi
+          # makers: zip, deb, rpm, AppImage (flatpak removed — see forge.config.ts).
+          pnpm run make --platform=linux --arch=x64
 
           shopt -s nullglob
           debs=(out/make/deb/x64/*.deb)
           rpms=(out/make/rpm/x64/*.rpm)
-          if [ ${#debs[@]} -eq 0 ] || [ ${#rpms[@]} -eq 0 ]; then
-            echo "::error::deb/rpm packaging failed — this is not a flatpak-only flake"
+          appimages=(out/make/AppImage/x64/*.AppImage)
+          if [ ${#debs[@]} -eq 0 ] || [ ${#rpms[@]} -eq 0 ] || [ ${#appimages[@]} -eq 0 ]; then
+            echo "::error::Linux packaging incomplete (deb/rpm/AppImage)"
             exit 1
-          fi
-          if ls out/make/flatpak/x86_64/*.flatpak >/dev/null 2>&1; then
-            echo "flatpak built OK"
-          else
-            echo "note: flatpak not produced — shipping deb + rpm for this release"
-          fi
-          if ls out/make/AppImage/x64/*.AppImage >/dev/null 2>&1; then
-            echo "AppImage built OK"
-          else
-            echo "note: AppImage not produced — shipping deb + rpm for this release"
           fi
 
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            for package in out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/flatpak/x86_64/*.flatpak out/make/AppImage/x64/*.AppImage; do
+            for package in out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/AppImage/x64/*.AppImage; do
               [ -e "$package" ] || continue
               extension="${package##*.}"
               base="${package%.*}"
@@ -223,7 +201,7 @@ jobs:
 
           echo "Build completed. Checking output..."
           ls -la out/
-          find out/ -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" | head -10
+          find out/ -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" | head -10
 
       - name: List generated files
         run: |
@@ -231,10 +209,10 @@ jobs:
           find ui/desktop/out/ -type f | head -20
           echo ""
           echo "=== Package files specifically ==="
-          find ui/desktop/out/ -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage"
+          find ui/desktop/out/ -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage"
           echo ""
           echo "=== File sizes ==="
-          find ui/desktop/out/ -name "*.deb" -o -name "*.rpm" -o -name "*.flatpak" -o -name "*.AppImage" -exec ls -lh {} \;
+          find ui/desktop/out/ -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -exec ls -lh {} \;
 
       - name: Upload .deb package
         if: matrix.variant == 'standard'
@@ -268,29 +246,13 @@ jobs:
           path: ui/desktop/out/make/rpm/x64/*-vulkan.rpm
           if-no-files-found: error
 
-      - name: Upload .flatpak package
-        if: matrix.variant == 'standard'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: Goose-linux-x64-flatpak
-          path: ui/desktop/out/make/flatpak/x86_64/*.flatpak
-          if-no-files-found: warn
-
-      - name: Upload .flatpak package (Vulkan)
-        if: matrix.variant == 'vulkan'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: Goose-linux-x64-vulkan-flatpak
-          path: ui/desktop/out/make/flatpak/x86_64/*-vulkan.flatpak
-          if-no-files-found: warn
-
       - name: Upload .AppImage package
         if: matrix.variant == 'standard'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: Goose-linux-x64-AppImage
           path: ui/desktop/out/make/AppImage/x64/*.AppImage
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload .AppImage package (Vulkan)
         if: matrix.variant == 'vulkan'

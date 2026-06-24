@@ -116,53 +116,16 @@ module.exports = {
         },
       },
     },
+    // NOTE: the flatpak maker was removed. Its runtimeVersion 25.08 needs the
+    // freedesktop runtime + org.electronjs.Electron2.BaseApp//25.08 published on
+    // flathub, which isn't reliably available, so it failed on every build — and
+    // electron-forge runs makers concurrently and aborts the WHOLE batch on any
+    // failure, which killed the deb/rpm/AppImage makers too. deb + rpm +
+    // AppImage (portable) cover Linux; flatpak can be re-added once a published
+    // runtime/BaseApp version is pinned.
     {
-      name: '@electron-forge/maker-flatpak',
-      config: {
-        options: {
-          id: 'io.github.block.Goose', // NOTE: kept for backwards compat with existing installs
-          categories: ['Development'],
-          icon: {
-            scalable: 'src/images/icon.svg',
-            '512x512': 'src/images/icon-512.png',
-          },
-          homepage: 'https://goose-docs.ai/',
-          runtimeVersion: '25.08',
-          baseVersion: '25.08',
-          bin: 'Goose',
-          modules: [
-            {
-              name: 'libbz2-shim',
-              buildsystem: 'simple',
-              'build-commands': [
-                // Create the lib directory in the app bundle
-                'mkdir -p /app/lib',
-                // Point to the actual library in the 25.08 runtime
-                // We use a wildcard to handle multi-arch paths (x86_64-linux-gnu, etc)
-                'ln -s $(find /usr/lib -name "libbz2.so.1" | head -n 1) /app/lib/libbz2.so.1.0',
-              ],
-            },
-          ],
-          finishArgs: [
-            '--share=ipc',
-            '--socket=x11',
-            '--socket=wayland',
-            '--device=dri',
-            '--share=network',
-            '--filesystem=home',
-            '--talk-name=org.freedesktop.Notifications',
-            '--socket=session-bus',
-            '--socket=system-bus',
-            // This ensures the app looks in our shim folder first
-            '--env=LD_LIBRARY_PATH=/app/lib',
-          ],
-        },
-      },
-    },
-    {
-      // Portable, distro-agnostic single-file installer. Complements deb/rpm
-      // (and is more universal than flatpak, whose runtime availability is
-      // flaky). Linux-only; the maker is skipped on macOS/Windows bundle jobs.
+      // Portable, distro-agnostic single-file installer alongside deb/rpm.
+      // Linux-only; the maker is skipped on macOS/Windows bundle jobs.
       name: '@reforged/maker-appimage',
       config: {
         options: {
