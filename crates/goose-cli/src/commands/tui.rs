@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -83,7 +83,7 @@ pub fn handle_tui(args: Vec<String>) -> Result<()> {
     {
         use std::os::unix::process::CommandExt;
         let err = cmd.exec();
-        Err(anyhow!("failed to exec TUI ({descriptor}): {err}"))
+        Err(anyhow::anyhow!("failed to exec TUI ({descriptor}): {err}"))
     }
 
     #[cfg(not(unix))]

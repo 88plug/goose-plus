@@ -174,8 +174,28 @@ jobs:
           cd ui/desktop
           echo "Building Linux packages (.deb, .rpm, and .flatpak) for ${{ matrix.variant }}..."
 
-          # Build all configured packages
-          pnpm run make --platform=linux --arch=x64
+          # Build all configured packages. The flatpak maker needs the
+          # freedesktop runtime + Electron BaseApp published for its
+          # runtimeVersion; that availability is an external flake. deb/rpm are
+          # produced first and are the primary Linux installers, so a
+          # flatpak-only failure must not block the whole multi-platform
+          # release. Hard-fail only when deb or rpm is missing.
+          if ! pnpm run make --platform=linux --arch=x64; then
+            echo "::warning::electron-forge make returned non-zero (typically the flatpak maker); verifying deb/rpm were still produced"
+          fi
+
+          shopt -s nullglob
+          debs=(out/make/deb/x64/*.deb)
+          rpms=(out/make/rpm/x64/*.rpm)
+          if [ ${#debs[@]} -eq 0 ] || [ ${#rpms[@]} -eq 0 ]; then
+            echo "::error::deb/rpm packaging failed — this is not a flatpak-only flake"
+            exit 1
+          fi
+          if ls out/make/flatpak/x86_64/*.flatpak >/dev/null 2>&1; then
+            echo "flatpak built OK"
+          else
+            echo "::warning::flatpak not produced — shipping deb + rpm for this release"
+          fi
 
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
             for package in out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/flatpak/x86_64/*.flatpak; do
@@ -247,7 +267,7 @@ jobs:
         with:
           name: Goose-linux-x64-flatpak
           path: ui/desktop/out/make/flatpak/x86_64/*.flatpak
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upload .flatpak package (Vulkan)
         if: matrix.variant == 'vulkan'
@@ -255,4 +275,4 @@ jobs:
         with:
           name: Goose-linux-x64-vulkan-flatpak
           path: ui/desktop/out/make/flatpak/x86_64/*-vulkan.flatpak
-          if-no-files-found: error
+          if-no-files-found: warn

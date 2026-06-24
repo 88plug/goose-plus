@@ -30,9 +30,14 @@ concurrency:
 jobs:
   # Fast fail-early gates on every target OS. A trivial compile error or any
   # warning — including platform-conditional (#[cfg(windows)]/macOS) code — fails
-  # in ~2 min here under -D warnings (setup-rust-toolchain default; no warnings
-  # allowed), instead of ~40 min deep in the build matrix. --no-default-features
-  # skips local-inference so llama-cpp's C++ isn't built.
+  # in ~2-5 min here under -D warnings (setup-rust-toolchain default; no warnings
+  # allowed), instead of ~40 min deep in the build matrix.
+  #
+  # The CLI check enables the full default feature surface MINUS local-inference
+  # (the only feature that pulls llama-cpp's heavy C++). This is what closes the
+  # gap that let a Windows-only `unused import` in a feature-gated module (tui,
+  # update, ...) pass a bare --no-default-features gate yet fail the real build:
+  # those modules are #[cfg(feature = "...")] and must actually be compiled here.
   preflight-host:
     name: Preflight - host compile gate
     if: github.repository == '88plug/goose-plus'
@@ -41,7 +46,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - run: cargo check -p goose-cli -p goose-server --no-default-features --features rustls-tls --all-targets
+      - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
+      - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
 
   preflight-windows:
     name: Preflight - Windows compile gate
@@ -51,7 +57,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - run: cargo check -p goose-cli -p goose-server --no-default-features --features rustls-tls --all-targets
+      - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
+      - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
 
   preflight-macos:
     name: Preflight - macOS compile gate
@@ -63,7 +70,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - run: cargo check -p goose-cli -p goose-server --no-default-features --features rustls-tls --all-targets
+      - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
+      - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
 
   build-cli:
     needs: [preflight-host, preflight-windows, preflight-macos]
