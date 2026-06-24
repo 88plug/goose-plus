@@ -391,6 +391,14 @@ impl SessionManager {
             .await
     }
 
+    /// Idempotently ensure a session row exists for an explicit `id`. Entry
+    /// points that map an external id onto a goose session (e.g. the A2A
+    /// server's contextId) call this before `agent.reply` so persisted messages
+    /// satisfy the messages -> sessions foreign key.
+    pub async fn ensure_session(&self, id: &str, working_dir: PathBuf) -> Result<Session> {
+        self.storage.ensure_session(id, working_dir).await
+    }
+
     pub async fn get_session(&self, id: &str, include_messages: bool) -> Result<Session> {
         self.storage.get_session(id, include_messages).await
     }
@@ -1337,6 +1345,24 @@ impl SessionStorage {
         #[cfg(feature = "telemetry")]
         crate::posthog::emit_session_started();
         Ok(session)
+    }
+
+    async fn ensure_session(&self, id: &str, working_dir: PathBuf) -> Result<Session> {
+        let pool = self.pool().await?;
+        sqlx::query(
+            r#"
+                INSERT INTO sessions (id, name, session_type, working_dir, goose_mode)
+                VALUES (?, 'A2A', ?, ?, ?)
+                ON CONFLICT(id) DO NOTHING
+                "#,
+        )
+        .bind(id)
+        .bind(SessionType::default().to_string())
+        .bind(&*working_dir.to_string_lossy())
+        .bind(GooseMode::default().to_string())
+        .execute(pool)
+        .await?;
+        self.get_session(id, false).await
     }
 
     async fn get_session(&self, id: &str, include_messages: bool) -> Result<Session> {

@@ -64,6 +64,54 @@ impl AgentExecutor for GooseExecutor {
                 }
             };
 
+            // Map the A2A contextId onto a goose session row before replying so
+            // persisted messages satisfy the messages -> sessions foreign key.
+            let working_dir =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            if let Err(e) = app
+                .session_manager()
+                .ensure_session(&context_id, working_dir)
+                .await
+            {
+                let _ = tx.send(Err(A2AError::internal(e.to_string()))).await;
+                return;
+            }
+
+            // A2A is a headless entry point: if no provider has been configured
+            // on this agent, bootstrap one from GOOSE_PROVIDER / GOOSE_MODEL.
+            if agent.provider().await.is_err() {
+                let cfg = goose::config::Config::global();
+                let init = match (cfg.get_goose_provider(), cfg.get_goose_model()) {
+                    (Ok(provider_name), Ok(model)) => {
+                        async {
+                            let model_config = goose::model_config::model_config_from_user_config(
+                                &provider_name,
+                                &model,
+                            )?;
+                            let extensions = goose::session::EnabledExtensionsState::for_session(
+                                app.session_manager(),
+                                &context_id,
+                                cfg,
+                            )
+                            .await;
+                            let provider =
+                                goose::providers::create(&provider_name, model_config, extensions)
+                                    .await?;
+                            agent.update_provider(provider, &context_id).await?;
+                            anyhow::Ok(())
+                        }
+                        .await
+                    }
+                    _ => Err(anyhow::anyhow!(
+                        "no provider configured (set GOOSE_PROVIDER and GOOSE_MODEL)"
+                    )),
+                };
+                if let Err(e) = init {
+                    let _ = tx.send(Err(A2AError::internal(e.to_string()))).await;
+                    return;
+                }
+            }
+
             let session_config = SessionConfig {
                 id: context_id.clone(),
                 schedule_id: None,
@@ -83,13 +131,10 @@ impl AgentExecutor for GooseExecutor {
             while let Some(event) = stream.next().await {
                 if let Ok(AgentEvent::Message(m)) = event {
                     if m.role == rmcp::model::Role::Assistant {
-                        let t = goose::a2a::goose_text(&m);
-                        if !t.is_empty() {
-                            if !agent_text.is_empty() {
-                                agent_text.push('\n');
-                            }
-                            agent_text.push_str(&t);
-                        }
+                        // agent.reply streams incremental text deltas as separate
+                        // messages; concatenate them directly (the model's own
+                        // text carries its newlines).
+                        agent_text.push_str(&goose::a2a::goose_text(&m));
                     }
                 }
             }

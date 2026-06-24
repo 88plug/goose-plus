@@ -1444,17 +1444,10 @@ async fn handle_session_subcommand(command: SessionCommand) -> Result<()> {
             let session_id = if let Some(id) = identifier {
                 lookup_session_id(id).await?
             } else {
-                match crate::commands::session::prompt_interactive_session_selection(
-                    &session_manager,
-                )
-                .await
-                {
-                    Ok(id) => id,
-                    Err(e) => {
-                        eprintln!("Error: {}", e);
-                        return Ok(());
-                    }
-                }
+                // Propagate (non-zero exit) instead of swallowing as success when
+                // no session is given and no TTY is available to pick one.
+                crate::commands::session::prompt_interactive_session_selection(&session_manager)
+                    .await?
             };
             crate::commands::session::handle_diagnostics(&session_id, output).await?;
         }
