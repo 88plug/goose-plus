@@ -56,7 +56,9 @@ jobs:
   preflight-macos:
     name: Preflight - macOS compile gate
     if: github.repository == '88plug/goose-plus'
-    runs-on: macos-latest
+    # Pinned (not macos-latest) for deterministic runners + to avoid the
+    # "macos-latest label will migrate" notice on our own gate.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
