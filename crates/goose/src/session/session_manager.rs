@@ -1278,9 +1278,11 @@ impl SessionStorage {
                     .await?
                         > 0;
                     if !has_column {
-                        sqlx::query(AssertSqlSafe(format!("ALTER TABLE sessions ADD COLUMN {column} INTEGER")))
-                            .execute(&mut **tx)
-                            .await?;
+                        sqlx::query(AssertSqlSafe(format!(
+                            "ALTER TABLE sessions ADD COLUMN {column} INTEGER"
+                        )))
+                        .execute(&mut **tx)
+                        .await?;
                     }
                 }
             }
@@ -3296,10 +3298,12 @@ mod tests {
             "accumulated_cache_read_tokens",
             "accumulated_cache_write_tokens",
         ] {
-            sqlx::query(AssertSqlSafe(format!("ALTER TABLE sessions DROP COLUMN {column}")))
-                .execute(&pool)
-                .await
-                .unwrap();
+            sqlx::query(AssertSqlSafe(format!(
+                "ALTER TABLE sessions DROP COLUMN {column}"
+            )))
+            .execute(&pool)
+            .await
+            .unwrap();
         }
         sqlx::query("UPDATE schema_version SET version = 13")
             .execute(&pool)
@@ -3369,10 +3373,12 @@ mod tests {
             "accumulated_cache_read_tokens",
             "accumulated_cache_write_tokens",
         ] {
-            sqlx::query(AssertSqlSafe(format!("ALTER TABLE sessions DROP COLUMN {column}")))
-                .execute(&pool)
-                .await
-                .unwrap();
+            sqlx::query(AssertSqlSafe(format!(
+                "ALTER TABLE sessions DROP COLUMN {column}"
+            )))
+            .execute(&pool)
+            .await
+            .unwrap();
         }
         sqlx::query("UPDATE schema_version SET version = 13")
             .execute(&pool)

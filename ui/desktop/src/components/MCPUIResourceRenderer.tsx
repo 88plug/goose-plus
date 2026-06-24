@@ -1,14 +1,18 @@
 import { AppEvents } from '../constants/events';
-import {
-  UIResourceRenderer,
-  UIActionResultIntent,
-  UIActionResultLink,
-  UIActionResultNotification,
-  UIActionResultPrompt,
-  UIActionResultToolCall,
-  UIActionResult,
-} from '@mcp-ui/client';
-import { useState, useEffect } from 'react';
+import { AppRenderer, type RequestHandlerExtra } from '@mcp-ui/client';
+import type {
+  McpUiMessageRequest,
+  McpUiMessageResult,
+  McpUiOpenLinkRequest,
+  McpUiOpenLinkResult,
+  McpUiSizeChangedNotification,
+} from '@modelcontextprotocol/ext-apps/app-bridge';
+import type {
+  CallToolRequest,
+  CallToolResult,
+  LoggingMessageNotification,
+} from '@modelcontextprotocol/sdk/types.js';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import { EmbeddedResource } from '../api';
 import { useTheme } from '../contexts/ThemeContext';
@@ -57,46 +61,6 @@ interface MCPUIResourceRendererProps {
   appendPromptToChat?: (value: string) => void;
 }
 
-// More specific result types using discriminated unions
-type UIActionHandlerSuccess<T = unknown> = {
-  status: 'success';
-  data?: T;
-  message?: string;
-};
-
-type UIActionHandlerError = {
-  status: 'error';
-  error: {
-    code: UIActionErrorCode;
-    message: string;
-    details?: unknown;
-  };
-};
-
-type UIActionHandlerPending = {
-  status: 'pending';
-  message: string;
-};
-
-type UIActionHandlerResult<T = unknown> =
-  | UIActionHandlerSuccess<T>
-  | UIActionHandlerError
-  | UIActionHandlerPending;
-
-// Strongly typed error codes
-enum UIActionErrorCode {
-  UNSUPPORTED_ACTION = 'UNSUPPORTED_ACTION',
-  UNKNOWN_ACTION = 'UNKNOWN_ACTION',
-  TOOL_NOT_FOUND = 'TOOL_NOT_FOUND',
-  TOOL_EXECUTION_FAILED = 'TOOL_EXECUTION_FAILED',
-  NAVIGATION_FAILED = 'NAVIGATION_FAILED',
-  PROMPT_FAILED = 'PROMPT_FAILED',
-  INTENT_FAILED = 'INTENT_FAILED',
-  INVALID_PARAMS = 'INVALID_PARAMS',
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  TIMEOUT = 'TIMEOUT',
-}
-
 // toast component
 const ToastComponent = ({
   messageType,
@@ -131,123 +95,80 @@ const ToastComponent = ({
   );
 };
 
+async function fetchMcpUiProxyUrl(): Promise<URL | null> {
+  try {
+    const baseUrl = await window.electron.getGoosedHostPort();
+    const secretKey = await window.electron.getSecretKey();
+    if (!baseUrl || !secretKey) {
+      console.error('Failed to get goosed host/port or secret key');
+      return null;
+    }
+    return new URL(`${baseUrl}/mcp-app-proxy?secret=${encodeURIComponent(secretKey)}`);
+  } catch (error) {
+    console.error('Error fetching MCP-UI Proxy URL:', error);
+    return null;
+  }
+}
+
+// MCP-UI resources are delivered inline as either rawHtml (text/html) or an
+// externalUrl (text/uri-list). The v7 AppRenderer renders an HTML string in a
+// sandboxed iframe, so external URLs are wrapped in a full-bleed iframe.
+function resolveHtml(resource: EmbeddedResource['resource']): string | null {
+  if (!('text' in resource) || typeof resource.text !== 'string') {
+    return null;
+  }
+  const { text, mimeType } = resource;
+  if (mimeType === 'text/uri-list') {
+    const url = text
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line && !line.startsWith('#'));
+    if (!url) return null;
+    return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="${url}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></body></html>`;
+  }
+  return text;
+}
+
 export default function MCPUIResourceRenderer({
   content,
   appendPromptToChat,
 }: MCPUIResourceRendererProps) {
   const intl = useIntl();
   const { resolvedTheme } = useTheme();
-  const [proxyUrl, setProxyUrl] = useState<string | undefined>(undefined);
+  const [sandboxUrl, setSandboxUrl] = useState<URL | undefined>(undefined);
+  const [iframeHeight, setIframeHeight] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    const fetchProxyUrl = async () => {
-      try {
-        const gooseApiHost = await window.electron.getGoosedHostPort();
-        const secretKey = await window.electron.getSecretKey();
-        if (gooseApiHost && secretKey) {
-          setProxyUrl(`${gooseApiHost}/mcp-ui-proxy?secret=${encodeURIComponent(secretKey)}`);
-        } else {
-          console.error('Failed to get goosed host/port or secret key');
-        }
-      } catch (error) {
-        console.error('Error fetching MCP-UI Proxy URL:', error);
-      }
-    };
-
-    fetchProxyUrl().catch(console.error);
+    fetchMcpUiProxyUrl()
+      .then((url) => {
+        if (url) setSandboxUrl(url);
+      })
+      .catch(console.error);
   }, []);
 
-  const handleUIAction = async (actionEvent: UIActionResult): Promise<UIActionHandlerResult> => {
-    // result to pass back to the MCP-UI
-    let result: UIActionHandlerResult;
+  const html = useMemo(() => resolveHtml(content.resource), [content.resource]);
 
-    const handleToolAction = async (
-      actionEvent: UIActionResultToolCall
-    ): Promise<UIActionHandlerResult> => {
-      const { toolName, params } = actionEvent.payload;
-      toast.info(<ToastComponent messageType="tool" message={toolName} isImplemented={false} />, {
-        theme: resolvedTheme,
-      });
-      return {
-        status: 'error' as const,
-        error: {
-          code: UIActionErrorCode.UNSUPPORTED_ACTION,
-          message: 'Tool calls are not yet implemented',
-          details: { toolName, params },
-        },
-      };
-    };
-
-    const handlePromptAction = async (
-      actionEvent: UIActionResultPrompt
-    ): Promise<UIActionHandlerResult> => {
-      const { prompt } = actionEvent.payload;
-
-      if (appendPromptToChat) {
-        try {
-          appendPromptToChat(prompt);
-          window.dispatchEvent(new CustomEvent(AppEvents.SCROLL_CHAT_TO_BOTTOM));
-          return {
-            status: 'success' as const,
-            message: 'Prompt sent to chat successfully',
-          };
-        } catch (error) {
-          return {
-            status: 'error' as const,
-            error: {
-              code: UIActionErrorCode.PROMPT_FAILED,
-              message: 'Failed to send prompt to chat',
-              details: errorMessage(error),
-            },
-          };
-        }
-      }
-
-      return {
-        status: 'error' as const,
-        error: {
-          code: UIActionErrorCode.UNSUPPORTED_ACTION,
-          message: 'Prompt handling is not implemented - append prop is required',
-          details: { prompt },
-        },
-      };
-    };
-
-    const handleLinkAction = async (
-      actionEvent: UIActionResultLink
-    ): Promise<UIActionHandlerResult> => {
-      const { url } = actionEvent.payload;
-
+  const handleOpenLink = useCallback(
+    async (
+      { url }: McpUiOpenLinkRequest['params'],
+      _extra: RequestHandlerExtra
+    ): Promise<McpUiOpenLinkResult> => {
       try {
-        // Safe protocols open directly, unknown protocols require user confirmation
-        // Dangerous protocols are blocked by main.ts in the open-external handler
+        // Safe protocols open directly, unknown protocols require user confirmation.
+        // Dangerous protocols are blocked by main.ts in the open-external handler.
         if (isProtocolSafe(url)) {
           await window.electron.openExternal(url);
-          return {
-            status: 'success' as const,
-            message: `Opened ${url} in default application`,
-          };
+          return {};
         }
 
-        // Unknown protocols require user confirmation
         const protocol = getProtocol(url);
         if (!protocol) {
-          return {
-            status: 'error' as const,
-            error: {
-              code: UIActionErrorCode.INVALID_PARAMS,
-              message: `Invalid URL format: ${url}`,
-              details: { url },
-            },
-          };
+          return { isError: true, message: `Invalid URL format: ${url}` };
         }
 
         const result = await window.electron.showMessageBox({
           type: 'question',
-          buttons: [
-            intl.formatMessage(i18n.cancelButton),
-            intl.formatMessage(i18n.openButton),
-          ],
+          buttons: [intl.formatMessage(i18n.cancelButton), intl.formatMessage(i18n.openButton)],
           defaultId: 0,
           title: intl.formatMessage(i18n.openExternalLinkTitle),
           message: intl.formatMessage(i18n.openProtocolLink, { protocol }),
@@ -255,145 +176,99 @@ export default function MCPUIResourceRenderer({
         });
 
         if (result.response !== 1) {
-          return {
-            status: 'error' as const,
-            error: {
-              code: UIActionErrorCode.NAVIGATION_FAILED,
-              message: 'User cancelled',
-              details: { url },
-            },
-          };
+          return { isError: true, message: 'User cancelled' };
         }
 
         await window.electron.openExternal(url);
-        return {
-          status: 'success' as const,
-          message: `Opened ${url} in default application`,
-        };
+        return {};
       } catch (error) {
-        return {
-          status: 'error' as const,
-          error: {
-            code: UIActionErrorCode.NAVIGATION_FAILED,
-            message: `Failed to open URL: ${url}`,
-            details: errorMessage(error),
-          },
-        };
+        console.error('Failed to open URL from MCP-UI resource:', error);
+        return { isError: true, message: errorMessage(error) };
       }
-    };
+    },
+    [intl]
+  );
 
-    const handleNotifyAction = async (
-      actionEvent: UIActionResultNotification
-    ): Promise<UIActionHandlerResult> => {
-      const { message } = actionEvent.payload;
+  const handleMessage = useCallback(
+    async (
+      { content: blocks }: McpUiMessageRequest['params'],
+      _extra: RequestHandlerExtra
+    ): Promise<McpUiMessageResult> => {
+      if (!appendPromptToChat) {
+        return { isError: true, message: 'Prompt handling is not available in this context' };
+      }
+      const text = blocks
+        .filter((block): block is typeof block & { text: string } => block.type === 'text')
+        .map((block) => block.text)
+        .join('');
+      if (!text) {
+        return { isError: true, message: 'Message did not contain any text content' };
+      }
+      try {
+        appendPromptToChat(text);
+        window.dispatchEvent(new CustomEvent(AppEvents.SCROLL_CHAT_TO_BOTTOM));
+        return {};
+      } catch (error) {
+        console.error('Failed to send prompt to chat:', error);
+        return { isError: true, message: errorMessage(error) };
+      }
+    },
+    [appendPromptToChat]
+  );
 
-      toast.info(<ToastComponent messageType="notify" message={message} isImplemented={true} />, {
+  const handleCallTool = useCallback(
+    async ({ name }: CallToolRequest['params']): Promise<CallToolResult> => {
+      toast.info(<ToastComponent messageType="tool" message={name} isImplemented={false} />, {
         theme: resolvedTheme,
       });
       return {
-        status: 'success' as const,
-        data: {
-          displayedAt: new Date().toISOString(),
-          message: 'Notification displayed',
-          details: actionEvent.payload,
-        },
+        content: [{ type: 'text', text: 'Tool calls are not yet supported for inline MCP-UI.' }],
+        isError: true,
       };
-    };
+    },
+    [resolvedTheme]
+  );
 
-    const handleIntentAction = async (
-      actionEvent: UIActionResultIntent
-    ): Promise<UIActionHandlerResult> => {
-      toast.info(
-        <ToastComponent
-          messageType="intent"
-          message={actionEvent.payload.intent}
-          isImplemented={false}
-        />,
-        {
-          theme: resolvedTheme,
-        }
-      );
-      return {
-        status: 'error' as const,
-        error: {
-          code: UIActionErrorCode.UNSUPPORTED_ACTION,
-          message: 'Intent handling is not yet implemented',
-          details: actionEvent.payload,
-        },
-      };
-    };
+  const handleLoggingMessage = useCallback(
+    ({ data }: LoggingMessageNotification['params']) => {
+      const message = typeof data === 'string' ? data : JSON.stringify(data);
+      toast.info(<ToastComponent messageType="notify" message={message} isImplemented={true} />, {
+        theme: resolvedTheme,
+      });
+    },
+    [resolvedTheme]
+  );
 
-    try {
-      switch (actionEvent.type) {
-        case 'tool':
-          result = await handleToolAction(actionEvent);
-          break;
-
-        case 'prompt':
-          result = await handlePromptAction(actionEvent);
-          break;
-
-        case 'link':
-          result = await handleLinkAction(actionEvent);
-          break;
-
-        case 'notify':
-          result = await handleNotifyAction(actionEvent);
-          break;
-
-        case 'intent':
-          result = await handleIntentAction(actionEvent);
-          break;
-
-        default: {
-          const _exhaustiveCheck: never = actionEvent;
-          console.error('Unhandled MCP-UI action type:', _exhaustiveCheck);
-          result = {
-            status: 'error',
-            error: {
-              code: UIActionErrorCode.UNKNOWN_ACTION,
-              message: `Unknown action type`,
-              details: actionEvent,
-            },
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Unexpected error handling MCP-UI action:', error);
-      result = {
-        status: 'error',
-        error: {
-          code: UIActionErrorCode.UNKNOWN_ACTION,
-          message: 'An unexpected error occurred',
-          details: error instanceof Error ? error.stack : error,
-        },
-      };
+  const handleSizeChanged = useCallback(({ height }: McpUiSizeChangedNotification['params']) => {
+    if (height !== undefined && height > 0) {
+      setIframeHeight(height);
     }
+  }, []);
 
-    return result;
-  };
+  const sandbox = useMemo(
+    () => (sandboxUrl ? { url: sandboxUrl, permissions: 'allow-scripts allow-same-origin' } : null),
+    [sandboxUrl]
+  );
+
+  if (!html || !sandbox) return null;
 
   return (
     <div className="mt-3 p-4 border border-border-primary rounded-lg bg-background-secondary">
-      <div className="overflow-hidden rounded-sm">
-        <UIResourceRenderer
-          resource={content.resource}
-          onUIAction={handleUIAction}
-          supportedContentTypes={['rawHtml', 'externalUrl']} // Goose does not support remoteDom content
-          htmlProps={{
-            autoResizeIframe: {
-              height: true,
-              width: false, // set to false to allow for responsive design
-            },
-            iframeRenderData: {
-              // iframeRenderData allows us to pass data down to MCP-UIs
-              // MCP-UIs might find stuff like host and theme for conditional rendering
-              // usage of this is experimental, leaving in place for demos
-              host: 'goose',
-              theme: resolvedTheme,
-            },
-            proxy: proxyUrl, // refer to https://mcpui.dev/guide/client/using-a-proxy
-          }}
+      <div
+        className="overflow-hidden rounded-sm"
+        style={iframeHeight ? { height: iframeHeight } : undefined}
+      >
+        <AppRenderer
+          sandbox={sandbox}
+          toolName={content.resource.uri}
+          html={html}
+          hostContext={{ theme: resolvedTheme }}
+          onOpenLink={handleOpenLink}
+          onMessage={handleMessage}
+          onCallTool={handleCallTool}
+          onLoggingMessage={handleLoggingMessage}
+          onSizeChanged={handleSizeChanged}
+          onError={(error) => console.error('MCP-UI render error:', error)}
         />
       </div>
     </div>

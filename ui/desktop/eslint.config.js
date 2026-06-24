@@ -140,6 +140,27 @@ module.exports = [
       }],
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // eslint-plugin-react-hooks v7's "recommended" config additionally enables
+      // the React Compiler ruleset. Goose does not run the React Compiler, and
+      // these rules flag pervasive, intentional patterns that work correctly
+      // (e.g. writing the latest value to a ref during render to avoid stale
+      // closures — used throughout the ACP/chat hooks and McpAppRenderer).
+      // Adopting the compiler is a separate, behavior-affecting refactor, so the
+      // compiler-only rules are disabled here; the classic hooks rules above stay on.
+      'react-hooks/static-components': 'off',
+      'react-hooks/use-memo': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/incompatible-library': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/globals': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/error-boundaries': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-render': 'off',
+      'react-hooks/unsupported-syntax': 'off',
+      'react-hooks/config': 'off',
+      'react-hooks/gating': 'off',
       '@typescript-eslint/no-var-requires': 'warn', // Downgrade to warning for Electron main process
       'no-undef': 'error',
       'no-useless-catch': 'warn',

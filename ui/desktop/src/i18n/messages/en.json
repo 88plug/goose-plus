@@ -3015,7 +3015,7 @@
     "defaultMessage": "Enter parameter name..."
   },
   "recipeFormFields.parametersDescription": {
-    "defaultMessage": "Parameters will be automatically detected from '{{parameter_name}}' syntax in instructions/prompt/activities or you can manually add them below."
+    "defaultMessage": "Parameters will be automatically detected from '{{parameter_name}''}' syntax in instructions/prompt/activities or you can manually add them below."
   },
   "recipeFormFields.parametersLabel": {
     "defaultMessage": "Parameters"
@@ -3033,7 +3033,7 @@
     "defaultMessage": "Define the expected structure of the AI's response using JSON Schema format"
   },
   "recipeFormFields.templateVarHint": {
-    "defaultMessage": "Use '{{parameter_name}}' to define parameters that can be filled in when running the recipe."
+    "defaultMessage": "Use '{{parameter_name}''}' to define parameters that can be filled in when running the recipe."
   },
   "recipeFormFields.titleLabel": {
     "defaultMessage": "Title"
