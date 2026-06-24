@@ -3959,6 +3959,36 @@
   "sessions.error.tryAgain": {
     "defaultMessage": "पुनः प्रयास करें"
   },
+  "sessions.folders.create": {
+    "defaultMessage": "Create"
+  },
+  "sessions.folders.delete": {
+    "defaultMessage": "Delete folder"
+  },
+  "sessions.folders.moveTo": {
+    "defaultMessage": "Move to folder"
+  },
+  "sessions.folders.new": {
+    "defaultMessage": "New Folder"
+  },
+  "sessions.folders.newPlaceholder": {
+    "defaultMessage": "Folder name"
+  },
+  "sessions.folders.newTitle": {
+    "defaultMessage": "Create Folder"
+  },
+  "sessions.folders.none": {
+    "defaultMessage": "No folder"
+  },
+  "sessions.folders.remove": {
+    "defaultMessage": "Remove from folder"
+  },
+  "sessions.folders.toast.created": {
+    "defaultMessage": "Folder \"{name}\" created"
+  },
+  "sessions.folders.toast.deleted": {
+    "defaultMessage": "Folder deleted"
+  },
   "sessions.import": {
     "defaultMessage": "आयात सत्र"
   },

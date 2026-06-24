@@ -6,6 +6,10 @@ import {
   AlertCircle,
   Calendar,
   Folder,
+  FolderPlus,
+  FolderInput,
+  ChevronDown,
+  ChevronRight,
   Edit2,
   Trash2,
   Download,
@@ -50,6 +54,22 @@ import { cancelAcpPermissionRequestsForSession } from '../../acp/permissionReque
 import { cancelAcpElicitationRequestsForSession } from '../../acp/elicitationRequests';
 import { getSearchShortcutText } from '../../utils/keyboardShortcuts';
 import { clearSessionCache } from '../../hooks/useChatStream';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import {
+  assignSession,
+  createFolder,
+  deleteFolder,
+  getSessionFolders,
+  toggleFolderCollapsed,
+  type SessionFolder,
+} from '../../utils/sessionFolders';
 
 const i18n = defineMessages({
   editSessionTitle: { id: 'sessions.edit.title', defaultMessage: 'Edit Session Description' },
@@ -96,6 +116,16 @@ const i18n = defineMessages({
   shareNostrTitle: { id: 'sessions.shareNostr.title', defaultMessage: 'Encrypted Nostr Share Link' },
   shareNostrDesc: { id: 'sessions.shareNostr.description', defaultMessage: 'Anyone with this link can fetch and decrypt the session. Treat it like a secret.' },
   close: { id: 'sessions.close', defaultMessage: 'Close' },
+  newFolder: { id: 'sessions.folders.new', defaultMessage: 'New Folder' },
+  newFolderTitle: { id: 'sessions.folders.newTitle', defaultMessage: 'Create Folder' },
+  newFolderPlaceholder: { id: 'sessions.folders.newPlaceholder', defaultMessage: 'Folder name' },
+  create: { id: 'sessions.folders.create', defaultMessage: 'Create' },
+  moveToFolder: { id: 'sessions.folders.moveTo', defaultMessage: 'Move to folder' },
+  removeFromFolder: { id: 'sessions.folders.remove', defaultMessage: 'Remove from folder' },
+  noFolder: { id: 'sessions.folders.none', defaultMessage: 'No folder' },
+  deleteFolderAction: { id: 'sessions.folders.delete', defaultMessage: 'Delete folder' },
+  folderCreated: { id: 'sessions.folders.toast.created', defaultMessage: 'Folder "{name}" created' },
+  folderDeleted: { id: 'sessions.folders.toast.deleted', defaultMessage: 'Folder deleted' },
 });
 
 interface EditSessionModalProps {
@@ -264,6 +294,57 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
     const [sharingSessionId, setSharingSessionId] = useState<string | null>(null);
     const [nostrEnabled, setNostrEnabled] = useState(true);
 
+    // Folder organization state (persisted locally).
+    const [folders, setFolders] = useState<SessionFolder[]>([]);
+    const [folderAssignments, setFolderAssignments] = useState<Record<string, string>>({});
+    const [collapsedFolders, setCollapsedFolders] = useState<string[]>([]);
+    const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+
+    const refreshFolders = useCallback(() => {
+      const state = getSessionFolders();
+      setFolders(state.folders);
+      setFolderAssignments(state.assignments);
+      setCollapsedFolders(state.collapsed);
+    }, []);
+
+    useEffect(() => {
+      refreshFolders();
+    }, [refreshFolders]);
+
+    const handleCreateFolder = useCallback(() => {
+      const name = newFolderName.trim();
+      if (!name) return;
+      const state = createFolder(name);
+      setFolders(state.folders);
+      setFolderAssignments(state.assignments);
+      setCollapsedFolders(state.collapsed);
+      setNewFolderName('');
+      setShowNewFolderModal(false);
+      toast.success(intl.formatMessage(i18n.folderCreated, { name }));
+    }, [newFolderName, intl]);
+
+    const handleDeleteFolder = useCallback(
+      (folderId: string) => {
+        const state = deleteFolder(folderId);
+        setFolders(state.folders);
+        setFolderAssignments(state.assignments);
+        setCollapsedFolders(state.collapsed);
+        toast.success(intl.formatMessage(i18n.folderDeleted));
+      },
+      [intl]
+    );
+
+    const handleAssignSession = useCallback((sessionId: string, folderId: string | null) => {
+      const state = assignSession(sessionId, folderId);
+      setFolderAssignments(state.assignments);
+    }, []);
+
+    const handleToggleFolder = useCallback((folderId: string) => {
+      const state = toggleFolderCollapsed(folderId);
+      setCollapsedFolders(state.collapsed);
+    }, []);
+
     // Search state for debouncing
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
@@ -420,13 +501,35 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
       return () => void 0;
     }, [isLoading, showSkeleton]);
 
+    // Sessions whose assigned folder still exists are rendered under folders;
+    // everything else falls through to the normal date grouping.
+    const folderBuckets = useMemo(() => {
+      const buckets: Record<string, SessionListItem[]> = {};
+      // While searching we flatten everything into a single list so folder-assigned
+      // sessions still surface in the results.
+      if (debouncedSearchTerm) {
+        return { buckets, ungrouped: sessions };
+      }
+      const folderIds = new Set(folders.map((f) => f.id));
+      const ungrouped: SessionListItem[] = [];
+      for (const session of sessions) {
+        const folderId = folderAssignments[session.id];
+        if (folderId && folderIds.has(folderId)) {
+          (buckets[folderId] ??= []).push(session);
+        } else {
+          ungrouped.push(session);
+        }
+      }
+      return { buckets, ungrouped };
+    }, [sessions, folders, folderAssignments, debouncedSearchTerm]);
+
     // Memoize date groups calculation to prevent unnecessary recalculations
     const memoizedDateGroups = useMemo(() => {
-      if (sessions.length > 0) {
-        return groupSessionsByDate(sessions);
+      if (folderBuckets.ungrouped.length > 0) {
+        return groupSessionsByDate(folderBuckets.ungrouped);
       }
       return [];
-    }, [sessions]);
+    }, [folderBuckets.ungrouped]);
 
     // Update date groups when filtered sessions change
     useEffect(() => {
@@ -662,6 +765,9 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
       onShareClick,
       onOpenInNewWindow,
       isSharing,
+      availableFolders,
+      currentFolderId,
+      onAssignFolder,
     }: {
       session: SessionListItem;
       onEditClick: (session: SessionListItem) => void;
@@ -671,6 +777,9 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
       onShareClick: (session: SessionListItem, e: React.MouseEvent) => void;
       onOpenInNewWindow: (session: SessionListItem, e: React.MouseEvent) => void;
       isSharing: boolean;
+      availableFolders: SessionFolder[];
+      currentFolderId: string | null;
+      onAssignFolder: (sessionId: string, folderId: string | null) => void;
     }) {
       const handleEditClick = useCallback(
         (e: React.MouseEvent) => {
@@ -779,6 +888,49 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
             >
               <Trash2 className="w-3 h-3 text-red-500 hover:text-red-600" />
             </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                  title={intl.formatMessage(i18n.moveToFolder)}
+                >
+                  <FolderInput className="w-3 h-3 text-text-secondary hover:text-text-primary" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuLabel>{intl.formatMessage(i18n.moveToFolder)}</DropdownMenuLabel>
+                {currentFolderId && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAssignFolder(session.id, null);
+                    }}
+                  >
+                    {intl.formatMessage(i18n.removeFromFolder)}
+                  </DropdownMenuItem>
+                )}
+                {availableFolders.length > 0 && <DropdownMenuSeparator />}
+                {availableFolders.map((folder) => (
+                  <DropdownMenuItem
+                    key={folder.id}
+                    disabled={folder.id === currentFolderId}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAssignFolder(session.id, folder.id);
+                    }}
+                  >
+                    <Folder className="w-3 h-3 mr-2" />
+                    {folder.name}
+                  </DropdownMenuItem>
+                ))}
+                {availableFolders.length === 0 && (
+                  <DropdownMenuItem disabled>
+                    {intl.formatMessage(i18n.noFolder)}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               onClick={handleExportClick}
               className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
@@ -877,28 +1029,68 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
         );
       }
 
+      const renderSessionGrid = (items: SessionListItem[]) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          {items.map((session) => (
+            <SessionItem
+              key={session.id}
+              session={session}
+              onEditClick={handleEditSession}
+              onDuplicateClick={handleDuplicateSession}
+              onDeleteClick={handleDeleteSession}
+              onExportClick={handleExportSession}
+              onShareClick={handleShareSessionNostr}
+              onOpenInNewWindow={handleOpenInNewWindow}
+              isSharing={sharingSessionId === session.id}
+              availableFolders={folders}
+              currentFolderId={folderAssignments[session.id] ?? null}
+              onAssignFolder={handleAssignSession}
+            />
+          ))}
+        </div>
+      );
+
       return (
         <div className="space-y-8">
+          {!debouncedSearchTerm &&
+            folders.map((folder) => {
+              const folderSessions = folderBuckets.buckets[folder.id] ?? [];
+              const isCollapsed = collapsedFolders.includes(folder.id);
+              return (
+                <div key={folder.id} className="space-y-4">
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-background-primary/95 backdrop-blur-sm group/folder">
+                    <button
+                      onClick={() => handleToggleFolder(folder.id)}
+                      className="flex items-center gap-1 text-text-secondary hover:text-text-primary cursor-pointer"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                      <Folder className="w-4 h-4" />
+                      <span>{folder.name}</span>
+                      <span className="text-xs">({folderSessions.length})</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFolder(folder.id)}
+                      className="p-1 rounded opacity-0 group-hover/folder:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer transition-opacity"
+                      title={intl.formatMessage(i18n.deleteFolderAction)}
+                    >
+                      <Trash2 className="w-3 h-3 text-red-500 hover:text-red-600" />
+                    </button>
+                  </div>
+                  {!isCollapsed && renderSessionGrid(folderSessions)}
+                </div>
+              );
+            })}
+
           {visibleDateGroups.map((group) => (
             <div key={group.label} className="space-y-4">
               <div className="sticky top-0 z-10 bg-background-primary/95 backdrop-blur-sm">
                 <h2 className="text-text-secondary">{group.label}</h2>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                {group.sessions.map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    onEditClick={handleEditSession}
-                    onDuplicateClick={handleDuplicateSession}
-                    onDeleteClick={handleDeleteSession}
-                    onExportClick={handleExportSession}
-                    onShareClick={handleShareSessionNostr}
-                    onOpenInNewWindow={handleOpenInNewWindow}
-                    isSharing={sharingSessionId === session.id}
-                  />
-                ))}
-              </div>
+              {renderSessionGrid(group.sessions)}
             </div>
           ))}
 
@@ -923,6 +1115,15 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
                 <div className="flex justify-between items-center mb-1">
                   <h1 className="text-4xl font-light">{intl.formatMessage(i18n.chatHistory)}</h1>
                   <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setShowNewFolderModal(true)}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <FolderPlus className="w-4 h-4" />
+                      {intl.formatMessage(i18n.newFolder)}
+                    </Button>
                     {nostrEnabled && (
                       <Button
                         onClick={() => setShowImportLinkModal(true)}
@@ -1037,6 +1238,39 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
           onClose={handleModalClose}
           onSave={handleModalSave}
         />
+
+        <Dialog open={showNewFolderModal} onOpenChange={setShowNewFolderModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FolderPlus className="w-5 h-5" />
+                {intl.formatMessage(i18n.newFolderTitle)}
+              </DialogTitle>
+            </DialogHeader>
+
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') handleCreateFolder();
+              }}
+              placeholder={intl.formatMessage(i18n.newFolderPlaceholder)}
+              className="w-full rounded-lg border border-border-primary bg-background-primary p-3 text-sm text-text-primary outline-none focus:ring-2 focus:ring-border-active"
+              autoFocus
+              maxLength={100}
+            />
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowNewFolderModal(false)}>
+                {intl.formatMessage(i18n.cancel)}
+              </Button>
+              <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
+                {intl.formatMessage(i18n.create)}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showImportLinkModal} onOpenChange={setShowImportLinkModal}>
           <DialogContent className="sm:max-w-lg">

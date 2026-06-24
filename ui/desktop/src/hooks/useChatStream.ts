@@ -37,6 +37,15 @@ export function clearSessionCache(sessionId: string): void {
   resultsCache.delete(sessionId);
 }
 
+// A cached session snapshot is "poisoned" when it holds no messages but the
+// session reports message_count > 0. This happens on the reattach path, where
+// the session is set before its conversation has streamed in. Serving such an
+// entry (or persisting it) makes the history appear blank even though the
+// messages exist on disk, so both the read and write paths reject it.
+export function cachedEntryHasHistory(messages: Message[], session: Session): boolean {
+  return !(messages.length === 0 && session.message_count > 0);
+}
+
 interface StreamState {
   messages: Message[];
   session: Session | undefined;
@@ -206,8 +215,10 @@ const REDUCED_MOTION_BATCH_INTERVAL = 1000;
 /**
  * Creates an event processor that handles individual SSE events for a request.
  * Returns an unsubscribe function and a handler to process events.
+ *
+ * Exported for testing the reduced-motion batched-flush path (#8997).
  */
-function createEventProcessor(
+export function createEventProcessor(
   initialMessages: Message[],
   dispatch: React.Dispatch<StreamAction>,
   onFinish: (error?: string) => void,
@@ -220,9 +231,18 @@ function createEventProcessor(
   let latestChatState: ChatState = ChatState.Streaming;
   let lastBatchUpdate = Date.now();
   let hasPendingUpdate = false;
+  let pendingFlushTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingInference: Message['metadata']['inference'] | undefined;
 
+  const clearPendingFlushTimer = () => {
+    if (pendingFlushTimer !== null) {
+      clearTimeout(pendingFlushTimer);
+      pendingFlushTimer = null;
+    }
+  };
+
   const flushBatchedUpdates = () => {
+    clearPendingFlushTimer();
     if (reduceMotion && hasPendingUpdate) {
       if (latestTokenState) {
         dispatch({ type: 'SET_TOKEN_STATE', payload: latestTokenState });
@@ -240,6 +260,7 @@ function createEventProcessor(
       dispatch({ type: 'SET_MESSAGES', payload: currentMessages });
       dispatch({ type: 'SET_CHAT_STATE', payload: chatState });
     } else if (forceImmediate) {
+      clearPendingFlushTimer();
       dispatch({ type: 'SET_TOKEN_STATE', payload: tokenState });
       dispatch({ type: 'SET_MESSAGES', payload: currentMessages });
       dispatch({ type: 'SET_CHAT_STATE', payload: chatState });
@@ -252,6 +273,12 @@ function createEventProcessor(
       const now = Date.now();
       if (now - lastBatchUpdate >= REDUCED_MOTION_BATCH_INTERVAL) {
         flushBatchedUpdates();
+      } else if (pendingFlushTimer === null) {
+        // Ensure a batched update always reaches the UI even if no further
+        // events arrive before the stream ends or stalls. Without this, the
+        // reply would only appear after the view is remounted (see #8997).
+        const delay = REDUCED_MOTION_BATCH_INTERVAL - (now - lastBatchUpdate);
+        pendingFlushTimer = setTimeout(flushBatchedUpdates, delay);
       }
     }
   };
@@ -357,6 +384,11 @@ function createEventProcessor(
           dispatch({ type: 'SET_MESSAGES', payload: conversation });
         } else {
           hasPendingUpdate = true;
+          if (pendingFlushTimer === null) {
+            const now = Date.now();
+            const delay = Math.max(0, REDUCED_MOTION_BATCH_INTERVAL - (now - lastBatchUpdate));
+            pendingFlushTimer = setTimeout(flushBatchedUpdates, delay);
+          }
         }
         return false;
       }
@@ -424,9 +456,19 @@ export function useChatStream({
   }, [sessionId]);
 
   useEffect(() => {
-    if (state.session) {
-      resultsCache.set(sessionId, { session: state.session, messages: state.messages });
+    if (!state.session) {
+      return;
     }
+    // Guard against poisoning the cache with an empty conversation. The
+    // reattach path sets the session before messages have streamed in, so
+    // state.messages can briefly be [] for a session that actually has
+    // history. Caching that empty snapshot would make the next open of the
+    // session read it back and skip the server fetch entirely, leaving the
+    // history blank even though the messages exist on disk.
+    if (!cachedEntryHasHistory(state.messages, state.session)) {
+      return;
+    }
+    resultsCache.set(sessionId, { session: state.session, messages: state.messages });
   }, [sessionId, state.session, state.messages]);
 
   const onFinish = useCallback(
@@ -715,7 +757,7 @@ export function useChatStream({
     if (!sessionId) return;
 
     const cached = resultsCache.get(sessionId);
-    if (cached) {
+    if (cached && cachedEntryHasHistory(cached.messages, cached.session)) {
       dispatch({
         type: 'SESSION_LOADED',
         payload: {

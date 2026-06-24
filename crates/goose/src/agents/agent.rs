@@ -2639,6 +2639,33 @@ impl Agent {
         prompt_manager.remove_system_prompt_extra(key);
     }
 
+    /// Store model context supplied by an MCP App via `ui/update-model-context`.
+    ///
+    /// Per the MCP Apps spec, this lets a View inform the agent about app state
+    /// (e.g. "User selected 3 items totaling $150") so it influences future turns,
+    /// without triggering a follow-up action the way `ui/message` does. Each update
+    /// for a given (extension, resource URI) pair overwrites the previous one; an
+    /// empty `context` clears it.
+    pub async fn update_mcp_app_model_context(
+        &self,
+        extension_name: &str,
+        resource_uri: &str,
+        context: Option<String>,
+    ) {
+        let key = format!("mcp_app_context:{extension_name}:{resource_uri}");
+        match context {
+            Some(text) if !text.trim().is_empty() => {
+                let instruction = format!(
+                    "Context from the \"{extension_name}\" app view ({resource_uri}):\n{text}"
+                );
+                self.extend_system_prompt(key, instruction).await;
+            }
+            _ => {
+                self.remove_system_prompt_extra(&key).await;
+            }
+        }
+    }
+
     pub async fn set_goal(&self, goal: Option<String>) {
         *self.goal.lock().await = goal;
     }

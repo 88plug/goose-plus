@@ -141,6 +141,19 @@ pub struct CallToolRequest {
     arguments: Value,
 }
 
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateModelContextRequest {
+    session_id: String,
+    extension_name: String,
+    resource_uri: String,
+    /// ContentBlock[] from the MCP App's `ui/update-model-context` request.
+    #[serde(default)]
+    content: Vec<Value>,
+    #[serde(default)]
+    structured_content: Option<Value>,
+}
+
 /// Ref-only alias so utoipa emits `$ref: "#/components/schemas/ContentBlock"`.
 /// The actual schema is registered via `derive_utoipa!(RawContent as ContentBlockSchema => "ContentBlock")`.
 #[allow(dead_code)]
@@ -1236,6 +1249,59 @@ async fn call_tool(
     }))
 }
 
+/// Flatten an MCP App's `ui/update-model-context` payload into a single string the
+/// model can read. Text blocks are concatenated; structured content is appended as JSON.
+fn render_model_context(content: &[Value], structured_content: &Option<Value>) -> Option<String> {
+    let mut parts: Vec<String> = content
+        .iter()
+        .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+        .filter_map(|block| block.get("text").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+
+    if let Some(structured) = structured_content {
+        if !structured.is_null() {
+            if let Ok(json) = serde_json::to_string(structured) {
+                parts.push(json);
+            }
+        }
+    }
+
+    let combined = parts.join("\n").trim().to_string();
+    if combined.is_empty() {
+        None
+    } else {
+        Some(combined)
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/update_model_context",
+    request_body = UpdateModelContextRequest,
+    responses(
+        (status = 200, description = "Model context updated"),
+        (status = 401, description = "Unauthorized - invalid secret key"),
+        (status = 424, description = "Agent not initialized"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+async fn update_model_context(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<UpdateModelContextRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let agent = state
+        .get_agent_for_route(payload.session_id.clone())
+        .await?;
+
+    let context = render_model_context(&payload.content, &payload.structured_content);
+    agent
+        .update_mcp_app_model_context(&payload.extension_name, &payload.resource_uri, context)
+        .await;
+
+    Ok(StatusCode::OK)
+}
+
 #[derive(Deserialize, utoipa::IntoParams, utoipa::ToSchema)]
 pub struct ListAppsRequest {
     session_id: Option<String>,
@@ -1442,6 +1508,7 @@ pub fn routes(state: Arc<AppState>) -> Router {
         .route("/agent/tools", get(get_tools))
         .route("/agent/read_resource", post(read_resource))
         .route("/agent/call_tool", post(call_tool))
+        .route("/agent/update_model_context", post(update_model_context))
         .route("/agent/list_apps", get(list_apps))
         .route("/agent/export_app/{name}", get(export_app))
         .route("/agent/import_app", post(import_app))
@@ -1462,6 +1529,38 @@ mod tests {
     use goose::session::session_manager::SessionType;
     use rmcp::model::Tool;
     use rmcp::object;
+    use serde_json::json;
+
+    #[test]
+    fn render_model_context_concatenates_text_blocks() {
+        let content = vec![
+            json!({ "type": "text", "text": "User selected 3 items" }),
+            json!({ "type": "image", "data": "..." }),
+            json!({ "type": "text", "text": "totaling $150" }),
+        ];
+        let rendered = render_model_context(&content, &None);
+        assert_eq!(
+            rendered,
+            Some("User selected 3 items\ntotaling $150".to_string())
+        );
+    }
+
+    #[test]
+    fn render_model_context_appends_structured_content() {
+        let content = vec![json!({ "type": "text", "text": "selection" })];
+        let structured = Some(json!({ "count": 3 }));
+        let rendered = render_model_context(&content, &structured).unwrap();
+        assert!(rendered.contains("selection"));
+        assert!(rendered.contains("\"count\":3"));
+    }
+
+    #[test]
+    fn render_model_context_empty_returns_none() {
+        assert_eq!(render_model_context(&[], &None), None);
+        assert_eq!(render_model_context(&[], &Some(Value::Null)), None);
+        let blank = vec![json!({ "type": "text", "text": "   " })];
+        assert_eq!(render_model_context(&blank, &None), None);
+    }
 
     fn frontend_extension() -> ExtensionConfig {
         ExtensionConfig::Frontend {

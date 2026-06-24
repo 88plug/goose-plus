@@ -728,12 +728,41 @@ export default function McpAppRenderer({
         }
         return (await response.json()) as SamplingCreateMessageResponse;
       }
-      return {
-        status: 'error' as const,
-        message: `Unhandled JSON-RPC method: ${request.method ?? '<unknown>'}`,
-      };
+
+      // ui/update-model-context: the app supplies context to influence future turns
+      // without triggering an agent response (unlike ui/message). Per the MCP Apps
+      // spec the host stores the latest update and returns an empty result.
+      if (request.method === 'ui/update-model-context') {
+        if (!sessionId || !apiHost || !secretKey) {
+          throw new Error('Session not initialized for update-model-context request');
+        }
+        const params = (request.params ?? {}) as {
+          content?: unknown[];
+          structuredContent?: Record<string, unknown>;
+        };
+        const response = await fetch(`${apiHost}/agent/update_model_context`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Secret-Key': secretKey,
+          },
+          body: JSON.stringify({
+            sessionId,
+            extensionName,
+            resourceUri,
+            content: params.content ?? [],
+            structuredContent: params.structuredContent ?? null,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`update-model-context request failed: ${response.statusText}`);
+        }
+        return {};
+      }
+
+      throw new Error(`Unhandled JSON-RPC method: ${request.method ?? '<unknown>'}`);
     },
-    [sessionId, apiHost, secretKey]
+    [sessionId, apiHost, secretKey, extensionName, resourceUri]
   );
 
   const handleError = useCallback((err: Error) => {
