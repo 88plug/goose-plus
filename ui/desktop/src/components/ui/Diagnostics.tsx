@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Download, Github } from 'lucide-react';
+import { AlertTriangle, Download } from 'lucide-react';
+import { FaGithub } from 'react-icons/fa6';
 import { Button } from './button';
 import { toastError } from '../../toasts';
 import { diagnostics, systemInfo } from '../../api';
@@ -253,7 +254,7 @@ Add any other context about the problem here.
             disabled={isDownloading || isFilingBug}
             className="bg-slate-600 text-white hover:bg-slate-700"
           >
-            <Github size={16} className="mr-1" />
+            <FaGithub size={16} className="mr-1" />
             {isFilingBug ? intl.formatMessage(i18n.opening) : intl.formatMessage(i18n.fileBug)}
           </Button>
         </div>
