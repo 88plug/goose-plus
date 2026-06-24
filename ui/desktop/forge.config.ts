@@ -159,6 +159,21 @@ module.exports = {
         },
       },
     },
+    {
+      // Portable, distro-agnostic single-file installer. Complements deb/rpm
+      // (and is more universal than flatpak, whose runtime availability is
+      // flaky). Linux-only; the maker is skipped on macOS/Windows bundle jobs.
+      name: '@reforged/maker-appimage',
+      config: {
+        options: {
+          name: 'goose',
+          productName: 'Goose',
+          bin: 'Goose',
+          categories: ['Development'],
+          icon: 'src/images/icon.png',
+        },
+      },
+    },
   ],
   plugins: [
     {
