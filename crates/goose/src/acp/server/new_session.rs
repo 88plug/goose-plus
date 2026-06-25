@@ -83,6 +83,11 @@ impl GooseAcpAgent {
         let response = self
             .build_new_session_response(&reloaded_session, &extension_results)
             .await?;
+        // Pre-warm provider prefix + tool caches so the first prompt of this
+        // (desktop/ACP) session isn't cold — same win as the CLI path.
+        agent
+            .prewarm(&session.id, reloaded_session.working_dir.as_path())
+            .await;
         super::send_session_setup_notifications(
             cx,
             &reloaded_session,
