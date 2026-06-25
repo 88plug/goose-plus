@@ -242,6 +242,9 @@ fn parse_cell_reference(reference: &str) -> Result<(u32, u32)> {
         }
     }
 
+    if col_str.is_empty() {
+        anyhow::bail!("Invalid cell reference: missing column letter");
+    }
     let col = column_letter_to_number(&col_str)?;
     let row = row_str.parse::<u32>().context("Invalid row number")?;
 

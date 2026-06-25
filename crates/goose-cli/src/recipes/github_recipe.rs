@@ -13,7 +13,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tar::Archive;
+
+static GET_FOLDER_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecipeInfo {
@@ -206,11 +209,15 @@ fn fetch_origin(local_repo_path: &Path) -> Result<()> {
 
 fn get_folder_from_github(local_repo_path: &Path, recipe_name: &str) -> Result<PathBuf> {
     let ref_and_path = format!("origin/main:{}", recipe_name);
-    let output_dir = env::temp_dir().join(temp_child_name(recipe_name));
+    let unique = format!(
+        "{}-{}",
+        std::process::id(),
+        GET_FOLDER_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let output_dir = env::temp_dir()
+        .join(temp_child_name(recipe_name))
+        .join(unique);
 
-    if output_dir.exists() {
-        fs::remove_dir_all(&output_dir)?;
-    }
     fs::create_dir_all(&output_dir)?;
 
     let mut archive_output = Command::new("git")

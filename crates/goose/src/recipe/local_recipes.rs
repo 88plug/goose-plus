@@ -14,7 +14,9 @@ pub fn get_recipe_library_dir(is_global: bool) -> PathBuf {
     if is_global {
         Paths::config_dir().join("recipes")
     } else {
-        env::current_dir().unwrap().join(".goose/recipes")
+        env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(".goose/recipes")
     }
 }
 

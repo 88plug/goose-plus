@@ -254,23 +254,28 @@ fn filter_tool_responses(messages: &[Message], remove_percent: u32) -> Vec<&Mess
 
     let num_to_remove = ((tool_indices.len() * remove_percent as usize) / 100).max(1);
 
-    let middle = tool_indices.len() / 2;
-    let mut indices_to_remove = Vec::new();
+    let indices_to_remove = if num_to_remove >= tool_indices.len() {
+        tool_indices.clone()
+    } else {
+        let middle = tool_indices.len() / 2;
+        let mut indices_to_remove = Vec::new();
 
-    // Middle out
-    for i in 0..num_to_remove {
-        if i % 2 == 0 {
-            let offset = i / 2;
-            if middle > offset {
-                indices_to_remove.push(tool_indices[middle - offset - 1]);
-            }
-        } else {
-            let offset = i / 2;
-            if middle + offset < tool_indices.len() {
-                indices_to_remove.push(tool_indices[middle + offset]);
+        // Middle out
+        for i in 0..num_to_remove {
+            if i % 2 == 0 {
+                let offset = i / 2;
+                if middle > offset {
+                    indices_to_remove.push(tool_indices[middle - offset - 1]);
+                }
+            } else {
+                let offset = i / 2;
+                if middle + offset < tool_indices.len() {
+                    indices_to_remove.push(tool_indices[middle + offset]);
+                }
             }
         }
-    }
+        indices_to_remove
+    };
 
     messages
         .iter()

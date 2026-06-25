@@ -248,7 +248,9 @@ async fn serve_guest_html(
     };
 
     match entry {
-        Some((html, csp, _created)) => {
+        Some((html, csp, created))
+            if created.elapsed() < std::time::Duration::from_secs(GUEST_HTML_TTL_SECS) =>
+        {
             let mut response = Html(html).into_response();
             let headers = response.headers_mut();
             // Use strict-origin so third-party SDKs (e.g. Square Web Payments)
@@ -274,7 +276,7 @@ async fn serve_guest_html(
             }
             response
         }
-        None => (
+        _ => (
             StatusCode::NOT_FOUND,
             "Guest content not found or already consumed",
         )

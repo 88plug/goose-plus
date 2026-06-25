@@ -755,6 +755,13 @@ pub fn parse_model_spec(spec: &str) -> Result<(String, String)> {
         );
     }
 
+    if quant.contains('/') || quant.contains('\\') || quant.contains("..") {
+        bail!(
+            "Invalid quantization '{}': must not contain path separators",
+            quant
+        );
+    }
+
     Ok((repo_id.to_string(), quant.to_string()))
 }
 

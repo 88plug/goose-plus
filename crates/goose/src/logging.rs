@@ -55,9 +55,10 @@ pub fn build_logging_subscriber(
 ) -> Result<impl SubscriberInitExt + Send + Sync + 'static> {
     let log_dir = prepare_log_directory(config.component, true)?;
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let pid = std::process::id();
     let log_filename = match config.name {
-        Some(n) => format!("{}-{}.log", timestamp, n),
-        None => format!("{}.log", timestamp),
+        Some(n) => format!("{}-{}-{}.log", timestamp, n, pid),
+        None => format!("{}-{}.log", timestamp, pid),
     };
 
     let file_appender =

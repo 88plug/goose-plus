@@ -573,6 +573,12 @@ fn register_pending_download_model(
     }
 
     let filename = variant_id.clone();
+    if filename.contains("..") || std::path::Path::new(&filename).components().count() != 1 {
+        anyhow::bail!(
+            "Invalid model filename '{}': must be a single path component",
+            filename
+        );
+    }
     registry.add_model(LocalModelEntry {
         id: model_id.to_string(),
         repo_id,

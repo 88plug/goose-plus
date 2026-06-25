@@ -14,6 +14,8 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use crate::acp::transport::auth::token_matches;
+
 const GUEST_HTML_TTL_SECS: u64 = 300;
 const GUEST_HTML_MAX_ENTRIES: usize = 64;
 const MCP_APP_PROXY_HTML: &str = include_str!("templates/mcp_app_proxy.html");
@@ -225,7 +227,7 @@ async fn mcp_app_proxy(
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     Query(params): Query<ProxyQuery>,
 ) -> Response {
-    if params.secret != state.secret_key {
+    if !token_matches(Some(&params.secret), &state.secret_key) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
     if !peer_addr_is_loopback(&peer_addr) {
@@ -266,7 +268,7 @@ async fn store_guest_html(
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     Json(body): Json<StoreGuestBody>,
 ) -> Response {
-    if body.secret != state.secret_key {
+    if !token_matches(Some(&body.secret), &state.secret_key) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
     if !peer_addr_is_loopback(&peer_addr) {

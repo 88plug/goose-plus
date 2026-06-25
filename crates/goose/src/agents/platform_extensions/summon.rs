@@ -1944,7 +1944,9 @@ impl McpClientTrait for SummonClient {
 
     async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
         let (tx, rx) = mpsc::channel(16);
-        self.notification_subscribers.lock().await.push(tx);
+        let mut subscribers = self.notification_subscribers.lock().await;
+        subscribers.retain(|tx| !tx.is_closed());
+        subscribers.push(tx);
         rx
     }
 

@@ -23,16 +23,25 @@ impl Paths {
                 top_level_domain: "Block".to_string(),
                 author: "Block".to_string(),
                 app_name: "goose".to_string(),
-            })
-            .expect("goose requires a home dir");
+            });
 
-            match dir_type {
-                DirType::Config => strategy.config_dir(),
-                DirType::Data => strategy.data_dir(),
-                DirType::State => strategy.state_dir().unwrap_or(strategy.data_dir()),
-                DirType::Plugins => strategy.home_dir().join(".agents").join("plugins"),
-                DirType::Agents => strategy.home_dir().join(".agents").join("agents"),
-                DirType::AgentsHome => strategy.home_dir().join(".agents"),
+            match strategy {
+                Ok(strategy) => match dir_type {
+                    DirType::Config => strategy.config_dir(),
+                    DirType::Data => strategy.data_dir(),
+                    DirType::State => strategy.state_dir().unwrap_or(strategy.data_dir()),
+                    DirType::Plugins => strategy.home_dir().join(".agents").join("plugins"),
+                    DirType::Agents => strategy.home_dir().join(".agents").join("agents"),
+                    DirType::AgentsHome => strategy.home_dir().join(".agents"),
+                },
+                Err(_) => match dir_type {
+                    DirType::Config => PathBuf::from(".config/goose"),
+                    DirType::Data => std::env::temp_dir().join("goose/data"),
+                    DirType::State => std::env::temp_dir().join("goose/state"),
+                    DirType::Plugins => PathBuf::from(".agents/plugins"),
+                    DirType::Agents => PathBuf::from(".agents/agents"),
+                    DirType::AgentsHome => PathBuf::from(".agents"),
+                },
             }
         }
     }

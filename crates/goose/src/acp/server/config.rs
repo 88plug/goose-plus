@@ -51,8 +51,11 @@ impl GooseAcpAgent {
         req: PreferencesRemoveRequest,
     ) -> Result<EmptyResponse, agent_client_protocol::Error> {
         let config = self.config()?;
-        for key in req.keys {
-            let def = preference_def(key)?;
+        let mut defs = Vec::with_capacity(req.keys.len());
+        for key in &req.keys {
+            defs.push(preference_def(*key)?);
+        }
+        for def in defs {
             config.delete(def.config_key).internal_err()?;
         }
         Ok(EmptyResponse {})

@@ -1104,6 +1104,10 @@ impl CliSession {
                     let curr_goose_mode = config.get_goose_mode().unwrap_or_default();
                     if curr_goose_mode != GooseMode::Auto {
                         config.set_goose_mode(GooseMode::Auto).unwrap();
+                        let _ = self
+                            .agent
+                            .update_goose_mode(GooseMode::Auto, &self.session_id)
+                            .await;
                     }
 
                     // clear the messages before acting on the plan
@@ -1121,6 +1125,10 @@ impl CliSession {
                     // Reset run & goose mode
                     if curr_goose_mode != GooseMode::Auto {
                         let _ = config.set_goose_mode(curr_goose_mode);
+                        let _ = self
+                            .agent
+                            .update_goose_mode(curr_goose_mode, &self.session_id)
+                            .await;
                     }
                     act_result?;
                 } else {

@@ -286,6 +286,19 @@ impl Scheduler {
         original_job_spec: ScheduledJob,
         make_copy: bool,
     ) -> Result<(), SchedulerError> {
+        let id = &original_job_spec.id;
+        if id.is_empty()
+            || id.contains('/')
+            || id.contains('\\')
+            || id.contains("..")
+            || Path::new(id).components().count() != 1
+        {
+            return Err(SchedulerError::RecipeLoadError(format!(
+                "Invalid schedule id '{}': must be a single path-safe component",
+                id
+            )));
+        }
+
         {
             let jobs_guard = self.jobs.lock().await;
             if jobs_guard.contains_key(&original_job_spec.id) {
@@ -935,7 +948,7 @@ async fn execute_job(
     use futures::StreamExt;
     let mut stream = std::pin::pin!(stream);
 
-    let mut stream_error = false;
+    let mut stream_error: Option<anyhow::Error> = None;
     while let Some(message_result) = stream.next().await {
         tokio::task::yield_now().await;
 
@@ -949,7 +962,7 @@ async fn execute_job(
             Ok(_) => {}
             Err(e) => {
                 tracing::error!("Error in agent stream: {}", e);
-                stream_error = true;
+                stream_error = Some(e);
                 break;
             }
         }
@@ -966,7 +979,11 @@ async fn execute_job(
 
     {
         let session_duration = start_time.elapsed();
-        let exit_type = if stream_error { "error" } else { "normal" };
+        let exit_type = if stream_error.is_some() {
+            "error"
+        } else {
+            "normal"
+        };
         let (total_tokens, message_count) = agent
             .config
             .session_manager
@@ -1024,6 +1041,10 @@ async fn execute_job(
                 tracing::debug!("Failed to send schedule telemetry: {}", e);
             }
         });
+    }
+
+    if let Some(e) = stream_error {
+        return Err(anyhow!("Scheduled job stream failed: {e}"));
     }
 
     Ok(session.id)
