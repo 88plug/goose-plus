@@ -32,18 +32,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Both legs on ubuntu-22.04 — the ONLY runner where the rpm maker works.
-          # 24.04 AND 26.04 ship rpm with the sqlite backend and the unprivileged-
-          # userns apparmor restriction, so rpmbuild can't open /var/lib/rpm/
-          # rpmdb.sqlite -> "Operation not permitted (1)" (verified: 1.39.14 std on
-          # 26.04 and vulkan on 24.04 both died there). 22.04's rpm uses the bdb
-          # backend and has no such restriction. build-cli stays on 26.04 (no rpm).
-          # Adopting 24.04/26.04 here later needs a writable rpmdb (%_dbpath in
-          # ~/.rpmmacros + `rpmdb --initdb`) before the maker runs.
+          # The two legs need DIFFERENT runners and can't share one:
+          #  - standard makes the .rpm. rpm's maker ONLY works on ubuntu-22.04;
+          #    24.04/26.04 ship the sqlite-backend rpm + unprivileged-userns
+          #    apparmor restriction, so rpmbuild can't open /var/lib/rpm/
+          #    rpmdb.sqlite -> "Operation not permitted (1)" (verified 1.39.14/.16).
+          #  - vulkan needs `glslc` (shaderc) to compile shaders; that apt package
+          #    exists only on 24.04+, NOT on 22.04 (1.39.16: "Unable to locate
+          #    package glslc"). So vulkan builds on 24.04 and SKIPS rpm (ships
+          #    deb+AppImage+zip); the standard leg provides the .rpm. The deb and
+          #    AppImage makers work fine on 24.04 — only rpm is broken there.
+          # build-cli stays on 26.04 (it makes no rpm).
           - variant: standard
             build-on: ubuntu-22.04
           - variant: vulkan
-            build-on: ubuntu-22.04
+            build-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -196,19 +199,30 @@ jobs:
           echo "Building Linux packages for ${{ matrix.variant }}..."
           pnpm run i18n:compile
 
-          # Phase 1 — core formats. flatpak is built separately (Phase 2) so its
-          # failure can never abort these concurrent makers (electron-forge aborts
-          # the whole batch on any maker failure).
-          pnpm exec electron-forge make --platform=linux --arch=x64 \
-            --targets "@electron-forge/maker-zip,@electron-forge/maker-deb,@electron-forge/maker-rpm,@reforged/maker-appimage"
+          # Phase 1 — core formats. rpm ONLY on the standard leg: its maker needs
+          # ubuntu-22.04, but vulkan runs on 24.04 (for glslc), so vulkan ships
+          # deb+AppImage+zip and the standard leg provides the .rpm. flatpak is
+          # built separately (Phase 2) so its failure can't abort the batch
+          # (electron-forge aborts the whole batch on any maker failure).
+          CORE_TARGETS="@electron-forge/maker-zip,@electron-forge/maker-deb,@reforged/maker-appimage"
+          if [ "${{ matrix.variant }}" != "vulkan" ]; then
+            CORE_TARGETS="${CORE_TARGETS},@electron-forge/maker-rpm"
+          fi
+          pnpm exec electron-forge make --platform=linux --arch=x64 --targets "$CORE_TARGETS"
 
           shopt -s nullglob
           debs=(out/make/deb/x64/*.deb)
-          rpms=(out/make/rpm/x64/*.rpm)
           appimages=(out/make/AppImage/x64/*.AppImage)
-          if [ ${#debs[@]} -eq 0 ] || [ ${#rpms[@]} -eq 0 ] || [ ${#appimages[@]} -eq 0 ]; then
-            echo "::error::Linux packaging incomplete (deb/rpm/AppImage)"
+          if [ ${#debs[@]} -eq 0 ] || [ ${#appimages[@]} -eq 0 ]; then
+            echo "::error::Linux packaging incomplete (deb/AppImage)"
             exit 1
+          fi
+          if [ "${{ matrix.variant }}" != "vulkan" ]; then
+            rpms=(out/make/rpm/x64/*.rpm)
+            if [ ${#rpms[@]} -eq 0 ]; then
+              echo "::error::Linux packaging incomplete (rpm missing on standard leg)"
+              exit 1
+            fi
           fi
 
           # Phase 2 — flatpak, isolated. Runtimes are pre-installed, so this
@@ -282,8 +296,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: Goose-linux-x64-vulkan-rpm
+          # vulkan builds on 24.04 (for glslc) which can't make rpm; the standard
+          # leg provides the .rpm. So no vulkan rpm is expected — warn, don't fail.
           path: ui/desktop/out/make/rpm/x64/*-vulkan.rpm
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upload .AppImage package
         if: matrix.variant == 'standard'
