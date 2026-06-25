@@ -650,6 +650,15 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
     // Extensions are loaded after session creation because we may change directory when resuming
     let agent_ptr = resolve_and_load_extensions(agent, extensions_for_provider, &session_id).await;
 
+    // Pre-warm the provider prefix + tool caches now (overlaps startup the user
+    // doesn't perceive) so the FIRST prompt after hitting enter isn't cold.
+    agent_ptr
+        .prewarm(
+            &session_id,
+            &std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+        )
+        .await;
+
     let edit_mode = config
         .get_param::<String>("EDIT_MODE")
         .ok()

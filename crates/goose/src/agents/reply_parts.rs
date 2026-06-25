@@ -139,6 +139,39 @@ async fn toolshim_postprocess(
 }
 
 impl Agent {
+    /// Pre-warm the provider's prompt-prefix cache (and goose's tool cache) at
+    /// session start, so the FIRST user prompt does NOT pay the cold, uncached cost
+    /// of building + transmitting the full system prompt and tool schemas — a cost
+    /// that scales with the number of enabled extensions and is otherwise felt
+    /// entirely on the first turn after hitting enter. Building the prefix here also
+    /// populates the tool cache, moving the cold tool-gather off turn 1. The actual
+    /// provider request is fire-and-forget (background task): it never blocks the
+    /// session or surfaces errors. Disable with GOOSE_DISABLE_PREWARM=1.
+    pub async fn prewarm(&self, session_id: &str, working_dir: &std::path::Path) {
+        if std::env::var("GOOSE_DISABLE_PREWARM").is_ok() {
+            return;
+        }
+        let Ok((tools, _toolshim_tools, system_prompt)) =
+            self.prepare_tools_and_prompt(session_id, working_dir).await
+        else {
+            return;
+        };
+        let Ok(provider) = self.provider().await else {
+            return;
+        };
+        let model_config = provider.get_model_config();
+        let session_id = session_id.to_string();
+        tokio::spawn(async move {
+            let warm = [Message::user().with_text("ok")];
+            if let Err(e) = provider
+                .complete(&model_config, &session_id, &system_prompt, &warm, &tools)
+                .await
+            {
+                tracing::debug!("prewarm completion failed (non-fatal): {e}");
+            }
+        });
+    }
+
     pub async fn prepare_tools_and_prompt(
         &self,
         session_id: &str,
