@@ -161,6 +161,11 @@ impl AppState {
         buses.get(session_id).cloned()
     }
 
+    pub async fn remove_event_bus(&self, session_id: &str) {
+        self.session_buses.lock().await.remove(session_id);
+        self.recipe_session_tracker.lock().await.remove(session_id);
+    }
+
     pub async fn get_agent(&self, session_id: String) -> anyhow::Result<Arc<goose::agents::Agent>> {
         self.agent_manager.get_or_create_agent(session_id).await
     }

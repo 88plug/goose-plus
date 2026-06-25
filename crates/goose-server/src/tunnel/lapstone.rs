@@ -1,6 +1,7 @@
 use super::TunnelInfo;
 use anyhow::{Context, Result};
 use futures::{SinkExt, StreamExt};
+use goose::acp::transport::auth::token_matches;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use socket2::{SockRef, TcpKeepalive};
@@ -20,22 +21,6 @@ struct ProxyContext {
     tunnel_secret: String,
     server_secret: String,
     http_client: reqwest::Client,
-}
-
-/// Constant-time comparison using hash to prevent timing attacks
-fn secure_compare(a: &str, b: &str) -> bool {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher_a = DefaultHasher::new();
-    a.hash(&mut hasher_a);
-    let hash_a = hasher_a.finish();
-
-    let mut hasher_b = DefaultHasher::new();
-    b.hash(&mut hasher_b);
-    let hash_b = hasher_b.finish();
-
-    hash_a == hash_b
 }
 
 const WORKER_URL: &str = "https://cloudflare-tunnel-proxy.michael-neale.workers.dev";
@@ -118,7 +103,7 @@ fn validate_and_build_request(
         })
         .ok_or_else(|| anyhow::anyhow!("Missing tunnel secret header"))?;
 
-    if !secure_compare(incoming_secret, tunnel_secret) {
+    if !token_matches(Some(incoming_secret.as_str()), tunnel_secret) {
         anyhow::bail!("Invalid tunnel secret");
     }
 
@@ -226,7 +211,17 @@ async fn handle_chunked_response(
     message_path: String,
     ws_tx: WebSocketSender,
 ) -> Result<()> {
-    let total_chunks = body.len().div_ceil(MAX_WS_SIZE);
+    let mut boundaries: Vec<(usize, usize)> = Vec::new();
+    let mut start = 0;
+    for (idx, ch) in body.char_indices() {
+        if idx > start && idx - start + ch.len_utf8() > MAX_WS_SIZE {
+            boundaries.push((start, idx));
+            start = idx;
+        }
+    }
+    boundaries.push((start, body.len()));
+
+    let total_chunks = boundaries.len();
     info!(
         "← {} {} [{}] ({} bytes, {} chunks)",
         status,
@@ -236,8 +231,11 @@ async fn handle_chunked_response(
         total_chunks
     );
 
-    for (i, chunk) in body.as_bytes().chunks(MAX_WS_SIZE).enumerate() {
-        let chunk_str = String::from_utf8_lossy(chunk).to_string();
+    for (i, (chunk_start, chunk_end)) in boundaries.into_iter().enumerate() {
+        let chunk_str = body
+            .get(chunk_start..chunk_end)
+            .unwrap_or_default()
+            .to_string();
         let tunnel_response = TunnelResponse {
             request_id: request_id.clone(),
             status,

@@ -367,9 +367,13 @@ impl Agent {
             .await
         {
             Ok(prompt_result) => {
-                for (i, prompt_message) in prompt_result.messages.into_iter().enumerate() {
-                    let msg = Message::from(prompt_message);
+                let messages: Vec<Message> = prompt_result
+                    .messages
+                    .into_iter()
+                    .map(Message::from)
+                    .collect();
 
+                for (i, msg) in messages.iter().enumerate() {
                     let expected_role = if i % 2 == 0 {
                         rmcp::model::Role::User
                     } else {
@@ -383,11 +387,13 @@ impl Agent {
                         );
                         return Ok(Some(Message::assistant().with_text(error_msg)));
                     }
+                }
 
+                for msg in &messages {
                     self.config
                         .session_manager
                         .clone()
-                        .add_message(session_id, &msg)
+                        .add_message(session_id, msg)
                         .await?;
                 }
 

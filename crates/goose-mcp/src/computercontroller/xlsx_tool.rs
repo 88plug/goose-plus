@@ -98,6 +98,11 @@ impl XlsxTool {
 
     pub fn get_range(&self, worksheet: &Worksheet, range: &str) -> Result<RangeData> {
         let (start_row, start_col, end_row, end_col) = parse_range(range)?;
+        let end_row = end_row.min(worksheet.highest_row());
+        let end_col = end_col.min(worksheet.highest_column());
+        if start_row > end_row || start_col > end_col {
+            anyhow::bail!("Range is empty or outside the worksheet bounds");
+        }
         let mut values = Vec::new();
 
         // Iterate through rows first, then columns

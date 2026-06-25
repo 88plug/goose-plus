@@ -214,26 +214,22 @@ impl Scheduler {
             let running_tasks = running_tasks_arc.clone();
 
             Box::pin(async move {
+                let current_time = Utc::now();
                 let should_execute = {
-                    let jobs_guard = current_jobs_arc.lock().await;
-                    jobs_guard
-                        .get(&task_job_id)
-                        .map(|(_, j)| !j.paused)
-                        .unwrap_or(false)
+                    let mut jobs_guard = current_jobs_arc.lock().await;
+                    match jobs_guard.get_mut(&task_job_id) {
+                        Some((_, job)) if !job.paused && !job.currently_running => {
+                            job.last_run = Some(current_time);
+                            job.currently_running = true;
+                            job.process_start_time = Some(current_time);
+                            true
+                        }
+                        _ => false,
+                    }
                 };
 
                 if !should_execute {
                     return;
-                }
-
-                let current_time = Utc::now();
-                {
-                    let mut jobs_guard = current_jobs_arc.lock().await;
-                    if let Some((_, job)) = jobs_guard.get_mut(&task_job_id) {
-                        job.last_run = Some(current_time);
-                        job.currently_running = true;
-                        job.process_start_time = Some(current_time);
-                    }
                 }
 
                 if let Err(e) = persist_jobs(&local_storage_path, &current_jobs_arc).await {

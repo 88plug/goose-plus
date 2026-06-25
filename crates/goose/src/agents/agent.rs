@@ -2516,6 +2516,9 @@ impl Agent {
                         }
                     }
 
+                    let goal_snapshot = self.goal.lock().await.clone();
+                    let grind_snapshot = self.grind.lock().await.clone();
+
                     match final_output {
                         Some(None) => {
                             warn!("Final output tool has not been called yet. Continuing agent loop.");
@@ -2531,9 +2534,9 @@ impl Agent {
                             // continue from last user message after recovery compact
                         }
                         None if self.has_pending_steers(&session_config.id).await => {}
-                        None if self.goal.lock().await.is_some() && !goal_check_pending => {
+                        None if goal_snapshot.is_some() && !goal_check_pending => {
                             goal_check_pending = true;
-                            let goal = self.goal.lock().await.clone().unwrap();
+                            let goal = goal_snapshot.clone().unwrap();
                             let nudge = format!(
                                 "Before finishing, check whether the following goal has been fully met:\n\n\
                                  **Goal:** {goal}\n\n\
@@ -2550,8 +2553,8 @@ impl Agent {
                             );
                         }
 
-                        None if self.grind.lock().await.is_some() => {
-                            let grind = self.grind.lock().await.clone().unwrap();
+                        None if grind_snapshot.is_some() => {
+                            let grind = grind_snapshot.clone().unwrap();
                             let nudge = format!(
                                 "Keep working. The grind goal is not yet complete:\n\n\
                                  **Goal:** {grind}\n\n\

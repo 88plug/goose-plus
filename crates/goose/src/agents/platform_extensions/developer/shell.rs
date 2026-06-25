@@ -757,7 +757,17 @@ fn truncate_output(
     let output_path = save_full_output(full_output, label, output_dir)?;
 
     let preview_start = total_lines.saturating_sub(OUTPUT_PREVIEW_LINES);
-    let preview = lines[preview_start..].join("\n");
+    let mut preview = lines[preview_start..].join("\n");
+
+    if preview.len() > OUTPUT_LIMIT_BYTES {
+        let target = preview.len() - OUTPUT_LIMIT_BYTES;
+        let boundary = preview
+            .char_indices()
+            .map(|(i, _)| i)
+            .find(|&i| i >= target)
+            .unwrap_or(preview.len());
+        preview = preview.split_off(boundary);
+    }
 
     let reason = if exceeded_lines {
         format!("Output exceeded {OUTPUT_LIMIT_LINES} line limit ({total_lines} lines total).")

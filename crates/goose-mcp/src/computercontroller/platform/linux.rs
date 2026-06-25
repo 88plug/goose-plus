@@ -218,8 +218,15 @@ impl SystemAutomation for LinuxAutomation {
         // For complex automation sequences, use Python as an intermediary
         if commands.len() > 1 {
             let python_script = self.create_python_script(&commands);
+            static SCRIPT_COUNTER: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
+            let unique = SCRIPT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let mut temp_path = self.get_temp_path();
-            temp_path.push("automation_script.py");
+            temp_path.push(format!(
+                "automation_script_{}_{}.py",
+                std::process::id(),
+                unique
+            ));
 
             std::fs::write(&temp_path, python_script)?;
 

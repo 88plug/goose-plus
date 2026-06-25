@@ -153,6 +153,21 @@ impl MemoryServer {
         &self.instructions
     }
 
+    fn validate_category(category: &str) -> io::Result<()> {
+        if category.is_empty()
+            || category.contains('/')
+            || category.contains('\\')
+            || category.contains("..")
+            || std::path::Path::new(category).components().count() != 1
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid memory category: {}", category),
+            ));
+        }
+        Ok(())
+    }
+
     fn get_memory_file(
         &self,
         category: &str,
@@ -211,6 +226,7 @@ impl MemoryServer {
         is_global: bool,
         working_dir: Option<&PathBuf>,
     ) -> io::Result<()> {
+        Self::validate_category(category)?;
         let memory_file_path = self.get_memory_file(category, is_global, working_dir);
 
         if let Some(parent) = memory_file_path.parent() {
@@ -306,6 +322,7 @@ impl MemoryServer {
         is_global: bool,
         working_dir: Option<&PathBuf>,
     ) -> io::Result<()> {
+        Self::validate_category(category)?;
         let memory_file_path = self.get_memory_file(category, is_global, working_dir);
         if memory_file_path.exists() {
             fs::remove_file(memory_file_path)?;
