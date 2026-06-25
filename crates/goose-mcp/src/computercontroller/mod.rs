@@ -553,7 +553,7 @@ impl ComputerControllerServer {
 
     // Helper function to generate a cache file path
     fn get_cache_path(&self, prefix: &str, extension: &str) -> PathBuf {
-        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S_%6f");
         self.cache_dir
             .join(format!("{}_{}.{}", prefix, timestamp, extension))
     }
@@ -1023,7 +1023,11 @@ impl ComputerControllerServer {
                 )
             })?;
 
-        let mut result = format!("Script completed successfully.\n\nOutput:\n{}", output);
+        let mut result = if output.is_empty() {
+            "Script ran (no output / command may not have been recognized).".to_string()
+        } else {
+            format!("Script completed successfully.\n\nOutput:\n{}", output)
+        };
 
         // Save output if requested
         if save_output && !output.is_empty() {
@@ -1662,7 +1666,40 @@ impl ServerHandler for ComputerControllerServer {
             )
         })?;
 
-        // Clone the resource to return
-        Ok(ReadResourceResult::new(vec![resource.clone()]))
+        match resource {
+            ResourceContents::TextResourceContents {
+                uri,
+                mime_type,
+                meta,
+                ..
+            } => {
+                let path = Url::parse(uri)
+                    .ok()
+                    .and_then(|url| url.to_file_path().ok())
+                    .ok_or_else(|| {
+                        ErrorData::new(
+                            ErrorCode::INTERNAL_ERROR,
+                            format!("Invalid resource URI: {}", uri),
+                            None,
+                        )
+                    })?;
+                let text = fs::read_to_string(&path).map_err(|e| {
+                    ErrorData::new(
+                        ErrorCode::INTERNAL_ERROR,
+                        format!("Failed to read resource: {}", e),
+                        None,
+                    )
+                })?;
+                Ok(ReadResourceResult::new(vec![
+                    ResourceContents::TextResourceContents {
+                        uri: uri.clone(),
+                        text,
+                        mime_type: mime_type.clone(),
+                        meta: meta.clone(),
+                    },
+                ]))
+            }
+            other => Ok(ReadResourceResult::new(vec![other.clone()])),
+        }
     }
 }

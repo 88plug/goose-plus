@@ -121,6 +121,19 @@ async fn create_schedule(
             status: err.status,
         });
     }
+    let scheduler = state.scheduler();
+    if scheduler
+        .list_scheduled_jobs()
+        .await
+        .iter()
+        .any(|job| job.id == id)
+    {
+        return Err(ErrorResponse {
+            message: format!("Job ID already exists: {}", id),
+            status: StatusCode::CONFLICT,
+        });
+    }
+
     let scheduled_recipes_dir = get_default_scheduled_recipes_dir().map_err(|e| {
         ErrorResponse::internal(format!("Failed to get scheduled recipes directory: {}", e))
     })?;
@@ -147,7 +160,6 @@ async fn create_schedule(
         recipe_base_dir: None,
     };
 
-    let scheduler = state.scheduler();
     scheduler
         .add_scheduled_job(job.clone(), false)
         .await

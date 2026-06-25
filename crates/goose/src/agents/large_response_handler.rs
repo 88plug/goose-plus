@@ -3,8 +3,11 @@ use chrono::Utc;
 use rmcp::model::{CallToolResult, Content, ErrorData};
 use std::fs::File;
 use std::io::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DEFAULT_LARGE_TEXT_THRESHOLD: usize = 200_000;
+
+static SPILL_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn large_text_threshold() -> usize {
     Config::global()
@@ -72,9 +75,11 @@ fn write_large_text_to_file(content: &str) -> Result<String, std::io::Error> {
     let temp_dir = std::env::temp_dir().join("goose_mcp_responses");
     std::fs::create_dir_all(&temp_dir)?;
 
-    // Generate a unique filename with timestamp
+    // Generate a unique filename with timestamp and a process-global counter to
+    // avoid collisions between concurrent spills within the same microsecond
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S%.6f");
-    let filename = format!("mcp_response_{}.txt", timestamp);
+    let seq = SPILL_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let filename = format!("mcp_response_{}_{}.txt", timestamp, seq);
     let file_path = temp_dir.join(&filename);
 
     // Write content to file
@@ -132,7 +137,7 @@ mod tests {
             assert!(text_content.text.contains("characters"));
 
             // Extract the file path from the message
-            if let Some(file_path) = text_content.text.split("stored in the file: ").nth(1) {
+            if let Some(file_path) = text_content.text.split("search in: ").nth(1) {
                 // Verify the file exists and contains the original text
                 let path = Path::new(file_path.trim());
                 if path.exists() {
@@ -199,7 +204,7 @@ mod tests {
                 .contains("The response returned from the tool call was larger"));
 
             // Extract the file path and clean up
-            if let Some(file_path) = text_content.text.split("stored in the file: ").nth(1) {
+            if let Some(file_path) = text_content.text.split("search in: ").nth(1) {
                 let path = Path::new(file_path.trim());
                 if path.exists() {
                     let _ = fs::remove_file(path); // Ignore errors on cleanup

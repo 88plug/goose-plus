@@ -135,7 +135,7 @@ impl<'a> ChatHistorySearch<'a> {
             r#"
             SELECT 
                 s.id as session_id,
-                s.description as session_description,
+                s.name as session_description,
                 s.working_dir as session_working_dir,
                 s.created_at as session_created_at,
                 m.role,

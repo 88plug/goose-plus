@@ -733,9 +733,8 @@ impl AutoVisualiserRouter {
         // - macOS/Linux: ~/.cache/goose/autovisualiser/
         // - Windows:     ~\AppData\Local\Block\goose\cache\autovisualiser\
         let cache_dir = choose_app_strategy(crate::APP_STRATEGY.clone())
-            .unwrap()
-            .cache_dir()
-            .join("autovisualiser");
+            .map(|strategy| strategy.cache_dir().join("autovisualiser"))
+            .unwrap_or_else(|_| std::env::temp_dir().join("goose/autovisualiser"));
 
         // Create cache directory if it doesn't exist
         let _ = std::fs::create_dir_all(&cache_dir);

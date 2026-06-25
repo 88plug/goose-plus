@@ -198,7 +198,7 @@ fn compaction_remaining_line(
 
     Some(format!(
         "~{}k tokens remaining",
-        compaction_at.saturating_sub(total_tokens) / 1000
+        (compaction_at - total_tokens).max(0) / 1000
     ))
 }
 

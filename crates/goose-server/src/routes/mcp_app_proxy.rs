@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use goose::acp::transport::auth::token_matches;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -151,7 +152,7 @@ async fn mcp_app_proxy(
     axum::extract::State(state): axum::extract::State<AppState>,
     Query(params): Query<ProxyQuery>,
 ) -> Response {
-    if params.secret != state.secret_key {
+    if !token_matches(Some(&params.secret), &state.secret_key) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
@@ -193,7 +194,7 @@ async fn store_guest_html(
     axum::extract::State(state): axum::extract::State<AppState>,
     Json(body): Json<StoreGuestBody>,
 ) -> Response {
-    if body.secret != state.secret_key {
+    if !token_matches(Some(&body.secret), &state.secret_key) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
@@ -236,7 +237,7 @@ async fn serve_guest_html(
     axum::extract::State(state): axum::extract::State<AppState>,
     Query(params): Query<GuestQuery>,
 ) -> Response {
-    if params.secret != state.secret_key {
+    if !token_matches(Some(&params.secret), &state.secret_key) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 

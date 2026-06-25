@@ -71,11 +71,6 @@ pub async fn handle_schedule_add(
     recipe_source_arg: String, // This is expected to be a file path by the Scheduler
     params: Vec<(String, String)>,
 ) -> Result<()> {
-    println!(
-        "[CLI Debug] Scheduling job ID: {}, Cron: {}, Recipe Source Path: {}",
-        schedule_id, cron, recipe_source_arg
-    );
-
     validate_cron_expression(&cron)?;
 
     // The Scheduler's add_scheduled_job will handle copying the recipe from recipe_source_arg

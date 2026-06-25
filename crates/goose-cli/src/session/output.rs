@@ -560,7 +560,7 @@ fn print_tool_output(text: &str) {
         println!(
             "    {}",
             style(format!(
-                "... ({} lines hidden, /toggle to show all)",
+                "... ({} lines hidden, /r to show all)",
                 lines.len() - head - tail
             ))
             .dim()

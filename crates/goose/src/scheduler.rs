@@ -444,7 +444,11 @@ impl Scheduler {
             }
         };
 
-        for job_to_load in list {
+        for mut job_to_load in list {
+            job_to_load.currently_running = false;
+            job_to_load.current_session_id = None;
+            job_to_load.process_start_time = None;
+
             if !Path::new(&job_to_load.source).exists() {
                 tracing::warn!(
                     "Recipe file {} not found, skipping job '{}'",

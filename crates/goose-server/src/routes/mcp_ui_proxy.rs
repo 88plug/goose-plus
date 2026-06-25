@@ -5,6 +5,7 @@ use axum::{
     routing::get,
     Router,
 };
+use goose::acp::transport::auth::token_matches;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -29,7 +30,7 @@ async fn mcp_ui_proxy(
     axum::extract::State(secret_key): axum::extract::State<String>,
     Query(params): Query<ProxyQuery>,
 ) -> Response {
-    if params.secret != secret_key {
+    if !token_matches(Some(&params.secret), &secret_key) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 

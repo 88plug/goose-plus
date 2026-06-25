@@ -152,7 +152,7 @@ fn extract_destinations(command: &str) -> Vec<EgressDestination> {
         .collect();
     for cap in generic_net_cmd_re.captures_iter(command) {
         let domain = cap[2].to_string();
-        if !already_seen.contains(&domain) {
+        if !already_seen.contains(&domain.to_lowercase()) {
             destinations.push(EgressDestination {
                 kind: "generic_network".to_string(),
                 destination: cap[0].to_string(),

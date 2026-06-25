@@ -196,7 +196,10 @@ def run_command(cmd):
         );
 
         for cmd in commands {
-            script.push_str(&format!("run_command('{}')\n", cmd));
+            script.push_str(&format!(
+                "run_command({})\n",
+                serde_json::to_string(cmd).unwrap()
+            ));
         }
 
         script

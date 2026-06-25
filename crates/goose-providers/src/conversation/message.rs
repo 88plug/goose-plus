@@ -60,7 +60,7 @@ where
                 tracing::info!(
                     original = %original,
                     sanitized = %sanitized,
-                    removed_count = original.len() - sanitized.len(),
+                    removed_count = original.len().saturating_sub(sanitized.len()),
                     "Unicode Tags sanitized during Message deserialization"
                 );
                 text_content.text = sanitized;

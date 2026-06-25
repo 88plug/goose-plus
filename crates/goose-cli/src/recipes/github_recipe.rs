@@ -213,7 +213,7 @@ fn get_folder_from_github(local_repo_path: &Path, recipe_name: &str) -> Result<P
     }
     fs::create_dir_all(&output_dir)?;
 
-    let archive_output = Command::new("git")
+    let mut archive_output = Command::new("git")
         .args(["archive", &ref_and_path])
         .current_dir(local_repo_path)
         .stdout(Stdio::piped())
@@ -222,10 +222,17 @@ fn get_folder_from_github(local_repo_path: &Path, recipe_name: &str) -> Result<P
 
     let stdout = archive_output
         .stdout
+        .take()
         .ok_or_else(|| anyhow::anyhow!("Failed to capture stdout from git archive"))?;
 
     let mut archive = Archive::new(stdout);
     archive.unpack(&output_dir)?;
+
+    let status = archive_output.wait()?;
+    if !status.success() {
+        return Err(anyhow::anyhow!("git archive {} failed", ref_and_path));
+    }
+
     list_files(&output_dir)?;
 
     Ok(output_dir)

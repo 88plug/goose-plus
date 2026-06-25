@@ -253,7 +253,10 @@ impl MemoryServer {
                         .split_whitespace()
                         .map(String::from)
                         .collect::<Vec<_>>();
-                    memories.insert(tags.join(" "), lines.map(String::from).collect());
+                    memories
+                        .entry(tags.join(" "))
+                        .or_insert_with(Vec::new)
+                        .extend(lines.map(String::from));
                 } else {
                     let entry_data: Vec<String> = std::iter::once(first_line.to_string())
                         .chain(lines.map(String::from))

@@ -523,7 +523,7 @@ fn build_authorize_url(redirect_uri: &str, pkce: &PkceChallenge, state: &str) ->
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
     access_token: String,
-    refresh_token: String,
+    refresh_token: Option<String>,
     id_token: Option<String>,
     expires_in: Option<i64>,
 }
@@ -795,9 +795,13 @@ async fn perform_oauth_flow(auth_state: &ChatGptCodexAuthState) -> Result<TokenD
 
     let expires_at = Utc::now() + chrono::Duration::seconds(tokens.expires_in.unwrap_or(3600));
 
+    let refresh_token = tokens
+        .refresh_token
+        .ok_or_else(|| anyhow!("Token exchange response missing refresh_token"))?;
+
     let mut token_data = TokenData {
         access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
+        refresh_token,
         id_token: tokens.id_token,
         expires_at,
         account_id: None,
@@ -836,7 +840,9 @@ impl ChatGptCodexAuthProvider {
             match refresh_access_token_with_issuer(ISSUER, &token_data.refresh_token).await {
                 Ok(new_tokens) => {
                     token_data.access_token = new_tokens.access_token;
-                    token_data.refresh_token = new_tokens.refresh_token;
+                    if let Some(rt) = new_tokens.refresh_token {
+                        token_data.refresh_token = rt;
+                    }
                     if new_tokens.id_token.is_some() {
                         token_data.id_token = new_tokens.id_token;
                     }
@@ -1326,7 +1332,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(tokens.access_token, "access-1");
-        assert_eq!(tokens.refresh_token, "refresh-1");
+        assert_eq!(tokens.refresh_token.as_deref(), Some("refresh-1"));
         assert_eq!(tokens.id_token.as_deref(), Some("id-1"));
         assert_eq!(tokens.expires_in, Some(3600));
     }
@@ -1352,7 +1358,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(tokens.access_token, "access-2");
-        assert_eq!(tokens.refresh_token, "refresh-2");
+        assert_eq!(tokens.refresh_token.as_deref(), Some("refresh-2"));
         assert_eq!(tokens.id_token.as_deref(), Some("id-2"));
         assert_eq!(tokens.expires_in, Some(1800));
     }

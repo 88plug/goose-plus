@@ -169,6 +169,7 @@ where
         let mut base_stream = std::pin::pin!(base_stream);
 
         let mut accumulated_text = String::new();
+        let mut streamed_len = 0usize;
         let mut xml_detected = false;
         let mut last_usage: Option<ProviderUsage> = None;
 
@@ -191,6 +192,8 @@ where
                     if xml_detected {
                         continue;
                     }
+
+                    streamed_len = accumulated_text.len();
                 }
 
                 yield (Some(message), usage);
@@ -205,7 +208,10 @@ where
             if !xml_tool_calls.is_empty() {
                 let mut contents = Vec::new();
                 if let Some(prefix_text) = prefix {
-                    contents.push(MessageContent::text(prefix_text));
+                    let unstreamed = prefix_text.get(streamed_len..).unwrap_or("");
+                    if !unstreamed.is_empty() {
+                        contents.push(MessageContent::text(unstreamed));
+                    }
                 }
                 contents.extend(xml_tool_calls);
 
@@ -217,13 +223,16 @@ where
 
                 yield (Some(msg), last_usage);
             } else {
-                let msg = Message::new(
-                    Role::Assistant,
-                    chrono::Utc::now().timestamp(),
-                    vec![MessageContent::text(&accumulated_text)],
-                );
+                let unstreamed = accumulated_text.get(streamed_len..).unwrap_or("");
+                if !unstreamed.is_empty() {
+                    let msg = Message::new(
+                        Role::Assistant,
+                        chrono::Utc::now().timestamp(),
+                        vec![MessageContent::text(unstreamed)],
+                    );
 
-                yield (Some(msg), last_usage);
+                    yield (Some(msg), last_usage);
+                }
             }
         }
     }
