@@ -8,6 +8,46 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// goose-plus self-update source: our fork's releases, not upstream.
+const RELEASE_REPO: &str = "88plug/goose-plus";
+
+/// Resolve the release tag to update to. goose-plus tags releases `plus-v*` (not
+/// `stable`/`canary`), so resolve the newest published release via the GitHub API:
+/// the latest prerelease for `--canary`, otherwise the latest stable release.
+async fn resolve_release_tag(canary: bool) -> Result<String> {
+    let url = format!("https://api.github.com/repos/{RELEASE_REPO}/releases?per_page=20");
+    let token = env::var("GITHUB_TOKEN")
+        .ok()
+        .or_else(|| env::var("GH_TOKEN").ok());
+    let client = reqwest::Client::new();
+    let mut req = client
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "goose-cli");
+    if let Some(tok) = token {
+        req = req.header("Authorization", format!("Bearer {tok}"));
+    }
+    let resp = req.send().await.context("Failed to query releases")?;
+    if !resp.status().is_success() {
+        bail!("Failed to query releases: HTTP {}", resp.status());
+    }
+    let releases: Vec<serde_json::Value> = resp.json().await.context("Failed to parse releases")?;
+    let tag = releases
+        .iter()
+        .filter(|r| !r["draft"].as_bool().unwrap_or(false))
+        .find(|r| r["prerelease"].as_bool().unwrap_or(false) == canary)
+        .and_then(|r| r["tag_name"].as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No {} release found in {RELEASE_REPO}",
+                if canary { "canary" } else { "stable" }
+            )
+        })?;
+    Ok(tag)
+}
+
 /// Asset name for this platform (compile-time).
 fn asset_name() -> &'static str {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -81,7 +121,7 @@ const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com
 
 async fn fetch_attestations(digest: &str, token: Option<&str>) -> Result<Vec<serde_json::Value>> {
     let url = format!(
-        "https://api.github.com/repos/aaif-goose/goose/attestations/sha256:{digest}\
+        "https://api.github.com/repos/{RELEASE_REPO}/attestations/sha256:{digest}\
          ?per_page=30&predicate_type=https://slsa.dev/provenance/v1"
     );
 
@@ -143,13 +183,15 @@ fn verify_bundle(
 }
 
 /// Returns `Ok(true)` verified, `Ok(false)` skipped (soft warning), `Err` hard failure.
-async fn verify_provenance(archive_data: &[u8], tag: &str) -> Result<bool> {
+async fn verify_provenance(archive_data: &[u8], canary: bool) -> Result<bool> {
     let digest = sha256_hex(archive_data);
     println!("Archive SHA-256: {digest}");
 
-    let workflow = match tag {
-        "canary" => "canary.yml",
-        _ => "release.yml",
+    // goose-plus attests CLI binaries from release-plus.yml (stable) / canary.yml.
+    let workflow = if canary {
+        "canary.yml"
+    } else {
+        "release-plus.yml"
     };
 
     let token = env::var("GITHUB_TOKEN")
@@ -220,11 +262,13 @@ pub async fn update(canary: bool, reconfigure: bool) -> Result<()> {
 
     #[cfg(not(feature = "disable-update"))]
     {
-        let tag = if canary { "canary" } else { "stable" };
+        let tag = resolve_release_tag(canary)
+            .await
+            .context("Failed to resolve latest goose-plus release")?;
         let asset = asset_name();
-        let url = format!("https://github.com/aaif-goose/goose/releases/download/{tag}/{asset}");
+        let url = format!("https://github.com/{RELEASE_REPO}/releases/download/{tag}/{asset}");
 
-        println!("Downloading {asset} from {tag} release...");
+        println!("Downloading {asset} from {RELEASE_REPO} {tag} release...");
 
         // --- Download -----------------------------------------------------------
         let response = reqwest::get(&url)
@@ -247,7 +291,7 @@ pub async fn update(canary: bool, reconfigure: bool) -> Result<()> {
         println!("Downloaded {} bytes.", bytes.len());
 
         // --- Verify SLSA provenance via Sigstore --------------------------------
-        let provenance_verified = verify_provenance(&bytes, tag).await?;
+        let provenance_verified = verify_provenance(&bytes, canary).await?;
 
         // --- Extract to temp dir (hardened against path traversal) --------------
         let tmp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
@@ -813,7 +857,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_provenance_warns_on_missing_attestation() {
-        let result = verify_provenance(b"not a real archive", "stable").await;
+        let result = verify_provenance(b"not a real archive", false).await;
         // Network failures and missing attestations are soft warnings: Ok(false), not hard errors.
         assert_eq!(
             result.ok(),
