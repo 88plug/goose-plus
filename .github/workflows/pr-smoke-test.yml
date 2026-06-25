@@ -67,13 +67,13 @@ jobs:
 
       - name: Build Binary for Smoke Tests
         run: |
-          cargo build --bin goose --bin goosed
+          cargo build --bin goose-plus --bin goosed
 
       - name: Upload goose binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: goose-binary
-          path: target/debug/goose
+          path: target/debug/goose-plus
           retention-days: 1
 
       - name: Upload goosed binary
@@ -100,7 +100,7 @@ jobs:
           path: target/debug
 
       - name: Make Binary Executable
-        run: chmod +x target/debug/goose
+        run: chmod +x target/debug/goose-plus
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -188,7 +188,7 @@ jobs:
           path: target/debug
 
       - name: Make Binary Executable
-        run: chmod +x target/debug/goose
+        run: chmod +x target/debug/goose-plus
 
       - name: Install Node.js Dependencies
         run: source ../../bin/activate-hermit && pnpm install --frozen-lockfile
@@ -231,7 +231,7 @@ jobs:
           path: target/debug
 
       - name: Make Binary Executable
-        run: chmod +x target/debug/goose
+        run: chmod +x target/debug/goose-plus
 
       - name: Set up Python
         uses: actions/setup-python@v6

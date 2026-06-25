@@ -371,8 +371,8 @@ export function setupAutoUpdater(tray?: Tray) {
   // Set the feed URL for GitHub releases
   const feedConfig = {
     provider: 'github' as const,
-    owner: 'aaif-goose',
-    repo: 'goose',
+    owner: '88plug',
+    repo: 'goose-plus',
     releaseType: 'release' as const,
   };
 
@@ -774,7 +774,7 @@ function updateTrayIcon(hasUpdate: boolean) {
     } else {
       iconPath = path.join(process.resourcesPath, 'images', 'iconTemplate.png');
     }
-    trayRef.setToolTip('Goose');
+    trayRef.setToolTip('Goose Plus');
   }
 
   const icon = nativeImage.createFromPath(iconPath);

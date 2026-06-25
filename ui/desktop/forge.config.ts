@@ -6,6 +6,8 @@ const isLinuxVulkanBuild = process.env.GOOSE_DESKTOP_LINUX_VARIANT === 'vulkan';
 
 let cfg = {
   asar: true,
+  name: 'Goose Plus',
+  appBundleId: 'com.88plug.goose-plus',
   extraResource: ['src/bin', 'src/images'],
   icon: 'src/images/icon',
   // Windows specific configuration
@@ -87,8 +89,8 @@ module.exports = {
     {
       name: '@electron-forge/maker-deb',
       config: {
-        name: 'Goose',
-        bin: 'Goose',
+        name: 'Goose Plus',
+        bin: 'Goose Plus',
         maintainer: 'AAIF (Agentic AI Foundation)',
         homepage: 'https://goose-docs.ai/',
         categories: ['Development'],
@@ -103,8 +105,8 @@ module.exports = {
     {
       name: '@electron-forge/maker-rpm',
       config: {
-        name: 'Goose',
-        bin: 'Goose',
+        name: 'Goose Plus',
+        bin: 'Goose Plus',
         maintainer: 'AAIF (Agentic AI Foundation)',
         homepage: 'https://goose-docs.ai/',
         categories: ['Development'],
@@ -124,7 +126,7 @@ module.exports = {
       name: '@electron-forge/maker-flatpak',
       config: {
         options: {
-          id: 'io.github.block.Goose', // kept for backwards compat with existing installs
+          id: 'com.88plug.goose-plus',
           categories: ['Development'],
           icon: {
             scalable: 'src/images/icon.svg',
@@ -133,7 +135,7 @@ module.exports = {
           homepage: 'https://goose-docs.ai/',
           runtimeVersion: '25.08',
           baseVersion: '25.08',
-          bin: 'Goose',
+          bin: 'Goose Plus',
           modules: [
             {
               name: 'libbz2-shim',
@@ -165,9 +167,9 @@ module.exports = {
       name: '@reforged/maker-appimage',
       config: {
         options: {
-          name: 'goose',
-          productName: 'Goose',
-          bin: 'Goose',
+          name: 'goose-plus',
+          productName: 'Goose Plus',
+          bin: 'Goose Plus',
           categories: ['Development'],
           icon: 'src/images/icon.png',
         },

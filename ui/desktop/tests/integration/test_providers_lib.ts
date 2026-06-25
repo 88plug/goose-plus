@@ -221,13 +221,13 @@ function shouldSkipProvider(provider: string): boolean {
 export function buildGoose(): string {
   if (!process.env.SKIP_BUILD) {
     console.error('Building goose...');
-    execSync('cargo build --bin goose', { stdio: 'inherit' });
+    execSync('cargo build --bin goose-plus', { stdio: 'inherit' });
     console.error('');
   } else {
     console.error('Skipping build (SKIP_BUILD is set)...');
     console.error('');
   }
-  return path.resolve(process.cwd(), '..', '..', 'target/debug/goose');
+  return path.resolve(process.cwd(), '..', '..', 'target/debug/goose-plus');
 }
 
 // ---------------------------------------------------------------------------

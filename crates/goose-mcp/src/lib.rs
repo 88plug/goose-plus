@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub static APP_STRATEGY: Lazy<AppStrategyArgs> = Lazy::new(|| AppStrategyArgs {
     top_level_domain: "Block".to_string(),
     author: "Block".to_string(),
-    app_name: "goose".to_string(),
+    app_name: "goose-plus".to_string(),
 });
 
 pub mod autovisualiser;

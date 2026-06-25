@@ -12,7 +12,7 @@ description.workspace = true
 workspace = true
 
 [[bin]]
-name = "goose"
+name = "goose-plus"
 path = "src/main.rs"
 
 [[bin]]

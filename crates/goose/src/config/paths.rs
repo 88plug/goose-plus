@@ -22,7 +22,7 @@ impl Paths {
             let strategy = choose_app_strategy(AppStrategyArgs {
                 top_level_domain: "Block".to_string(),
                 author: "Block".to_string(),
-                app_name: "goose".to_string(),
+                app_name: "goose-plus".to_string(),
             });
 
             match strategy {
@@ -35,9 +35,9 @@ impl Paths {
                     DirType::AgentsHome => strategy.home_dir().join(".agents"),
                 },
                 Err(_) => match dir_type {
-                    DirType::Config => PathBuf::from(".config/goose"),
-                    DirType::Data => std::env::temp_dir().join("goose/data"),
-                    DirType::State => std::env::temp_dir().join("goose/state"),
+                    DirType::Config => PathBuf::from(".config/goose-plus"),
+                    DirType::Data => std::env::temp_dir().join("goose-plus/data"),
+                    DirType::State => std::env::temp_dir().join("goose-plus/state"),
                     DirType::Plugins => PathBuf::from(".agents/plugins"),
                     DirType::Agents => PathBuf::from(".agents/agents"),
                     DirType::AgentsHome => PathBuf::from(".agents"),

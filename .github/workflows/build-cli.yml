@@ -185,7 +185,7 @@ jobs:
           fi
 
           if [ "${{ matrix.variant }}" = "musl" ]; then
-            cargo build --release --target ${TARGET} -p goose-cli --bin goose \
+            cargo build --release --target ${TARGET} -p goose-cli --bin goose-plus \
               --no-default-features \
               --features portable-default
           else
@@ -259,14 +259,14 @@ jobs:
             cargo build --release --target x86_64-pc-windows-msvc -p goose-cli
           }
 
-          if (-not (Test-Path "./target/x86_64-pc-windows-msvc/release/goose.exe")) {
+          if (-not (Test-Path "./target/x86_64-pc-windows-msvc/release/goose-plus.exe")) {
             Write-Error "Windows CLI binary not found."
             Get-ChildItem ./target/x86_64-pc-windows-msvc/release/ -ErrorAction SilentlyContinue
             exit 1
           }
 
           Write-Output "Windows CLI binary found."
-          Get-Item ./target/x86_64-pc-windows-msvc/release/goose.exe
+          Get-Item ./target/x86_64-pc-windows-msvc/release/goose-plus.exe
 
       - name: Package CLI (Linux/macOS)
         if: matrix.platform != 'windows'
@@ -284,8 +284,8 @@ jobs:
           # Create a directory for the package contents
           mkdir -p "target/${TARGET}/release/goose-package"
 
-          # Copy the goose binary
-          cp "target/${TARGET}/release/goose" "target/${TARGET}/release/goose-package/"
+          # Copy the goose binary (named goose-plus inside the package)
+          cp "target/${TARGET}/release/goose-plus" "target/${TARGET}/release/goose-package/"
 
           cd "target/${TARGET}/release"
           tar -cjf "goose-${TARGET}${VARIANT_SUFFIX}.tar.bz2" -C goose-package .
@@ -305,7 +305,7 @@ jobs:
 
           mkdir -p "target/${TARGET}/release/goose-package"
 
-          cp "target/${TARGET}/release/goose.exe" "target/${TARGET}/release/goose-package/"
+          cp "target/${TARGET}/release/goose-plus.exe" "target/${TARGET}/release/goose-package/"
 
           cd "target/${TARGET}/release"
           7z a -tzip "goose-${TARGET}${VARIANT_SUFFIX}.zip" goose-package/

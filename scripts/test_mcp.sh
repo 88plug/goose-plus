@@ -3,7 +3,7 @@ set -e
 
 if [ -z "$SKIP_BUILD" ]; then
   echo "Building goose..."
-  cargo build --bin goose
+  cargo build --bin goose-plus
   echo ""
 else
   echo "Skipping build (SKIP_BUILD is set)..."
@@ -11,7 +11,7 @@ else
 fi
 
 SCRIPT_DIR=$(pwd)
-GOOSE_BIN="$SCRIPT_DIR/target/debug/goose"
+GOOSE_BIN="$SCRIPT_DIR/target/debug/goose-plus"
 
 TEST_PROVIDER=${GOOSE_PROVIDER:-anthropic}
 TEST_MODEL=${GOOSE_MODEL:-claude-haiku-4-5-20251001}

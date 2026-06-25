@@ -7,7 +7,7 @@ fi
 
 if [ -z "$SKIP_BUILD" ]; then
   echo "Building goose..."
-  cargo build --bin goose
+  cargo build --bin goose-plus
   echo ""
 else
   echo "Skipping build (SKIP_BUILD is set)..."
@@ -98,7 +98,7 @@ check_recipe_output() {
 
 echo "Running recipe with parallel subrecipes..."
 TMPFILE=$(mktemp)
-if (cd "$TESTDIR" && "$SCRIPT_DIR/target/debug/goose" run --recipe project_analyzer_parallel.yaml --no-session 2>&1) | tee "$TMPFILE"; then
+if (cd "$TESTDIR" && "$SCRIPT_DIR/target/debug/goose-plus" run --recipe project_analyzer_parallel.yaml --no-session 2>&1) | tee "$TMPFILE"; then
   echo "✓ SUCCESS: Recipe completed successfully"
   RESULTS+=("✓ Recipe exit code")
   check_recipe_output "$TMPFILE" "parallel"

@@ -1,6 +1,6 @@
 {
-  "name": "goose-app",
-  "productName": "Goose",
+  "name": "goose-plus-app",
+  "productName": "Goose Plus",
   "version": "1.38.0",
   "description": "Goose App",
   "engines": {
@@ -19,9 +19,9 @@
     "start:test-error": "GOOSE_TEST_ERROR=true electron-forge start",
     "package": "pnpm run i18n:compile && electron-forge package",
     "make": "pnpm run i18n:compile && electron-forge make",
-    "bundle:default": "node scripts/prepare-platform-binaries.js && pnpm run make && BUNDLE_NAME=\"${GOOSE_BUNDLE_NAME:-Goose}\" && APP_DIR=\"out/${BUNDLE_NAME}-darwin-arm64\" && APP_BUNDLE=\"${APP_DIR}/${BUNDLE_NAME}.app\" && (cd \"$APP_DIR\" && ditto -c -k --sequesterRsrc --keepParent \"${BUNDLE_NAME}.app\" \"${BUNDLE_NAME}.zip\")",
-    "bundle:intel": "node scripts/prepare-platform-binaries.js && pnpm run make --arch=x64 && BUNDLE_NAME=\"${GOOSE_BUNDLE_NAME:-Goose}\" && APP_DIR=\"out/${BUNDLE_NAME}-darwin-x64\" && APP_BUNDLE=\"${APP_DIR}/${BUNDLE_NAME}.app\" && (cd \"$APP_DIR\" && ditto -c -k --sequesterRsrc --keepParent \"${BUNDLE_NAME}.app\" \"${BUNDLE_NAME}_intel_mac.zip\")",
-    "debug": "echo 'run --remote-debugging-port=8315' && BUNDLE_NAME=\"${GOOSE_BUNDLE_NAME:-Goose}\" && lldb \"out/${BUNDLE_NAME}-darwin-arm64/${BUNDLE_NAME}.app\"",
+    "bundle:default": "node scripts/prepare-platform-binaries.js && pnpm run make && BUNDLE_NAME=\"${GOOSE_BUNDLE_NAME:-Goose Plus}\" && APP_DIR=\"out/${BUNDLE_NAME}-darwin-arm64\" && APP_BUNDLE=\"${APP_DIR}/${BUNDLE_NAME}.app\" && (cd \"$APP_DIR\" && ditto -c -k --sequesterRsrc --keepParent \"${BUNDLE_NAME}.app\" \"${BUNDLE_NAME}.zip\")",
+    "bundle:intel": "node scripts/prepare-platform-binaries.js && pnpm run make --arch=x64 && BUNDLE_NAME=\"${GOOSE_BUNDLE_NAME:-Goose Plus}\" && APP_DIR=\"out/${BUNDLE_NAME}-darwin-x64\" && APP_BUNDLE=\"${APP_DIR}/${BUNDLE_NAME}.app\" && (cd \"$APP_DIR\" && ditto -c -k --sequesterRsrc --keepParent \"${BUNDLE_NAME}.app\" \"${BUNDLE_NAME}_intel_mac.zip\")",
+    "debug": "echo 'run --remote-debugging-port=8315' && BUNDLE_NAME=\"${GOOSE_BUNDLE_NAME:-Goose Plus}\" && lldb \"out/${BUNDLE_NAME}-darwin-arm64/${BUNDLE_NAME}.app\"",
     "test-e2e": "pnpm run generate-api && playwright test",
     "test-e2e:dev": "pnpm run generate-api && playwright test --reporter=list --retries=0 --max-failures=1",
     "test-e2e:ui": "pnpm run generate-api && playwright test --ui",

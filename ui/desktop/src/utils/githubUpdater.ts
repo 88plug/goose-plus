@@ -27,9 +27,9 @@ interface UpdateCheckResult {
 }
 
 export class GitHubUpdater {
-  private readonly owner = process.env.GITHUB_OWNER || 'aaif-goose';
-  private readonly repo = process.env.GITHUB_REPO || 'goose';
-  private readonly bundleName = process.env.GOOSE_BUNDLE_NAME || 'Goose';
+  private readonly owner = process.env.GITHUB_OWNER || '88plug';
+  private readonly repo = process.env.GITHUB_REPO || 'goose-plus';
+  private readonly bundleName = process.env.GOOSE_BUNDLE_NAME || 'Goose Plus';
   private readonly apiUrl = `https://api.github.com/repos/${this.owner}/${this.repo}/releases/latest`;
 
   async checkForUpdates(): Promise<UpdateCheckResult> {

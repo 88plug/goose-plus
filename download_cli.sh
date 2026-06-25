@@ -55,7 +55,7 @@ fi
 
 # --- 2) Variables ---
 REPO="aaif-goose/goose"
-OUT_FILE="goose"
+OUT_FILE="goose-plus"
 
 # Set default bin directory based on detected OS environment
 if [[ "${WINDIR:-}" ]] || [[ "${windir:-}" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
@@ -195,7 +195,7 @@ elif [ "$OS" = "windows" ]; then
     FILE="goose-$ARCH-pc-windows-msvc-cuda.zip"
   fi
   EXTRACT_CMD="unzip"
-  OUT_FILE="goose.exe"
+  OUT_FILE="goose-plus.exe"
 else
   case "$GOOSE_LINUX_VARIANT" in
     standard|vulkan|musl) ;;
@@ -298,9 +298,9 @@ fi
 
 # Make binary executable
 if [ "$OS" = "windows" ]; then
-  chmod +x "$EXTRACT_DIR/goose.exe"
+  chmod +x "$EXTRACT_DIR/goose-plus.exe"
 else
-  chmod +x "$EXTRACT_DIR/goose"
+  chmod +x "$EXTRACT_DIR/goose-plus"
 fi
 
 # --- 5) Install to $GOOSE_BIN_DIR ---
@@ -311,7 +311,7 @@ fi
 
 echo "Moving goose to $GOOSE_BIN_DIR/$OUT_FILE"
 if [ "$OS" = "windows" ]; then
-  mv "$EXTRACT_DIR/goose.exe" "$GOOSE_BIN_DIR/$OUT_FILE"
+  mv "$EXTRACT_DIR/goose-plus.exe" "$GOOSE_BIN_DIR/$OUT_FILE"
 else
   # On Linux, if the target binary is currently running, writing to it fails
   # with ETXTBSY ("Text file busy"). Rename the old binary out of the way
@@ -319,14 +319,14 @@ else
   # so the user is never left without an executable.
   if [ -f "$GOOSE_BIN_DIR/$OUT_FILE" ]; then
     mv "$GOOSE_BIN_DIR/$OUT_FILE" "$GOOSE_BIN_DIR/$OUT_FILE.old"
-    if ! mv "$EXTRACT_DIR/goose" "$GOOSE_BIN_DIR/$OUT_FILE"; then
+    if ! mv "$EXTRACT_DIR/goose-plus" "$GOOSE_BIN_DIR/$OUT_FILE"; then
       echo "Error: failed to install new binary, restoring previous version"
       mv "$GOOSE_BIN_DIR/$OUT_FILE.old" "$GOOSE_BIN_DIR/$OUT_FILE"
       exit 1
     fi
     rm -f "$GOOSE_BIN_DIR/$OUT_FILE.old"
   else
-    mv "$EXTRACT_DIR/goose" "$GOOSE_BIN_DIR/$OUT_FILE"
+    mv "$EXTRACT_DIR/goose-plus" "$GOOSE_BIN_DIR/$OUT_FILE"
   fi
 fi
 

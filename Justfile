@@ -51,10 +51,10 @@ copy-binary BUILD_MODE="release":
         echo "Binary not found in target/{{BUILD_MODE}}"; \
         exit 1; \
     fi
-    @if [ -f ./target/{{BUILD_MODE}}/goose ]; then \
+    @if [ -f ./target/{{BUILD_MODE}}/goose-plus ]; then \
         echo "Copying goose CLI binary from target/{{BUILD_MODE}}..."; \
         rm -f ./ui/desktop/src/bin/goose; \
-        cp -p ./target/{{BUILD_MODE}}/goose ./ui/desktop/src/bin/; \
+        cp -p ./target/{{BUILD_MODE}}/goose-plus ./ui/desktop/src/bin/goose; \
     else \
         echo "goose CLI binary not found in target/{{BUILD_MODE}}"; \
         exit 1; \
@@ -70,10 +70,10 @@ copy-binary-intel:
         echo "Intel release binary not found."; \
         exit 1; \
     fi
-    @if [ -f ./target/x86_64-apple-darwin/release/goose ]; then \
+    @if [ -f ./target/x86_64-apple-darwin/release/goose-plus ]; then \
         echo "Copying Intel goose CLI binary to ui/desktop/src/bin..."; \
         rm -f ./ui/desktop/src/bin/goose; \
-        cp -p ./target/x86_64-apple-darwin/release/goose ./ui/desktop/src/bin/; \
+        cp -p ./target/x86_64-apple-darwin/release/goose-plus ./ui/desktop/src/bin/goose; \
     else \
         echo "Intel goose CLI binary not found."; \
         exit 1; \
