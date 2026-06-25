@@ -32,10 +32,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # NOT ubuntu-26.04: its preview image's rpm tooling fails the deb/rpm
+          # maker (rpmdb.sqlite "Operation not permitted"). The desktop bundle
+          # stays on the proven LTS runners until 26.04 GA fixes the rpm path.
+          # (build-cli builds fine on 26.04 — it makes no rpm — and stays there.)
           - variant: standard
-            build-on: ubuntu-26.04
+            build-on: ubuntu-22.04
           - variant: vulkan
-            build-on: ubuntu-26.04
+            build-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
