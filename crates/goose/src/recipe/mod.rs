@@ -108,6 +108,9 @@ pub struct Settings {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_turns: Option<usize>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_params: Option<HashMap<String, Value>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]

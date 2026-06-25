@@ -69,7 +69,7 @@ use rmcp::model::{
     AnnotateAble, CallToolResult, RawContent, RawTextContent, ResourceContents, Role,
 };
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -147,6 +147,7 @@ impl<T, E: std::fmt::Display> ResultExt<T> for Result<T, E> {
 pub(super) const DEFAULT_PROVIDER_ID: &str = "goose";
 pub(super) const DEFAULT_PROVIDER_LABEL: &str = "Goose (Default)";
 const PROVIDER_CONFIG_STATUS_CHECK_CONCURRENCY: usize = 16;
+const MAX_CLOSED_SESSION_TOMBSTONES: usize = 1024;
 
 /// In-memory state for an active ACP session.
 ///
@@ -208,6 +209,7 @@ pub struct GooseAcpAgent {
     sessions: Arc<Mutex<HashMap<String, GooseAcpSession>>>,
     active_prompt_runs: Arc<Mutex<HashMap<String, ActivePromptRun>>>,
     closed_session_ids: Arc<Mutex<HashSet<String>>>,
+    closed_session_order: Arc<Mutex<VecDeque<String>>>,
     agent_manager: Arc<AgentManager>,
     provider_factory: AcpProviderFactory,
     builtins: Vec<String>,
@@ -914,6 +916,7 @@ impl GooseAcpAgent {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             active_prompt_runs: Arc::new(Mutex::new(HashMap::new())),
             closed_session_ids: Arc::new(Mutex::new(HashSet::new())),
+            closed_session_order: Arc::new(Mutex::new(VecDeque::new())),
             agent_manager,
             provider_factory: options.provider_factory,
             builtins: options.builtins,
@@ -2886,10 +2889,18 @@ impl GooseAcpAgent {
         &self,
         session_id: &str,
     ) -> Result<CloseSessionResponse, agent_client_protocol::Error> {
-        self.closed_session_ids
-            .lock()
-            .await
-            .insert(session_id.to_string());
+        {
+            let mut closed = self.closed_session_ids.lock().await;
+            if closed.insert(session_id.to_string()) {
+                let mut order = self.closed_session_order.lock().await;
+                order.push_back(session_id.to_string());
+                while order.len() > MAX_CLOSED_SESSION_TOMBSTONES {
+                    if let Some(old) = order.pop_front() {
+                        closed.remove(&old);
+                    }
+                }
+            }
+        }
 
         let active_run_token = {
             let active_prompt_runs = self.active_prompt_runs.lock().await;

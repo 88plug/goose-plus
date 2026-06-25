@@ -3237,6 +3237,7 @@ impl Agent {
             goose_model: Some(model_name.clone()),
             temperature: Some(model_config.temperature.unwrap_or(0.0)),
             max_turns: None,
+            request_params: None,
         };
 
         tracing::debug!(

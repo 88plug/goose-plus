@@ -1501,6 +1501,7 @@ impl SummonClient {
             goose_provider: params.provider.clone(),
             temperature: params.temperature,
             max_turns: None,
+            request_params: None,
         });
 
         let mut builder = Recipe::builder()
@@ -1534,6 +1535,14 @@ impl SummonClient {
             Some(&session.extension_data),
             Config::global(),
         );
+
+        if let Some(recipe_extensions) = &recipe.extensions {
+            for ext in recipe_extensions {
+                if !extensions.iter().any(|e| e.name() == ext.name()) {
+                    extensions.push(ext.clone());
+                }
+            }
+        }
 
         if let Some(filter) = &params.extensions {
             if filter.is_empty() {
@@ -2476,6 +2485,7 @@ You review code."#;
                     goose_model: None,
                     temperature: None,
                     max_turns: Some(10),
+                    request_params: None,
                 }),
                 activities: None,
                 author: None,

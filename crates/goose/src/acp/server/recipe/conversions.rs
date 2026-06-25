@@ -108,6 +108,7 @@ impl From<RecipeSettingsDto> for Settings {
             goose_model: dto.goose_model,
             temperature: dto.temperature,
             max_turns: dto.max_turns,
+            request_params: None,
         }
     }
 }

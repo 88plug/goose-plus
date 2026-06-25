@@ -207,8 +207,10 @@ where
 
             if !xml_tool_calls.is_empty() {
                 let mut contents = Vec::new();
-                if let Some(prefix_text) = prefix {
-                    let unstreamed = prefix_text.get(streamed_len..).unwrap_or("");
+                if prefix.is_some() {
+                    let remainder = accumulated_text.get(streamed_len..).unwrap_or("");
+                    let prefix_end = remainder.find("<function=").unwrap_or(remainder.len());
+                    let unstreamed = remainder.get(..prefix_end).unwrap_or("").trim();
                     if !unstreamed.is_empty() {
                         contents.push(MessageContent::text(unstreamed));
                     }

@@ -276,6 +276,9 @@ fn resolve_provider_and_model(
         if let Some(temp) = recipe_settings.and_then(|s| s.temperature) {
             config = config.with_temperature(Some(temp));
         }
+        if let Some(params) = recipe_settings.and_then(|s| s.request_params.clone()) {
+            config = config.with_merged_request_params(params);
+        }
         config
     } else {
         let mut config =
@@ -286,6 +289,9 @@ fn resolve_provider_and_model(
                 });
         if let Some(temp) = recipe_settings.and_then(|s| s.temperature) {
             config = config.with_temperature(Some(temp));
+        }
+        if let Some(params) = recipe_settings.and_then(|s| s.request_params.clone()) {
+            config = config.with_merged_request_params(params);
         }
         config
     };

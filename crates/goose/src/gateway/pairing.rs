@@ -108,7 +108,8 @@ impl PairingStore {
         expires_at: i64,
     ) -> anyhow::Result<()> {
         let mut codes = Self::load_pending_codes();
-        codes.retain(|c| c.code != code);
+        let now = chrono::Utc::now().timestamp();
+        codes.retain(|c| c.code != code && c.expires_at > now);
         codes.push(StoredPendingCode {
             code: code.to_string(),
             gateway_type: gateway_type.to_string(),

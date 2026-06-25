@@ -6,6 +6,7 @@ use nostr::nips::nip19::{FromBech32, Nip19Event, ToBech32};
 use nostr::nips::nip44;
 use nostr::prelude::*;
 use nostr_sdk::Client;
+use tracing::warn;
 
 use crate::config::{Config, ConfigError};
 
@@ -127,8 +128,14 @@ pub fn default_relays() -> Vec<String> {
 pub fn relays_from_config(config: &Config) -> Vec<String> {
     match config.get_param::<Vec<String>>(CONFIG_RELAYS_KEY) {
         Ok(relays) if !relays.is_empty() => normalize_relays(relays),
+        Ok(_) => default_relays(),
         Err(ConfigError::NotFound(_)) => default_relays(),
-        _ => default_relays(),
+        Err(err) => {
+            warn!(
+                "Failed to read configured Nostr relays ({CONFIG_RELAYS_KEY}); falling back to default relays: {err}"
+            );
+            default_relays()
+        }
     }
 }
 

@@ -22,6 +22,10 @@ const OUTBOUND_BROADCAST_CAPACITY: usize = 1024;
 /// notifications that land before the client opens the session GET stream).
 const PRE_SUBSCRIBE_BUFFER_CAPACITY: usize = 1024;
 
+/// Caps outstanding request→route mappings; an unanswered request would
+/// otherwise leak its entry forever.
+const MAX_PENDING_ROUTES: usize = 4096;
+
 #[derive(Clone, Debug)]
 pub(crate) enum ResponseRoute {
     Connection,
@@ -217,7 +221,15 @@ impl Connection {
         if id.is_null() {
             return;
         }
-        self.pending_routes.lock().await.insert(id, route);
+        let mut routes = self.pending_routes.lock().await;
+        if routes.len() >= MAX_PENDING_ROUTES {
+            warn!(
+                "Pending route table full ({} entries); clearing unanswered routes",
+                MAX_PENDING_ROUTES
+            );
+            routes.clear();
+        }
+        routes.insert(id, route);
     }
 
     pub async fn subscribe_connection_stream(&self) -> (Vec<String>, broadcast::Receiver<String>) {

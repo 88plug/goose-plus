@@ -92,8 +92,9 @@ fn parse_google_retry_delay(payload: &Value) -> Option<Duration> {
                         .get("retryDelay")
                         .and_then(|delay| delay.as_str())
                         .and_then(|s| s.strip_suffix('s'))
-                        .and_then(|num| num.parse::<u64>().ok())
-                        .map(Duration::from_secs)
+                        .and_then(|num| num.trim().parse::<f64>().ok())
+                        .filter(|secs| secs.is_finite() && *secs >= 0.0)
+                        .map(Duration::from_secs_f64)
                 } else {
                     None
                 }

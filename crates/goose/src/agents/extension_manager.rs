@@ -1305,9 +1305,10 @@ impl ExtensionManager {
             .read_resource(session_id, &resource_uri, cancellation_token)
             .await
         {
-            Ok(resource_result) => {
-                attachment.resource_result = serde_json::to_value(&resource_result).ok();
-            }
+            Ok(resource_result) => match serde_json::to_value(&resource_result) {
+                Ok(value) => attachment.resource_result = Some(value),
+                Err(error) => attachment.read_error = Some(error.to_string()),
+            },
             Err(error) => {
                 attachment.read_error = Some(error.to_string());
             }

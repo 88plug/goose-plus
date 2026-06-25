@@ -141,10 +141,20 @@ async fn ensure_featured_models_in_registry() -> Result<(), ErrorResponse> {
 
     let entries_to_add: Vec<LocalModelEntry> = resolved
         .into_iter()
-        .map(|(pending, hf_file)| {
+        .filter_map(|(pending, hf_file)| {
+            if hf_file.filename.contains("..")
+                || std::path::Path::new(&hf_file.filename).components().count() != 1
+            {
+                tracing::warn!(
+                    "Skipping featured model '{}': invalid filename '{}' must be a single path component",
+                    pending.model_id,
+                    hf_file.filename
+                );
+                return None;
+            }
             let local_path = Paths::in_data_dir("models").join(&hf_file.filename);
             let settings = default_settings_for_model(&pending.model_id);
-            LocalModelEntry {
+            Some(LocalModelEntry {
                 id: pending.model_id,
                 repo_id: pending.repo_id,
                 filename: hf_file.filename,
@@ -160,7 +170,7 @@ async fn ensure_featured_models_in_registry() -> Result<(), ErrorResponse> {
                 mmproj_size_bytes: 0,
                 mmproj_checked: false,
                 shard_files: vec![],
-            }
+            })
         })
         .collect();
 

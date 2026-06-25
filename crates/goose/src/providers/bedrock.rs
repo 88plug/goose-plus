@@ -362,6 +362,15 @@ impl BedrockProvider {
             request = request.tool_config(tool_config);
         }
 
+        let mut inference_config = bedrock::InferenceConfiguration::builder();
+        if let Some(temperature) = self.model.temperature {
+            inference_config = inference_config.temperature(temperature);
+        }
+        if let Some(max_tokens) = self.model.max_tokens {
+            inference_config = inference_config.max_tokens(max_tokens);
+        }
+        request = request.inference_config(inference_config.build());
+
         let mut request = request.customize();
 
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
@@ -404,6 +413,12 @@ impl BedrockProvider {
                 )),
                 ConverseError::ModelErrorException(err) => {
                     ProviderError::ExecutionError(format!("Failed to call Bedrock: {:?}", err))
+                }
+                ConverseError::ResourceNotFoundException(err) => {
+                    ProviderError::ExecutionError(format!(
+                        "Bedrock model not found: {}",
+                        err.message().unwrap_or("unknown")
+                    ))
                 }
                 err => ProviderError::ServerError(format!("Failed to call Bedrock: {:?}", err)),
             })?;
@@ -458,6 +473,15 @@ impl BedrockProvider {
             request = request.tool_config(tool_config);
         }
 
+        let mut inference_config = bedrock::InferenceConfiguration::builder();
+        if let Some(temperature) = self.model.temperature {
+            inference_config = inference_config.temperature(temperature);
+        }
+        if let Some(max_tokens) = self.model.max_tokens {
+            inference_config = inference_config.max_tokens(max_tokens);
+        }
+        request = request.inference_config(inference_config.build());
+
         let mut request = request.customize();
 
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
@@ -496,6 +520,12 @@ impl BedrockProvider {
                 }
                 ConverseStreamError::ModelErrorException(err) => {
                     ProviderError::ExecutionError(format!("Failed to call Bedrock: {:?}", err))
+                }
+                ConverseStreamError::ResourceNotFoundException(err) => {
+                    ProviderError::ExecutionError(format!(
+                        "Bedrock model not found: {}",
+                        err.message().unwrap_or("unknown")
+                    ))
                 }
                 err => ProviderError::ServerError(format!("Failed to call Bedrock: {:?}", err)),
             })

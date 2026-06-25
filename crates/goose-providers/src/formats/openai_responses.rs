@@ -280,20 +280,30 @@ fn parse_responses_stream_event(data_line: &str) -> anyhow::Result<Option<Respon
         ))
     })?;
 
-    let Some(event_type) = raw_event.get("type").and_then(Value::as_str) else {
+    let Some(event_type) = raw_event
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+    else {
         return Ok(None);
     };
 
-    if !is_known_responses_stream_event_type(event_type) {
+    if !is_known_responses_stream_event_type(&event_type) {
         return Ok(None);
     }
 
-    let event = serde_json::from_value(raw_event).map_err(|e| {
-        ProviderError::stream_decode_error(format!(
-            "Failed to parse Responses stream event: {}: {:?}",
-            e, data_line
-        ))
-    })?;
+    let event = match serde_json::from_value(raw_event) {
+        Ok(event) => event,
+        Err(e) => {
+            tracing::warn!(
+                "Skipping malformed Responses stream event '{}': {}: {:?}",
+                event_type,
+                e,
+                data_line
+            );
+            return Ok(None);
+        }
+    };
     Ok(Some(event))
 }
 

@@ -47,8 +47,16 @@ impl PromptInjectionScanner {
     }
 
     pub fn with_ml_detection() -> Result<Self> {
-        let command_classifier = Self::create_classifier(ClassifierType::Command).ok();
-        let prompt_classifier = Self::create_classifier(ClassifierType::Prompt).ok();
+        let command_classifier =
+            Self::create_classifier(ClassifierType::Command).unwrap_or_else(|e| {
+                tracing::warn!("command classifier initialization failed: {:#}", e);
+                None
+            });
+        let prompt_classifier =
+            Self::create_classifier(ClassifierType::Prompt).unwrap_or_else(|e| {
+                tracing::warn!("prompt classifier initialization failed: {:#}", e);
+                None
+            });
 
         if command_classifier.is_none() && prompt_classifier.is_none() {
             anyhow::bail!("ML detection enabled but no classifiers could be initialized");
@@ -61,7 +69,7 @@ impl PromptInjectionScanner {
         })
     }
 
-    fn create_classifier(classifier_type: ClassifierType) -> Result<ClassificationClient> {
+    fn create_classifier(classifier_type: ClassifierType) -> Result<Option<ClassificationClient>> {
         let config = Config::global();
         let prefix = match classifier_type {
             ClassifierType::Command => "COMMAND",
@@ -83,7 +91,7 @@ impl PromptInjectionScanner {
         };
 
         if !enabled {
-            anyhow::bail!("{} classifier not enabled", prefix);
+            return Ok(None);
         }
 
         let model_name = config
@@ -101,16 +109,16 @@ impl PromptInjectionScanner {
             .filter(|s| !s.trim().is_empty());
 
         if let Some(model) = model_name {
-            return ClassificationClient::from_model_name(&model, None);
+            return ClassificationClient::from_model_name(&model, None).map(Some);
         }
 
         if let Some(endpoint_url) = endpoint {
-            return ClassificationClient::from_endpoint(endpoint_url, None, token);
+            return ClassificationClient::from_endpoint(endpoint_url, None, token).map(Some);
         }
 
         if classifier_type == ClassifierType::Command {
             if let Ok(client) = ClassificationClient::from_model_type("command", None) {
-                return Ok(client);
+                return Ok(Some(client));
             }
         }
 
