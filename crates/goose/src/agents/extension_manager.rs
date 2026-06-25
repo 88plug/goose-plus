@@ -2032,14 +2032,35 @@ impl ExtensionManager {
                 .collect()
         };
 
-        let mut parts = Vec::new();
-        for (name, client) in platform_clients {
-            if let Some(moim_content) = client.get_moim(session_id).await {
-                tracing::debug!("MOIM content from {}: {} chars", name, moim_content.len());
-                parts.push(moim_content);
+        // This runs every turn BEFORE the model call, so it must never stall the turn.
+        // Query all platform extensions CONCURRENTLY and time-boxed: a slow/hung
+        // extension is skipped for this turn instead of serially blocking "after enter"
+        // responsiveness. Order is preserved (join_all yields in input order).
+        let budget = Duration::from_millis(
+            std::env::var("GOOSE_MOIM_TIMEOUT_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(250),
+        );
+        let collected = future::join_all(platform_clients.into_iter().map(|(name, client)| {
+            let sid = session_id.to_string();
+            async move {
+                match tokio::time::timeout(budget, client.get_moim(&sid)).await {
+                    Ok(Some(content)) => Some(content),
+                    Ok(None) => None,
+                    Err(_) => {
+                        tracing::debug!(
+                            "MOIM from {} exceeded {}ms; skipping this turn",
+                            name,
+                            budget.as_millis()
+                        );
+                        None
+                    }
+                }
             }
-        }
-        parts
+        }))
+        .await;
+        collected.into_iter().flatten().collect()
     }
 }
 
