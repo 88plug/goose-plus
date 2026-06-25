@@ -1778,9 +1778,19 @@ impl Agent {
         session: Session,
         cancel_token: Option<CancellationToken>,
     ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
+        // GOOSE_PERF_LOG=1: per-turn timing to stderr (zero cost when unset) so a
+        // real session reveals exactly where the after-submit time goes.
+        let perf_log = std::env::var("GOOSE_PERF_LOG").is_ok();
+        let perf_reply_start = std::time::Instant::now();
         let context = self
             .prepare_reply_context(&session.id, conversation, session.working_dir.as_path())
             .await?;
+        if perf_log {
+            eprintln!(
+                "[goose-perf] prepare_reply_context (system prompt + tools build) = {}ms",
+                perf_reply_start.elapsed().as_millis()
+            );
+        }
         let ReplyContext {
             mut conversation,
             mut tools,
@@ -1955,6 +1965,7 @@ impl Agent {
                     break;
                 }
 
+                let perf_turn_start = std::time::Instant::now();
                 let conversation_with_moim = super::moim::inject_moim(
                     &session_config.id,
                     conversation.clone(),
@@ -1962,6 +1973,7 @@ impl Agent {
                     turns_taken,
                     max_turns,
                 ).await;
+                let perf_moim_ms = perf_turn_start.elapsed().as_millis();
 
                 let mut stream = Self::stream_response_from_provider(
                     self.provider().await?,
@@ -2011,7 +2023,18 @@ impl Agent {
                 // mode must be passed back to the API." (#9397, #9675)
                 let mut accumulated_thinking: Vec<MessageContent> = Vec::new();
 
+                let mut perf_first_token_logged = false;
                 while let Some(next) = stream.next().await {
+                    if perf_log && !perf_first_token_logged {
+                        perf_first_token_logged = true;
+                        eprintln!(
+                            "[goose-perf] turn {}: moim={}ms  turn->1st_token={}ms  submit->1st_token={}ms",
+                            turns_taken,
+                            perf_moim_ms,
+                            perf_turn_start.elapsed().as_millis(),
+                            perf_reply_start.elapsed().as_millis()
+                        );
+                    }
                     if is_token_cancelled(&cancel_token) || exit_chat {
                         break;
                     }
