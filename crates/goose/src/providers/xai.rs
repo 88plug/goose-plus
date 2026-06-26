@@ -69,20 +69,19 @@ impl ProviderDef for XaiProvider {
             let api_client =
                 ApiClient::new_with_tls(host, AuthMethod::BearerToken(api_key), tls_config)?;
 
-            // Apply authoritative xAI context windows (source of truth)
-            let mut model = model;
-            if let Some(ctx) = xai_context_window(&model.model_name) {
-                if model.context_limit.is_none() {
-                    model.context_limit = Some(ctx);
-                }
-            }
-
+            // Drive the catalog + context from api.x.ai's own /v1/models
+            // (context_length); fall back to the curated xai_context_window map
+            // only when the live listing is unavailable.
+            let fallback = xai_context_window(&model.model_name);
             Ok(OpenAiCompatibleProvider::new(
                 XAI_PROVIDER_NAME.to_string(),
                 api_client,
                 model,
                 String::new(),
-            ))
+            )
+            .with_rich_models(true)
+            .ensure_context_limit(fallback)
+            .await)
         })
     }
 }

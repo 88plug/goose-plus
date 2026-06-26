@@ -33,6 +33,10 @@ pub struct OpenAiCompatibleProvider {
     /// Path prefix prepended to `chat/completions` (e.g. `"deployments/{name}/"` for Azure).
     completions_prefix: String,
     supports_streaming: bool,
+    /// When set, the model list and per-model context are sourced from the
+    /// provider's own `/v1/models` (context_length / context_window) instead of
+    /// the canonical registry alone — used by the xAI providers.
+    rich_models: bool,
 }
 
 impl OpenAiCompatibleProvider {
@@ -48,11 +52,61 @@ impl OpenAiCompatibleProvider {
             model,
             completions_prefix,
             supports_streaming: true,
+            rich_models: false,
         }
     }
 
     pub fn with_supports_streaming(mut self, supports_streaming: bool) -> Self {
         self.supports_streaming = supports_streaming;
+        self
+    }
+
+    /// Source the model list + per-model context from the provider's own
+    /// `/v1/models` response (xAI). Off by default so other OpenAI-compatible
+    /// providers are unaffected.
+    pub fn with_rich_models(mut self, rich_models: bool) -> Self {
+        self.rich_models = rich_models;
+        self
+    }
+
+    /// Fetch and validate the `/v1/models` JSON body.
+    async fn fetch_models_json(&self) -> Result<Value, ProviderError> {
+        let response = self
+            .api_client
+            .response_get(None, "models")
+            .await
+            .map_err(|e| ProviderError::RequestFailed(e.to_string()))?;
+        let json = handle_response_openai_compat(response).await?;
+        if let Some(err_obj) = json.get("error") {
+            let msg = err_obj
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error");
+            return Err(ProviderError::Authentication(msg.to_string()));
+        }
+        Ok(json)
+    }
+
+    /// Live context window for `model_name` from the provider's `/v1/models`,
+    /// or `None` if unavailable. Bounded by a short timeout so a slow endpoint
+    /// can't stall provider construction.
+    pub async fn api_context_limit(&self, model_name: &str) -> Option<usize> {
+        const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+        let json = tokio::time::timeout(PROBE_TIMEOUT, self.fetch_models_json())
+            .await
+            .ok()?
+            .ok()?;
+        crate::openai::parse_n_ctx_from_models(&json, model_name)
+    }
+
+    /// If the model has no context limit yet, set it from the live `/v1/models`
+    /// response, falling back to `fallback` (e.g. a curated offline map) when
+    /// the API is unavailable. Builder-style for use in provider construction.
+    pub async fn ensure_context_limit(mut self, fallback: Option<usize>) -> Self {
+        if self.model.context_limit.is_none() {
+            let model_name = self.model.model_name.clone();
+            self.model.context_limit = self.api_context_limit(&model_name).await.or(fallback);
+        }
         self
     }
 
@@ -87,21 +141,7 @@ impl Provider for OpenAiCompatibleProvider {
     }
 
     async fn fetch_supported_models(&self) -> Result<Vec<String>, ProviderError> {
-        let response = self
-            .api_client
-            .response_get(None, "models")
-            .await
-            .map_err(|e| ProviderError::RequestFailed(e.to_string()))?;
-        let json = handle_response_openai_compat(response).await?;
-
-        if let Some(err_obj) = json.get("error") {
-            let msg = err_obj
-                .get("message")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown error");
-            return Err(ProviderError::Authentication(msg.to_string()));
-        }
-
+        let json = self.fetch_models_json().await?;
         let arr = json.get("data").and_then(|v| v.as_array()).ok_or_else(|| {
             ProviderError::RequestFailed("Missing 'data' array in models response".to_string())
         })?;
@@ -111,6 +151,48 @@ impl Provider for OpenAiCompatibleProvider {
             .collect();
         models.sort();
         Ok(models)
+    }
+
+    /// When `rich_models` is set, source the catalog from the provider's own
+    /// `/v1/models`: start from the canonical per-model metadata (so curated
+    /// capability flags are preserved) and override the context limit with the
+    /// live `context_length` / `context_window` reported by the API. Falls back
+    /// to the trait default (canonical only) when the endpoint is unavailable.
+    async fn fetch_supported_model_info(
+        &self,
+    ) -> Result<Vec<crate::base::ModelInfo>, ProviderError> {
+        if !self.rich_models {
+            let names = self.fetch_supported_models().await?;
+            return Ok(names
+                .iter()
+                .map(|n| crate::base::model_info_for_provider_model(&self.name, n))
+                .collect());
+        }
+        let json = self.fetch_models_json().await?;
+        let data = json.get("data").and_then(|v| v.as_array()).ok_or_else(|| {
+            ProviderError::RequestFailed("Missing 'data' array in models response".to_string())
+        })?;
+        let mut infos: Vec<crate::base::ModelInfo> = data
+            .iter()
+            .filter_map(|entry| {
+                let id = entry.get("id").and_then(|v| v.as_str())?;
+                let mut info = crate::base::model_info_for_provider_model(&self.name, id);
+                // API-reported context (context_length / context_window) is the
+                // source of truth; keep canonical caps otherwise.
+                if let Some(rich) = crate::openai::rich_model_to_info(entry) {
+                    info.context_limit = rich.context_limit;
+                    if rich.supports_vision.is_some() {
+                        info.supports_vision = rich.supports_vision;
+                    }
+                    if rich.supports_tools.is_some() {
+                        info.supports_tools = rich.supports_tools;
+                    }
+                }
+                Some(info)
+            })
+            .collect();
+        infos.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(infos)
     }
 
     async fn stream(

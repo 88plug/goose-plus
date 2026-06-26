@@ -817,6 +817,12 @@ impl Provider for XaiOAuthProvider {
         self.inner.fetch_supported_models().await
     }
 
+    async fn fetch_supported_model_info(
+        &self,
+    ) -> Result<Vec<goose_providers::base::ModelInfo>, ProviderError> {
+        self.inner.fetch_supported_model_info().await
+    }
+
     async fn configure_oauth(&self) -> Result<(), ProviderError> {
         // If a valid non-expired token already exists, skip re-auth.
         // Users frequently re-run `goose configure` just to switch models,
@@ -913,20 +919,21 @@ impl ProviderDef for XaiOAuthProvider {
                 api_client = api_client.with_header(&key, &value)?;
             }
 
-            // Apply authoritative xAI context windows (source of truth)
-            let mut model = model;
-            if let Some(ctx) = xai_context_window(&model.model_name) {
-                if model.context_limit.is_none() {
-                    model.context_limit = Some(ctx);
-                }
-            }
-
+            // Drive the catalog + context from the SuperGrok proxy's own
+            // /v1/models (context_window); fall back to the curated
+            // xai_context_window map only when the live listing is unavailable.
+            // The api_client already carries the x-grok-* headers the proxy
+            // requires for the /v1/models request.
+            let fallback = xai_context_window(&model.model_name);
             let inner = OpenAiCompatibleProvider::new(
                 XAI_OAUTH_PROVIDER_NAME.to_string(),
                 api_client,
                 model,
                 String::new(),
-            );
+            )
+            .with_rich_models(true)
+            .ensure_context_limit(fallback)
+            .await;
 
             Ok(Self {
                 inner,

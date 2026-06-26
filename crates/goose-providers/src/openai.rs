@@ -501,9 +501,10 @@ impl OpenAiProvider {
 
 /// Extract a model's context window from a `/v1/models` response body. Reads
 /// llama.cpp/Ollama's non-standard `meta.n_ctx`, and falls back to the standard
-/// top-level `context_length` (Nebius verbose schema and similar). Returns
-/// `None` when absent (e.g. real OpenAI's minimal listing).
-fn parse_n_ctx_from_models(json: &serde_json::Value, model_name: &str) -> Option<usize> {
+/// top-level `context_length` (Nebius verbose schema, xAI api.x.ai) or
+/// `context_window` (xAI Grok CLI proxy). Returns `None` when absent (e.g. real
+/// OpenAI's minimal listing).
+pub(crate) fn parse_n_ctx_from_models(json: &serde_json::Value, model_name: &str) -> Option<usize> {
     let data = json.get("data")?.as_array()?;
 
     let n_ctx = |entry: &serde_json::Value| -> Option<usize> {
@@ -512,7 +513,11 @@ fn parse_n_ctx_from_models(json: &serde_json::Value, model_name: &str) -> Option
             .and_then(|m| m.get("n_ctx"))
             .and_then(|v| v.as_u64());
         let from_ctx_len = entry.get("context_length").and_then(|v| v.as_u64());
-        from_meta.or(from_ctx_len).map(|v| v as usize)
+        let from_ctx_window = entry.get("context_window").and_then(|v| v.as_u64());
+        from_meta
+            .or(from_ctx_len)
+            .or(from_ctx_window)
+            .map(|v| v as usize)
     };
 
     if let Some(entry) = data
@@ -535,13 +540,16 @@ fn parse_n_ctx_from_models(json: &serde_json::Value, model_name: &str) -> Option
 const RICH_MODEL_FALLBACK_CONTEXT: usize = 8192;
 
 /// Map one entry of a verbose (`?verbose=true`) `/v1/models` response into a
-/// [`ModelInfo`]. Returns `None` for entries without an `id`.
-fn rich_model_to_info(entry: &serde_json::Value) -> Option<ModelInfo> {
+/// [`ModelInfo`]. Returns `None` for entries without an `id`. Reads
+/// `context_length` (Nebius/xAI api.x.ai) or `context_window` (xAI Grok CLI
+/// proxy) for the context limit.
+pub(crate) fn rich_model_to_info(entry: &serde_json::Value) -> Option<ModelInfo> {
     let name = entry.get("id").and_then(|v| v.as_str())?.to_string();
 
     let context_limit = entry
         .get("context_length")
         .and_then(|v| v.as_u64())
+        .or_else(|| entry.get("context_window").and_then(|v| v.as_u64()))
         .map(|v| v as usize)
         .unwrap_or(RICH_MODEL_FALLBACK_CONTEXT);
 
@@ -913,6 +921,25 @@ mod tests {
     fn parse_n_ctx_reads_context_length_fallback() {
         let json = json!({"data": [{"id": "m", "context_length": 262_144u64}]});
         assert_eq!(parse_n_ctx_from_models(&json, "m"), Some(262_144));
+    }
+
+    #[test]
+    fn parse_n_ctx_reads_context_window_grok_proxy() {
+        // xAI Grok CLI proxy reports `context_window`, not `context_length`.
+        let json = json!({"data": [{"id": "grok-build", "context_window": 512_000u64}]});
+        assert_eq!(parse_n_ctx_from_models(&json, "grok-build"), Some(512_000));
+    }
+
+    #[test]
+    fn rich_model_maps_grok_proxy_context_window() {
+        let entry = json!({
+            "id": "grok-build",
+            "name": "Grok Build",
+            "context_window": 512_000u64,
+            "api_backend": "responses"
+        });
+        let info = rich_model_to_info(&entry).expect("maps");
+        assert_eq!(info.context_limit, 512_000);
     }
 
     fn make_provider(name: &str) -> OpenAiProvider {
