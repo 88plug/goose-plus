@@ -15,8 +15,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
-    "ai": "^6.0.116",
+    "@ai-sdk/anthropic": "^4.0.0",
+    "ai": "^7.0.2",
     "consola": "^3.4.2",
     "dedent": "^1.7.2",
     "discord.js": "^14.25.1",

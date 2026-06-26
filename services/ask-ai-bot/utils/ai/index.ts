@@ -1,4 +1,4 @@
-import { stepCountIs, streamText } from "ai";
+import { isStepCount, streamText } from "ai";
 import type { Message, ThreadChannel } from "discord.js";
 import { model } from "../../clients/ai";
 import { logger } from "../logger";
@@ -48,13 +48,13 @@ export async function answerQuestion({
 
     const result = streamText({
       model,
-      system: systemPrompt,
+      instructions: systemPrompt,
       prompt,
       tools: aiTools,
-      stopWhen: stepCountIs(MAX_STEPS),
+      stopWhen: isStepCount(MAX_STEPS),
     });
 
-    for await (const event of result.fullStream) {
+    for await (const event of result.stream) {
       if (event.type === "tool-call") {
         if (statusMessage) {
           try {
