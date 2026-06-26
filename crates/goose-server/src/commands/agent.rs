@@ -21,6 +21,27 @@ fn boot_marker(message: &str) {
     eprintln!("GOOSED_BOOT: {message}");
 }
 
+fn is_truthy(raw: &str) -> bool {
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+/// Read an opt-in env flag tolerantly. The shared `get_param` coerces a raw
+/// `"1"` into a JSON number, so `get_param::<bool>` AND `get_param::<String>`
+/// both fail on the conventional `GOOSE_X=1` — silently disabling the feature.
+/// Read the env var raw so the usual truthy spellings work, falling back to a
+/// config-file bool when the var is unset.
+fn env_flag_enabled(key: &str) -> bool {
+    if let Ok(raw) = std::env::var(key.to_ascii_uppercase()) {
+        return is_truthy(&raw);
+    }
+    goose::config::Config::global()
+        .get_param::<bool>(key)
+        .unwrap_or(false)
+}
+
 #[cfg(unix)]
 async fn shutdown_signal() {
     use tokio::signal::unix::{signal, SignalKind};
@@ -95,9 +116,7 @@ pub async fn run() -> Result<()> {
     // A2A (Agent2Agent) server is opt-in via GOOSE_A2A_ENABLE and mounted
     // without the x-secret-key layer (remote agents authenticate per the Agent
     // Card scheme, not goose's internal secret).
-    let a2a_enabled = goose::config::Config::global()
-        .get_param::<bool>("GOOSE_A2A_ENABLE")
-        .unwrap_or(false);
+    let a2a_enabled = env_flag_enabled("GOOSE_A2A_ENABLE");
     let app = if a2a_enabled {
         let origin = goose::config::Config::global()
             .get_param::<String>("GOOSE_A2A_URL")
@@ -189,11 +208,7 @@ pub async fn run() -> Result<()> {
 /// `agent.reply` to completion and the concatenated assistant text is returned.
 fn spawn_nats_drive_loop(app_state: Arc<state::AppState>) {
     let cfg = goose::config::Config::global();
-    let drive_enabled = cfg
-        .get_param::<Option<bool>>("GOOSE_NATS_DRIVE")
-        .ok()
-        .flatten()
-        .unwrap_or(false);
+    let drive_enabled = env_flag_enabled("GOOSE_NATS_DRIVE");
     let nats_configured = cfg
         .get_param::<String>("GOOSE_NATS_URL")
         .map(|u| !u.trim().is_empty())
@@ -265,4 +280,23 @@ fn spawn_nats_drive_loop(app_state: Arc<state::AppState>) {
         })
         .await;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_truthy;
+
+    #[test]
+    fn truthy_accepts_conventional_spellings() {
+        for v in ["1", "true", "TRUE", " yes ", "on", "On"] {
+            assert!(is_truthy(v), "{v:?} should be truthy");
+        }
+    }
+
+    #[test]
+    fn truthy_rejects_falsey_and_garbage() {
+        for v in ["0", "false", "no", "off", "", "2", "enable"] {
+            assert!(!is_truthy(v), "{v:?} should not be truthy");
+        }
+    }
 }
