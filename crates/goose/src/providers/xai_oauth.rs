@@ -12,7 +12,9 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use goose_providers::errors::ProviderError;
 use goose_providers::model::ModelConfig;
-use goose_providers::xai::shared::{xai_base_url_for_model, xai_context_window};
+use goose_providers::xai::shared::{
+    xai_base_url_for_model, xai_context_window, xai_model_request_headers,
+};
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -107,6 +109,40 @@ fn get_cache_path() -> PathBuf {
     Paths::in_config_dir("xai_oauth/tokens.json")
 }
 
+/// Read the Grok CLI credential (`~/.grok/auth.json`) if present.
+///
+/// grok-cli stores `{ "<issuer>::<client_id>": { key, refresh_token,
+/// expires_at, ... } }`, where `key` is the access token. Translating it into a
+/// `TokenData` lets goose-plus reuse the exact session the user logged into with
+/// grok-cli — the SuperGrok subscription that has inference quota.
+fn load_grok_cli_token() -> Option<TokenData> {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    let path = PathBuf::from(home).join(".grok").join("auth.json");
+    let contents = std::fs::read_to_string(path).ok()?;
+    let root: serde_json::Value = serde_json::from_str(&contents).ok()?;
+    let entry = root
+        .as_object()?
+        .values()
+        .find(|v| v.get("key").is_some())?;
+    let access_token = entry.get("key")?.as_str()?.to_string();
+    let refresh_token = entry
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let expires_at = entry
+        .get("expires_at")
+        .and_then(|v| v.as_str())
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc))?;
+    Some(TokenData {
+        access_token,
+        refresh_token,
+        id_token: None,
+        expires_at,
+    })
+}
+
 impl TokenCache {
     pub(crate) fn new() -> Self {
         let cache_path = get_cache_path();
@@ -117,8 +153,19 @@ impl TokenCache {
     }
 
     fn load(&self) -> Option<TokenData> {
-        let contents = std::fs::read_to_string(&self.cache_path).ok()?;
-        serde_json::from_str(&contents).ok()
+        let own = std::fs::read_to_string(&self.cache_path)
+            .ok()
+            .and_then(|c| serde_json::from_str::<TokenData>(&c).ok());
+        // Share the Grok CLI's login: when the user has authenticated with
+        // grok-cli (~/.grok/auth.json), prefer whichever credential is fresher.
+        // goose-plus's own OAuth flow can land on a different xAI account than
+        // grok-cli, so following the CLI's session keeps the SuperGrok
+        // subscription that actually has quota.
+        match (own, load_grok_cli_token()) {
+            (Some(o), Some(g)) => Some(if g.expires_at > o.expires_at { g } else { o }),
+            (Some(o), None) => Some(o),
+            (None, g) => g,
+        }
     }
     pub(crate) fn has_token(&self) -> bool {
         self.load().is_some()
@@ -852,11 +899,19 @@ impl ProviderDef for XaiOAuthProvider {
 
             let auth_provider = Arc::new(XaiOAuthAuthProvider::new(XaiAuthState::instance()));
             let auth_for_client = Arc::clone(&auth_provider);
-            let api_client = ApiClient::new_with_tls(
+            let mut api_client = ApiClient::new_with_tls(
                 host,
                 AuthMethod::Custom(Box::new(SharedAuthProvider(auth_for_client))),
                 tls_config,
             )?;
+
+            // Grok CLI proxy models (grok-build, grok-composer-*) are served by
+            // cli-chat-proxy.grok.com, which rejects requests lacking the Grok CLI
+            // client headers with `426 Upgrade Required`. Attach them for those
+            // models; xai_model_request_headers returns empty for api.x.ai models.
+            for (key, value) in xai_model_request_headers(&model.model_name, None) {
+                api_client = api_client.with_header(&key, &value)?;
+            }
 
             // Apply authoritative xAI context windows (source of truth)
             let mut model = model;
