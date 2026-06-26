@@ -29,7 +29,7 @@
     "test-e2e:report": "playwright show-report",
     "test-e2e:single": "pnpm run generate-api && playwright test -g",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --fix --no-warn-ignored",
-    "lint:check": "pnpm run typecheck && eslint \"src/**/*.{ts,tsx}\" --max-warnings 0 --no-warn-ignored && pnpm run i18n:check",
+    "lint:check": "pnpm run typecheck && eslint \"src/**/*.{ts,tsx}\" --max-warnings 0 --no-warn-ignored && pnpm run format:check && pnpm run i18n:check",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "test": "vitest",

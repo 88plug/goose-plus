@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 description = "Rust SDK for Goose with optional uniffi bindings for Python/Kotlin"
 
+[lints]
+workspace = true
+
 [lib]
 name = "goose_sdk"
 crate-type = ["cdylib", "staticlib", "rlib"]
