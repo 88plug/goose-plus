@@ -26,7 +26,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use utoipa::ToSchema;
 
-static FIXED_PROVIDERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/providers/declarative");
+pub(crate) static FIXED_PROVIDERS: Dir =
+    include_dir!("$CARGO_MANIFEST_DIR/src/providers/declarative");
 
 pub fn custom_providers_dir() -> std::path::PathBuf {
     Paths::config_dir().join("custom_providers")
@@ -482,7 +483,7 @@ pub fn load_custom_providers(dir: &Path) -> Result<Vec<DeclarativeProviderConfig
         .collect()
 }
 
-fn deserialize_provider_config(content: &str) -> Result<DeclarativeProviderConfig> {
+pub(crate) fn deserialize_provider_config(content: &str) -> Result<DeclarativeProviderConfig> {
     let raw: serde_json::Value = serde_json::from_str(content)?;
     let preserves_thinking_was_set = raw.get("preserves_thinking").is_some();
     let mut config: DeclarativeProviderConfig = serde_json::from_value(raw)?;

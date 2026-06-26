@@ -624,6 +624,76 @@ mod tests {
         assert_eq!(free.len(), 4, "expected 4 free models");
     }
 
+    fn fixed_declarative_configs(
+    ) -> Vec<crate::config::declarative_providers::DeclarativeProviderConfig> {
+        use crate::config::declarative_providers::{deserialize_provider_config, FIXED_PROVIDERS};
+
+        FIXED_PROVIDERS
+            .files()
+            .filter(|file| file.path().extension().and_then(|s| s.to_str()) == Some("json"))
+            .map(|file| {
+                let path = file.path().to_path_buf();
+                let content = file
+                    .contents_utf8()
+                    .unwrap_or_else(|| panic!("{path:?} must be valid UTF-8"));
+                deserialize_provider_config(content).unwrap_or_else(|e| {
+                    panic!(
+                        "declarative provider {path:?} failed to deserialize: {e}. \
+                         A malformed bundled JSON is silently skipped by the loader, \
+                         removing the provider from every surface (CLI/TUI/ACP/desktop/server)."
+                    )
+                })
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_every_declarative_provider_is_registered() {
+        let configs = fixed_declarative_configs();
+        assert!(
+            !configs.is_empty(),
+            "expected bundled declarative providers to be present"
+        );
+
+        let registered: std::collections::HashSet<String> = providers()
+            .await
+            .into_iter()
+            .map(|(meta, _)| meta.name)
+            .collect();
+
+        let missing: Vec<&str> = configs
+            .iter()
+            .filter(|c| !registered.contains(&c.name))
+            .map(|c| c.name.as_str())
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "declarative providers present as JSON but missing from the registry \
+             (silent drift): {missing:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_declarative_inventory_matches_registry() {
+        let expected: std::collections::HashSet<String> = fixed_declarative_configs()
+            .into_iter()
+            .map(|c| c.name)
+            .collect();
+
+        let registered_declarative: std::collections::HashSet<String> = providers()
+            .await
+            .into_iter()
+            .filter(|(_, t)| *t == ProviderType::Declarative)
+            .map(|(meta, _)| meta.name)
+            .collect();
+
+        assert_eq!(
+            expected, registered_declarative,
+            "declarative JSON inventory and registered Declarative providers diverged"
+        );
+    }
+
     #[tokio::test]
     async fn test_models_dev_provider_registry_wiring() {
         let models_dev = get_from_registry("models_dev")
