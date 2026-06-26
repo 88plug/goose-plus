@@ -52,7 +52,7 @@ fn generate_serve_secret_key() -> String {
 }
 
 #[derive(Parser)]
-#[command(name = "goose", author, version, display_name = "", about, long_about = None)]
+#[command(name = "goose-plus", author, version, display_name = "", about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
