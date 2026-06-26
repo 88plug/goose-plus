@@ -2,43 +2,58 @@
   "name": "nebius",
   "engine": "openai",
   "display_name": "Nebius Token Factory",
-  "description": "Hosted open models via Nebius Token Factory OpenAI-compatible API with dynamic model discovery.",
+  "description": "Hosted open models via Nebius Token Factory OpenAI-compatible API with dynamic model discovery. Model list, context windows and capabilities are populated live from the API.",
   "api_key_env": "NEBIUS_API_KEY",
   "base_url": "https://api.tokenfactory.nebius.com/v1",
   "catalog_provider_id": "nebius",
   "dynamic_models": true,
+  "models_verbose": true,
   "models": [
+    {
+      "name": "deepseek-ai/DeepSeek-V4-Pro",
+      "context_limit": 1048576,
+      "reasoning": true,
+      "supports_tools": true
+    },
+    {
+      "name": "zai-org/GLM-5.2",
+      "context_limit": 432000,
+      "reasoning": true,
+      "supports_tools": true
+    },
+    {
+      "name": "moonshotai/Kimi-K2.6",
+      "context_limit": 262144,
+      "reasoning": true,
+      "supports_tools": true,
+      "supports_vision": true
+    },
     {
       "name": "Qwen/Qwen3.5-397B-A17B",
       "context_limit": 262144,
-      "reasoning": true
+      "reasoning": true,
+      "supports_tools": true
     },
     {
-      "name": "deepseek-ai/DeepSeek-V4-Pro",
-      "context_limit": 1000000,
-      "reasoning": true
+      "name": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "context_limit": 262144,
+      "supports_tools": true
     },
     {
-      "name": "moonshotai/Kimi-K2.5",
-      "context_limit": 256000,
-      "reasoning": true
+      "name": "openai/gpt-oss-120b",
+      "context_limit": 131072,
+      "reasoning": true,
+      "supports_tools": true
     },
     {
       "name": "meta-llama/Llama-3.3-70B-Instruct",
-      "context_limit": 128000
-    },
-    {
-      "name": "zai-org/GLM-5",
-      "context_limit": 200000,
-      "reasoning": true
-    },
-    {
-      "name": "Qwen/Qwen3-235B-A22B-Instruct",
-      "context_limit": 262144
+      "context_limit": 131072,
+      "supports_tools": true
     },
     {
       "name": "Qwen/Qwen2.5-VL-72B-Instruct",
-      "context_limit": 128000
+      "context_limit": 32000,
+      "supports_vision": true
     }
   ],
   "preserves_thinking": true,
