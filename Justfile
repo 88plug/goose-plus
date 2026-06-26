@@ -144,8 +144,8 @@ package-ui:
     @echo "Packaging desktop app..."
     cd ui/desktop && pnpm install && pnpm run package
     @echo "Signing with entitlements..."
-    codesign --force --deep --sign - --entitlements ui/desktop/entitlements.plist ui/desktop/out/Goose-darwin-arm64/Goose.app
-    @echo "Done! Launch with: open ui/desktop/out/Goose-darwin-arm64/Goose.app"
+    codesign --force --deep --sign - --entitlements ui/desktop/entitlements.plist ui/desktop/out/goose-plus-darwin-arm64/goose-plus.app
+    @echo "Done! Launch with: open ui/desktop/out/goose-plus-darwin-arm64/goose-plus.app"
 
 # Run UI with latest (Windows version)
 run-ui-windows:

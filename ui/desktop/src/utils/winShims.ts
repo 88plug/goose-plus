@@ -4,7 +4,7 @@ import os from 'node:os';
 import log from './logger';
 
 /**
- * Ensures Windows shims are available in %LOCALAPPDATA%\Goose Plus\bin
+ * Ensures Windows shims are available in %LOCALAPPDATA%\goose-plus\bin
  * This allows the bundled executables to be found via PATH regardless of where Goose is installed
  */
 export async function ensureWinShims(): Promise<void> {
@@ -13,7 +13,7 @@ export async function ensureWinShims(): Promise<void> {
   const srcDir = path.join(process.resourcesPath, 'bin'); // existing dir
   const tgtDir = path.join(
     process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'),
-    'Goose Plus',
+    'goose-plus',
     'bin'
   );
 

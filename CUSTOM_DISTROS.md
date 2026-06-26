@@ -277,7 +277,7 @@ You are an AI assistant called [YourName], created by [YourCompany].
 
    - Set build/release environment variables consistently:
      - `GITHUB_OWNER` and `GITHUB_REPO` for publisher + updater repository lookup
-     - `GOOSE_BUNDLE_NAME` for bundle/debug scripts and updater asset naming (defaults to `Goose`)
+     - `GOOSE_BUNDLE_NAME` for bundle/debug scripts and updater asset naming (defaults to `goose-plus`)
 
 Example:
 

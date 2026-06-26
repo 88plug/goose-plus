@@ -6,7 +6,7 @@ const isLinuxVulkanBuild = process.env.GOOSE_DESKTOP_LINUX_VARIANT === 'vulkan';
 
 let cfg = {
   asar: true,
-  name: 'Goose Plus',
+  name: 'goose-plus',
   appBundleId: 'com.88plug.goose-plus',
   extraResource: ['src/bin', 'src/images'],
   icon: 'src/images/icon',
@@ -89,8 +89,8 @@ module.exports = {
     {
       name: '@electron-forge/maker-deb',
       config: {
-        name: 'Goose Plus',
-        bin: 'Goose Plus',
+        name: 'goose-plus',
+        bin: 'goose-plus',
         maintainer: 'AAIF (Agentic AI Foundation)',
         homepage: 'https://goose-docs.ai/',
         categories: ['Development'],
@@ -105,8 +105,8 @@ module.exports = {
     {
       name: '@electron-forge/maker-rpm',
       config: {
-        name: 'Goose Plus',
-        bin: 'Goose Plus',
+        name: 'goose-plus',
+        bin: 'goose-plus',
         maintainer: 'AAIF (Agentic AI Foundation)',
         homepage: 'https://goose-docs.ai/',
         categories: ['Development'],
@@ -135,7 +135,7 @@ module.exports = {
           homepage: 'https://goose-docs.ai/',
           runtimeVersion: '25.08',
           baseVersion: '25.08',
-          bin: 'Goose Plus',
+          bin: 'goose-plus',
           modules: [
             {
               name: 'libbz2-shim',
@@ -168,8 +168,8 @@ module.exports = {
       config: {
         options: {
           name: 'goose-plus',
-          productName: 'Goose Plus',
-          bin: 'Goose Plus',
+          productName: 'goose-plus',
+          bin: 'goose-plus',
           categories: ['Development'],
           icon: 'src/images/icon.png',
         },

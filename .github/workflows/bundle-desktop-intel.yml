@@ -41,6 +41,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "12.0"
       HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
+      GOOSE_BUNDLE_NAME: "goose-plus"
     permissions:
       id-token: write
       contents: read
@@ -170,25 +171,29 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: Goose-darwin-x64
-          path: ui/desktop/out/Goose-darwin-x64/Goose_intel_mac.zip
+          path: ui/desktop/out/goose-plus-darwin-x64/goose-plus_intel_mac.zip
+          if-no-files-found: error
 
       - name: Quick launch test (macOS)
         if: ${{ inputs.quick_test }}
         run: |
+          BUNDLE_NAME="${GOOSE_BUNDLE_NAME:-goose-plus}"
+          APP_DIR="ui/desktop/out/${BUNDLE_NAME}-darwin-x64"
+          APP_BUNDLE="${APP_DIR}/${BUNDLE_NAME}.app"
           # Ensure no quarantine attributes (if needed)
-          xattr -cr "ui/desktop/out/Goose-darwin-x64/Goose.app"
-          echo "Opening Goose.app..."
-          open -g "ui/desktop/out/Goose-darwin-x64/Goose.app"
+          xattr -cr "${APP_BUNDLE}"
+          echo "Opening ${BUNDLE_NAME}.app..."
+          open -g "${APP_BUNDLE}"
 
           # Give the app a few seconds to start and write logs
           sleep 5
 
           # Check if it's running
-          if pgrep -f "Goose.app/Contents/MacOS/Goose" > /dev/null; then
+          if pgrep -f "${BUNDLE_NAME}.app/Contents/MacOS/${BUNDLE_NAME}" > /dev/null; then
             echo "App appears to be running."
           else
             echo "App did not stay open. Possible crash or startup error."
             exit 1
           fi
           # Kill the app to clean up
-          pkill -f "Goose.app/Contents/MacOS/Goose"
+          pkill -f "${BUNDLE_NAME}.app/Contents/MacOS/${BUNDLE_NAME}"

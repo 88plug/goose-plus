@@ -291,16 +291,6 @@ jobs:
           path: ui/desktop/out/make/rpm/x64/*.rpm
           if-no-files-found: error
 
-      - name: Upload .rpm package (Vulkan)
-        if: matrix.variant == 'vulkan'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: Goose-linux-x64-vulkan-rpm
-          # vulkan builds on 24.04 (for glslc) which can't make rpm; the standard
-          # leg provides the .rpm. So no vulkan rpm is expected — warn, don't fail.
-          path: ui/desktop/out/make/rpm/x64/*-vulkan.rpm
-          if-no-files-found: warn
-
       - name: Upload .AppImage package
         if: matrix.variant == 'standard'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -315,7 +305,7 @@ jobs:
         with:
           name: Goose-linux-x64-vulkan-AppImage
           path: ui/desktop/out/make/AppImage/x64/*-vulkan.AppImage
-          if-no-files-found: warn
+          if-no-files-found: ignore
 
       - name: Upload .flatpak package
         if: matrix.variant == 'standard'
@@ -323,7 +313,7 @@ jobs:
         with:
           name: Goose-linux-x64-flatpak
           path: ui/desktop/out/make/flatpak/x86_64/*.flatpak
-          if-no-files-found: warn
+          if-no-files-found: ignore
 
       - name: Upload .flatpak package (Vulkan)
         if: matrix.variant == 'vulkan'
@@ -331,4 +321,4 @@ jobs:
         with:
           name: Goose-linux-x64-vulkan-flatpak
           path: ui/desktop/out/make/flatpak/x86_64/*-vulkan.flatpak
-          if-no-files-found: warn
+          if-no-files-found: ignore

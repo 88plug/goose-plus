@@ -63,14 +63,15 @@ function yamlString(value) {
 }
 
 function writeManifest({ directory, version }) {
+  const bundleName = process.env.GOOSE_BUNDLE_NAME || 'goose-plus';
   const files = [
     {
-      sourceName: 'Goose.zip',
-      updateName: 'Goose-darwin-arm64.zip',
+      sourceName: `${bundleName}.zip`,
+      updateName: `${bundleName}-darwin-arm64.zip`,
     },
     {
-      sourceName: 'Goose_intel_mac.zip',
-      updateName: 'Goose-darwin-x64.zip',
+      sourceName: `${bundleName}_intel_mac.zip`,
+      updateName: `${bundleName}-darwin-x64.zip`,
     },
   ];
 

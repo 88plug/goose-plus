@@ -774,7 +774,7 @@ function updateTrayIcon(hasUpdate: boolean) {
     } else {
       iconPath = path.join(process.resourcesPath, 'images', 'iconTemplate.png');
     }
-    trayRef.setToolTip('Goose Plus');
+    trayRef.setToolTip('goose-plus');
   }
 
   const icon = nativeImage.createFromPath(iconPath);

@@ -233,6 +233,7 @@ jobs:
             goose-*.tar.gz
             goose-*.zip
             Goose*.zip
+            goose-plus*.zip
             *.deb
             *.rpm
             *.AppImage
@@ -249,6 +250,7 @@ jobs:
             goose-*.tar.gz
             goose-*.zip
             Goose*.zip
+            goose-plus*.zip
             *.deb
             *.rpm
             *.AppImage
@@ -277,6 +279,7 @@ jobs:
             goose-*.tar.gz
             goose-*.zip
             Goose*.zip
+            goose-plus*.zip
             *.deb
             *.rpm
             *.AppImage
