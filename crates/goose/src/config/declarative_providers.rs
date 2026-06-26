@@ -97,6 +97,11 @@ pub struct DeclarativeProviderConfig {
     /// - `Some(true)` or `None`: try the API; fall back to `models` on 404.
     #[serde(default)]
     pub dynamic_models: Option<bool>,
+    /// When true, the openai engine fetches `/v1/models?verbose=true` and
+    /// populates each model's context, capabilities and pricing from the
+    /// provider's rich schema instead of the static `models` list.
+    #[serde(default)]
+    pub models_verbose: bool,
     #[serde(default)]
     pub skip_canonical_filtering: bool,
     #[serde(default, deserialize_with = "deserialize_non_empty_string")]
@@ -319,6 +324,7 @@ pub fn create_custom_provider(
         base_path: params.base_path,
         env_vars: None,
         dynamic_models: None,
+        models_verbose: false,
         skip_canonical_filtering: false,
         model_doc_link: None,
         setup_steps: vec![],
@@ -399,6 +405,7 @@ pub fn update_custom_provider(params: UpdateCustomProviderParams) -> Result<()> 
             base_path: params.base_path,
             env_vars: existing_config.env_vars,
             dynamic_models: existing_config.dynamic_models,
+            models_verbose: false,
             skip_canonical_filtering: existing_config.skip_canonical_filtering,
             model_doc_link: existing_config.model_doc_link,
             setup_steps: existing_config.setup_steps,
@@ -708,6 +715,8 @@ mod tests {
                 currency: None,
                 supports_cache_control: None,
                 reasoning: false,
+                supports_tools: None,
+                supports_vision: None,
             }],
             headers: None,
             timeout_seconds: None,
@@ -717,6 +726,7 @@ mod tests {
             base_path: None,
             env_vars: None,
             dynamic_models: Some(false),
+            models_verbose: false,
             skip_canonical_filtering: false,
             model_doc_link: None,
             setup_steps: Vec::new(),

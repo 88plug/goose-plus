@@ -124,6 +124,8 @@ impl ModelsDevProvider {
                     currency: Some("$".to_string()),
                     supports_cache_control: None,
                     reasoning: model.reasoning.unwrap_or(false),
+                    supports_tools: None,
+                    supports_vision: None,
                 });
             }
         }

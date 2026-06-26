@@ -259,6 +259,8 @@ impl ProviderRegistry {
                 currency: m.currency.clone(),
                 supports_cache_control: Some(m.supports_cache_control.unwrap_or(false)),
                 reasoning: m.reasoning,
+                supports_tools: m.supports_tools,
+                supports_vision: m.supports_vision,
             })
             .collect();
 
@@ -409,6 +411,7 @@ mod tests {
             base_path: None,
             env_vars: None,
             dynamic_models: None,
+            models_verbose: false,
             skip_canonical_filtering: false,
             model_doc_link: None,
             setup_steps: vec![],

@@ -423,6 +423,7 @@ mod tests {
             base_path: None,
             env_vars: None,
             dynamic_models,
+            models_verbose: false,
             skip_canonical_filtering: false,
             model_doc_link: None,
             setup_steps: vec![],

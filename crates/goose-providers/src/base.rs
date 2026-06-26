@@ -226,6 +226,12 @@ pub struct ModelInfo {
     /// Whether this model supports reasoning/thinking controls
     #[serde(default)]
     pub reasoning: bool,
+    /// Whether this model supports tool/function calling (None = unknown)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_tools: Option<bool>,
+    /// Whether this model accepts image input / vision (None = unknown)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_vision: Option<bool>,
 }
 
 impl ModelInfo {
@@ -240,6 +246,8 @@ impl ModelInfo {
             currency: None,
             supports_cache_control: None,
             reasoning: false,
+            supports_tools: None,
+            supports_vision: None,
         }
     }
 
@@ -259,6 +267,8 @@ impl ModelInfo {
             currency: Some("$".to_string()),
             supports_cache_control: None,
             reasoning: false,
+            supports_tools: None,
+            supports_vision: None,
         }
     }
 }
@@ -304,6 +314,8 @@ pub fn model_info_for_provider_model(provider_name: &str, model_name: &str) -> M
         currency: None,
         supports_cache_control: None,
         reasoning,
+        supports_tools: None,
+        supports_vision: None,
     }
 }
 
@@ -712,6 +724,8 @@ mod tests {
             currency: None,
             supports_cache_control: None,
             reasoning: false,
+            supports_tools: None,
+            supports_vision: None,
         };
         assert_eq!(info.context_limit, 1000);
 
@@ -725,6 +739,8 @@ mod tests {
             currency: None,
             supports_cache_control: None,
             reasoning: false,
+            supports_tools: None,
+            supports_vision: None,
         };
         assert_eq!(info, info2);
 
@@ -738,6 +754,8 @@ mod tests {
             currency: None,
             supports_cache_control: None,
             reasoning: false,
+            supports_tools: None,
+            supports_vision: None,
         };
         assert_ne!(info, info3);
     }

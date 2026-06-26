@@ -1,5 +1,7 @@
 use super::api_client::ApiClient;
-use super::base::{ConfigKey, ModelInfo, Provider, ProviderMetadata};
+use super::base::{
+    model_info_for_provider_model, ConfigKey, ModelInfo, Provider, ProviderMetadata,
+};
 use super::retry::ProviderRetry;
 use crate::conversation::message::Message;
 use crate::conversation::token_usage::ProviderUsage;
@@ -131,6 +133,10 @@ pub struct OpenAiProvider {
     name: String,
     custom_models: Option<Vec<String>>,
     dynamic_models: Option<bool>,
+    /// When true, fetch `/v1/models?verbose=true` and map the RichModel schema
+    /// (context_length, supported_features, modality, pricing) into model
+    /// metadata. Off by default so OpenAI and other engines are unaffected.
+    models_verbose: bool,
     skip_canonical_filtering: bool,
     preserve_thinking_context: bool,
 }
@@ -151,6 +157,10 @@ pub struct OpenAiProviderBuilder {
     name: String,
     custom_models: Option<Vec<String>>,
     dynamic_models: Option<bool>,
+    /// When true, fetch `/v1/models?verbose=true` and map the RichModel schema
+    /// (context_length, supported_features, modality, pricing) into model
+    /// metadata. Off by default so OpenAI and other engines are unaffected.
+    models_verbose: bool,
     skip_canonical_filtering: bool,
     preserve_thinking_context: bool,
 }
@@ -168,6 +178,7 @@ impl OpenAiProviderBuilder {
             name: OPEN_AI_PROVIDER_NAME.to_string(),
             custom_models: None,
             dynamic_models: None,
+            models_verbose: false,
             skip_canonical_filtering: false,
             preserve_thinking_context: false,
         }
@@ -223,6 +234,11 @@ impl OpenAiProviderBuilder {
         self
     }
 
+    pub fn models_verbose(mut self, models_verbose: bool) -> Self {
+        self.models_verbose = models_verbose;
+        self
+    }
+
     pub fn skip_canonical_filtering(mut self, skip_canonical_filtering: bool) -> Self {
         self.skip_canonical_filtering = skip_canonical_filtering;
         self
@@ -245,6 +261,7 @@ impl OpenAiProviderBuilder {
             name: self.name,
             custom_models: self.custom_models,
             dynamic_models: self.dynamic_models,
+            models_verbose: self.models_verbose,
             skip_canonical_filtering: self.skip_canonical_filtering,
             preserve_thinking_context: self.preserve_thinking_context,
         }
@@ -265,6 +282,7 @@ impl OpenAiProvider {
             name: OPEN_AI_PROVIDER_NAME.to_string(),
             custom_models: None,
             dynamic_models: None,
+            models_verbose: false,
             skip_canonical_filtering: false,
             preserve_thinking_context: false,
         }
@@ -416,9 +434,14 @@ impl OpenAiProvider {
         }
     }
 
-    async fn fetch_models_from_api(&self) -> Result<Vec<String>, ProviderError> {
-        let models_path =
+    /// Fetch and validate the `/v1/models` JSON body, appending `?verbose=true`
+    /// when the provider opts into the rich model schema.
+    async fn fetch_models_json(&self) -> Result<serde_json::Value, ProviderError> {
+        let mut models_path =
             Self::map_base_path(&self.base_path, "models", OPEN_AI_DEFAULT_MODELS_PATH);
+        if self.models_verbose {
+            models_path.push_str("?verbose=true");
+        }
         let response = self
             .api_client
             .request(None, &models_path)
@@ -438,7 +461,11 @@ impl OpenAiProvider {
                 .unwrap_or("unknown error");
             return Err(ProviderError::Authentication(msg.to_string()));
         }
+        Ok(json)
+    }
 
+    async fn fetch_models_from_api(&self) -> Result<Vec<String>, ProviderError> {
+        let json = self.fetch_models_json().await?;
         let data = json.get("data").and_then(|v| v.as_array()).ok_or_else(|| {
             ProviderError::UsageError("Missing data field in JSON response".into())
         })?;
@@ -450,33 +477,42 @@ impl OpenAiProvider {
         Ok(models)
     }
 
+    /// Build full [`ModelInfo`] from a verbose (`?verbose=true`) models response,
+    /// mapping the RichModel schema: `context_length`, `supported_features`
+    /// (tools / reasoning), `architecture.modality` (vision), and `pricing`.
+    async fn fetch_rich_model_info(&self) -> Result<Vec<ModelInfo>, ProviderError> {
+        let json = self.fetch_models_json().await?;
+        let data = json.get("data").and_then(|v| v.as_array()).ok_or_else(|| {
+            ProviderError::UsageError("Missing data field in JSON response".into())
+        })?;
+        let mut models: Vec<ModelInfo> = data.iter().filter_map(rich_model_to_info).collect();
+        models.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(models)
+    }
+
     /// llama.cpp and Ollama expose the actual allocated context window in the
     /// non-standard `meta.n_ctx` field of `/v1/models`. Returns `None` when absent
     /// (e.g. real OpenAI).
     async fn fetch_n_ctx_from_api(&self, model_name: &str) -> Option<usize> {
-        let models_path =
-            Self::map_base_path(&self.base_path, "models", OPEN_AI_DEFAULT_MODELS_PATH);
-        let response = self
-            .api_client
-            .request(None, &models_path)
-            .response_get()
-            .await
-            .ok()?;
-        let json = handle_response_openai_compat(response).await.ok()?;
+        let json = self.fetch_models_json().await.ok()?;
         parse_n_ctx_from_models(&json, model_name)
     }
 }
 
-/// Extract `meta.n_ctx` for `model_name` from a `/v1/models` response body.
+/// Extract a model's context window from a `/v1/models` response body. Reads
+/// llama.cpp/Ollama's non-standard `meta.n_ctx`, and falls back to the standard
+/// top-level `context_length` (Nebius verbose schema and similar). Returns
+/// `None` when absent (e.g. real OpenAI's minimal listing).
 fn parse_n_ctx_from_models(json: &serde_json::Value, model_name: &str) -> Option<usize> {
     let data = json.get("data")?.as_array()?;
 
     let n_ctx = |entry: &serde_json::Value| -> Option<usize> {
-        entry
-            .get("meta")?
-            .get("n_ctx")?
-            .as_u64()
-            .map(|v| v as usize)
+        let from_meta = entry
+            .get("meta")
+            .and_then(|m| m.get("n_ctx"))
+            .and_then(|v| v.as_u64());
+        let from_ctx_len = entry.get("context_length").and_then(|v| v.as_u64());
+        from_meta.or(from_ctx_len).map(|v| v as usize)
     };
 
     if let Some(entry) = data
@@ -493,6 +529,66 @@ fn parse_n_ctx_from_models(json: &serde_json::Value, model_name: &str) -> Option
         [only] => n_ctx(only),
         _ => None,
     }
+}
+
+/// Default context window when a verbose entry omits `context_length`.
+const RICH_MODEL_FALLBACK_CONTEXT: usize = 8192;
+
+/// Map one entry of a verbose (`?verbose=true`) `/v1/models` response into a
+/// [`ModelInfo`]. Returns `None` for entries without an `id`.
+fn rich_model_to_info(entry: &serde_json::Value) -> Option<ModelInfo> {
+    let name = entry.get("id").and_then(|v| v.as_str())?.to_string();
+
+    let context_limit = entry
+        .get("context_length")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize)
+        .unwrap_or(RICH_MODEL_FALLBACK_CONTEXT);
+
+    let features: Vec<&str> = entry
+        .get("supported_features")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|f| f.as_str()).collect())
+        .unwrap_or_default();
+    let has = |f: &str| features.contains(&f);
+
+    let modality = entry
+        .get("architecture")
+        .and_then(|a| a.get("modality"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    // e.g. "text+image->text"; the input side is before "->".
+    let input_modality = modality.split("->").next().unwrap_or(modality);
+    let supports_vision = input_modality.contains("image");
+
+    let price = |field: &str| -> Option<f64> {
+        entry
+            .get("pricing")
+            .and_then(|p| p.get(field))
+            .and_then(|v| {
+                v.as_str()
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .or_else(|| v.as_f64())
+            })
+            .filter(|c| *c > 0.0)
+    };
+    let input_token_cost = price("prompt");
+    let output_token_cost = price("completion");
+    let currency =
+        (input_token_cost.is_some() || output_token_cost.is_some()).then(|| "$".to_string());
+
+    Some(ModelInfo {
+        name,
+        resolved_model: None,
+        context_limit,
+        input_token_cost,
+        output_token_cost,
+        currency,
+        supports_cache_control: None,
+        reasoning: has("reasoning"),
+        supports_tools: Some(has("tools")),
+        supports_vision: Some(supports_vision),
+    })
 }
 
 impl ProviderDescriptor for OpenAiProvider {
@@ -574,6 +670,28 @@ impl Provider for OpenAiProvider {
         }
 
         self.fetch_models_from_api().await
+    }
+
+    async fn fetch_supported_model_info(&self) -> Result<Vec<ModelInfo>, ProviderError> {
+        // Verbose providers (e.g. Nebius Token Factory) self-report context,
+        // capabilities and pricing — use them as the source of truth. Fall back
+        // to the canonical-registry mapping if the rich list is empty/unavailable.
+        if self.models_verbose
+            && !(self.custom_models.is_some() && self.dynamic_models == Some(false))
+        {
+            match self.fetch_rich_model_info().await {
+                Ok(models) if !models.is_empty() => return Ok(models),
+                Ok(_) => {}
+                Err(e) if e.is_endpoint_not_found() => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(self
+            .fetch_supported_models()
+            .await?
+            .iter()
+            .map(|name| model_info_for_provider_model(self.get_name(), name))
+            .collect())
     }
 
     async fn stream(
@@ -749,6 +867,54 @@ mod tests {
     use crate::api_client::AuthMethod;
     use serde_json::json;
 
+    #[test]
+    fn rich_model_maps_context_capabilities_and_pricing() {
+        // Captured shape from Nebius `/v1/models?verbose=true`.
+        let entry = json!({
+            "id": "deepseek-ai/DeepSeek-V4-Pro",
+            "context_length": 1_048_576u64,
+            "architecture": { "modality": "text->text" },
+            "supported_features": ["tools", "json_mode", "structured_outputs", "reasoning"],
+            "pricing": { "prompt": "0.00000013", "completion": "0.0000004" }
+        });
+        let info = rich_model_to_info(&entry).expect("maps");
+        assert_eq!(info.name, "deepseek-ai/DeepSeek-V4-Pro");
+        assert_eq!(info.context_limit, 1_048_576);
+        assert!(info.reasoning);
+        assert_eq!(info.supports_tools, Some(true));
+        assert_eq!(info.supports_vision, Some(false));
+        assert_eq!(info.input_token_cost, Some(0.00000013));
+        assert_eq!(info.output_token_cost, Some(0.0000004));
+    }
+
+    #[test]
+    fn rich_model_detects_vision_and_missing_context() {
+        let entry = json!({
+            "id": "Qwen/Qwen2.5-VL-72B-Instruct",
+            "context_length": 32_000u64,
+            "architecture": { "modality": "text+image->text" },
+            "supported_features": []
+        });
+        let info = rich_model_to_info(&entry).expect("maps");
+        assert_eq!(info.context_limit, 32_000);
+        assert_eq!(info.supports_vision, Some(true));
+        assert_eq!(info.supports_tools, Some(false));
+        assert!(!info.reasoning);
+        assert!(info.input_token_cost.is_none());
+
+        // No id => skipped.
+        assert!(rich_model_to_info(&json!({"context_length": 1u64})).is_none());
+        // Missing context => fallback.
+        let fb = rich_model_to_info(&json!({"id": "x"})).expect("maps");
+        assert_eq!(fb.context_limit, RICH_MODEL_FALLBACK_CONTEXT);
+    }
+
+    #[test]
+    fn parse_n_ctx_reads_context_length_fallback() {
+        let json = json!({"data": [{"id": "m", "context_length": 262_144u64}]});
+        assert_eq!(parse_n_ctx_from_models(&json, "m"), Some(262_144));
+    }
+
     fn make_provider(name: &str) -> OpenAiProvider {
         OpenAiProvider {
             api_client: ApiClient::new_with_tls(
@@ -766,6 +932,7 @@ mod tests {
             name: name.to_string(),
             custom_models: None,
             dynamic_models: None,
+            models_verbose: false,
             skip_canonical_filtering: false,
             preserve_thinking_context: false,
         }

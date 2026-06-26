@@ -4576,6 +4576,10 @@
               "$ref": "#/components/schemas/ModelInfo"
             }
           },
+          "models_verbose": {
+            "type": "boolean",
+            "description": "When true, the openai engine fetches `/v1/models?verbose=true` and\npopulates each model's context, capabilities and pricing from the\nprovider's rich schema instead of the static `models` list."
+          },
           "name": {
             "type": "string"
           },
@@ -6547,6 +6551,16 @@
           "supports_cache_control": {
             "type": "boolean",
             "description": "Whether this model supports cache control",
+            "nullable": true
+          },
+          "supports_tools": {
+            "type": "boolean",
+            "description": "Whether this model supports tool/function calling (None = unknown)",
+            "nullable": true
+          },
+          "supports_vision": {
+            "type": "boolean",
+            "description": "Whether this model accepts image input / vision (None = unknown)",
             "nullable": true
           }
         }

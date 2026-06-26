@@ -531,6 +531,8 @@ impl DatabricksProvider {
             currency: None,
             supports_cache_control: None,
             reasoning,
+            supports_tools: None,
+            supports_vision: None,
         }
     }
 

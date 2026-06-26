@@ -320,6 +320,7 @@ pub fn from_custom_config(
         .name(config.name.clone())
         .custom_models(custom_models)
         .dynamic_models(config.dynamic_models)
+        .models_verbose(config.models_verbose)
         .skip_canonical_filtering(config.skip_canonical_filtering)
         .preserve_thinking_context(config.preserves_thinking)
         .build())

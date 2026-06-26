@@ -226,6 +226,12 @@ export type DeclarativeProviderConfig = {
     } | null;
     model_doc_link?: string | null;
     models: Array<ModelInfo>;
+    /**
+     * When true, the openai engine fetches `/v1/models?verbose=true` and
+     * populates each model's context, capabilities and pricing from the
+     * provider's rich schema instead of the static `models` list.
+     */
+    models_verbose?: boolean;
     name: string;
     preserves_thinking?: boolean;
     requires_auth?: boolean;
@@ -868,6 +874,14 @@ export type ModelInfo = {
      * Whether this model supports cache control
      */
     supports_cache_control?: boolean | null;
+    /**
+     * Whether this model supports tool/function calling (None = unknown)
+     */
+    supports_tools?: boolean | null;
+    /**
+     * Whether this model accepts image input / vision (None = unknown)
+     */
+    supports_vision?: boolean | null;
 };
 
 export type ModelInfoData = {
