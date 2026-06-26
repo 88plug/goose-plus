@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="${GOOSE_GITHUB_REPO:-aaif-goose/goose}"
+REPO="${GOOSE_GITHUB_REPO:-88plug/goose-plus}"
+BUNDLE_NAME="${GOOSE_BUNDLE_NAME:-goose-plus}"
 DEST="$HOME/Downloads"
 TMPDIR=$(mktemp -d)
 PLIST=$(mktemp /tmp/entitlements.XXXXXX)
@@ -68,7 +69,7 @@ if [[ -z "$APP" ]]; then
     exit 1
 fi
 
-APP_NAME="Goose ${VERSION}.app"
+APP_NAME="${BUNDLE_NAME} ${VERSION}.app"
 rm -rf "$DEST/$APP_NAME"
 cp -R "$APP" "$DEST/$APP_NAME"
 APP_PATH="$DEST/$APP_NAME"

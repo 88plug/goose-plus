@@ -28,11 +28,10 @@ echo $dir
 
 # On macOS, use the .app bundle
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    # Assuming Goose.app is installed in /Applications
-    if [ -d "/Applications/Goose.app" ]; then
-        /Applications/Goose.app/Contents/MacOS/Goose --args --dir "$dir"
+    if [ -d "/Applications/goose-plus.app" ]; then
+        /Applications/goose-plus.app/Contents/MacOS/goose-plus --args --dir "$dir"
     else
-        echo "Error: Goose.app not found in /Applications"
+        echo "Error: goose-plus.app not found in /Applications"
         exit 1
     fi
 else

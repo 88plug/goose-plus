@@ -45,6 +45,8 @@ jobs:
   build-desktop-windows:
     name: Build Desktop (Windows)
     runs-on: ${{ inputs.windows_variant == 'cuda' && 'windows-2022' || 'windows-latest' }}
+    env:
+      GOOSE_BUNDLE_NAME: "goose-plus"
 
     steps:
       - name: Checkout repository
@@ -184,11 +186,13 @@ jobs:
         shell: bash
         run: |
           cd ui/desktop
-          mkdir -p ./out/Goose-win32-x64/resources/bin
-          cp -r src/bin/* out/Goose-win32-x64/resources/bin/
+          BUNDLE_NAME="${GOOSE_BUNDLE_NAME:-goose-plus}"
+          OUT_DIR="./out/${BUNDLE_NAME}-win32-x64"
+          mkdir -p "${OUT_DIR}/resources/bin"
+          cp -r src/bin/* "${OUT_DIR}/resources/bin/"
 
           mkdir -p ./dist-windows
-          cp -r ./out/Goose-win32-x64/* ./dist-windows/
+          cp -r "${OUT_DIR}"/* ./dist-windows/
 
           echo "📋 Final flat distribution structure:"
           ls -la ./dist-windows/
@@ -207,6 +211,8 @@ jobs:
     if: inputs.signing
     runs-on: windows-latest
     environment: ${{ inputs.signing && 'signing' || null }}
+    env:
+      GOOSE_BUNDLE_NAME: "goose-plus"
 
     steps:
       - name: Download unsigned distribution
@@ -229,14 +235,14 @@ jobs:
           trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
           files: |
-            ${{ github.workspace }}/dist-windows/Goose.exe
+            ${{ github.workspace }}/dist-windows/goose-plus.exe
             ${{ github.workspace }}/dist-windows/resources/bin/goosed.exe
 
       - name: Verify signed executables
         shell: pwsh
         run: |
           $files = @(
-            "dist-windows/Goose.exe",
+            "dist-windows/goose-plus.exe",
             "dist-windows/resources/bin/goosed.exe"
           )
           foreach ($file in $files) {
@@ -249,7 +255,8 @@ jobs:
       - name: Create Windows zip package
         shell: bash
         run: |
-          ZIP_NAME="Goose-win32-x64"
+          BUNDLE_NAME="${GOOSE_BUNDLE_NAME:-goose-plus}"
+          ZIP_NAME="${BUNDLE_NAME}-win32-x64"
           if [ "${{ inputs.windows_variant }}" = "cuda" ]; then
             ZIP_NAME="${ZIP_NAME}-cuda"
           fi
@@ -258,8 +265,8 @@ jobs:
       - name: Upload signed Windows build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: Goose-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}
-          path: Goose-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}.zip
+          name: goose-plus-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}
+          path: goose-plus-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}.zip
 
   # When signing is disabled, package the unsigned build directly
   package-desktop-windows:
@@ -267,6 +274,8 @@ jobs:
     needs: build-desktop-windows
     if: ${{ !inputs.signing }}
     runs-on: windows-latest
+    env:
+      GOOSE_BUNDLE_NAME: "goose-plus"
 
     steps:
       - name: Download unsigned distribution
@@ -278,7 +287,8 @@ jobs:
       - name: Create Windows zip package
         shell: bash
         run: |
-          ZIP_NAME="Goose-win32-x64"
+          BUNDLE_NAME="${GOOSE_BUNDLE_NAME:-goose-plus}"
+          ZIP_NAME="${BUNDLE_NAME}-win32-x64"
           if [ "${{ inputs.windows_variant }}" = "cuda" ]; then
             ZIP_NAME="${ZIP_NAME}-cuda"
           fi
@@ -287,5 +297,5 @@ jobs:
       - name: Upload Windows build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: Goose-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}
-          path: Goose-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}.zip
+          name: goose-plus-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}
+          path: goose-plus-win32-x64${{ inputs.windows_variant == 'cuda' && '-cuda' || '' }}.zip

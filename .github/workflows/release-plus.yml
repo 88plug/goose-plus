@@ -61,6 +61,12 @@ jobs:
           cache-on-failure: true
       - run: cargo check -p goose-cli --no-default-features --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls --all-targets
       - run: cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
+      - name: Vulkan CLI preflight (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev libvulkan1
+          cargo check -p goose-cli --features vulkan
 
   build-cli:
     needs: [preflight]

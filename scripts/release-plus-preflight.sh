@@ -37,9 +37,28 @@ for wf in .github/workflows/bundle-desktop.yml .github/workflows/bundle-desktop-
   fi
 done
 
+if grep -qE 'out/Goose-win32|Goose\.exe|Goose-win32' .github/workflows/bundle-desktop-windows.yml; then
+  error "bundle-desktop-windows.yml still references legacy Goose Windows paths"
+fi
+if ! grep -q 'GOOSE_BUNDLE_NAME: "goose-plus"' .github/workflows/bundle-desktop-windows.yml; then
+  error "bundle-desktop-windows.yml missing GOOSE_BUNDLE_NAME env"
+fi
+
+# --- PR comment / release-branch install instructions ---
+for wf in .github/workflows/pr-comment-bundle.yml .github/workflows/pr-comment-bundle-intel.yml \
+  .github/workflows/release-branches.yml; do
+  if grep -q 'Goose\.app' "$wf"; then
+    error "$wf still references Goose.app in install instructions"
+  fi
+done
+
 # --- Runtime updater defaults baked in at Vite build time ---
 if grep -qE "GOOSE_BUNDLE_NAME.*'Goose'|GITHUB_OWNER.*aaif-goose|GITHUB_REPO.*'goose'" ui/desktop/vite.main.config.mts; then
   error "vite.main.config.mts still has upstream Goose defaults"
+fi
+
+if grep -qE "GITHUB_OWNER.*aaif-goose|GITHUB_REPO.*'goose'" ui/desktop/forge.config.ts; then
+  error "forge.config.ts publisher still has upstream Goose defaults"
 fi
 
 if grep -q 'Goose\.app' ui/desktop/src/utils/autoUpdater.ts; then
@@ -58,6 +77,9 @@ done < <(grep -l 'flatpak' .github/workflows/bundle-desktop-linux.yml)
 if ! grep -q 'goose-plus\*\.zip' .github/workflows/release-plus.yml; then
   error "release-plus.yml missing goose-plus*.zip artifact glob"
 fi
+if ! grep -q 'cargo check -p goose-cli --features vulkan' .github/workflows/release-plus.yml; then
+  error "release-plus.yml preflight missing Vulkan CLI check"
+fi
 
 # --- Rust preflight (same feature surface as CI, minus local-inference) ---
 echo "== Cargo preflight (CI-equivalent) =="
@@ -66,6 +88,9 @@ cargo check -p goose-cli --no-default-features \
   --features code-mode,tui,update,aws-providers,telemetry,nostr,otel,system-keyring,rustls-tls \
   --all-targets
 cargo check -p goose-server --no-default-features --features rustls-tls --all-targets
+
+echo "== Vulkan CLI check =="
+cargo check -p goose-cli --features vulkan
 
 echo "== Nebius provider tests =="
 cargo test -p goose nebius -- --nocapture
