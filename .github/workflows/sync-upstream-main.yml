@@ -29,12 +29,12 @@ jobs:
       - name: Fast-forward main from upstream
         run: |
           set -euo pipefail
-          git fetch https://github.com/aaif-goose/goose.git main
+          git fetch --depth=1 https://github.com/aaif-goose/goose.git main
           UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
-          LOCAL_SHA="$(git rev-parse main)"
+          LOCAL_SHA="$(git rev-parse HEAD)"
           if [ "$UPSTREAM_SHA" = "$LOCAL_SHA" ]; then
             echo "main already matches upstream ($UPSTREAM_SHA)"
             exit 0
           fi
           git reset --hard "$UPSTREAM_SHA"
-          git push origin main
+          git push origin HEAD:main
