@@ -135,7 +135,9 @@ type ConfigUpsert = (key: string, value: unknown, isSecret: boolean) => Promise<
 export async function readFavoriteModels(read: ConfigRead): Promise<string[]> {
   try {
     const value = await read(FAVORITE_MODELS_CONFIG_KEY, false);
-    return Array.isArray(value) ? (value as unknown[]).filter((v): v is string => typeof v === 'string') : [];
+    return Array.isArray(value)
+      ? (value as unknown[]).filter((v): v is string => typeof v === 'string')
+      : [];
   } catch {
     return [];
   }
@@ -149,9 +151,7 @@ export async function toggleFavoriteModel(
 ): Promise<string[]> {
   const key = favoriteModelKey(provider, model);
   const favorites = await readFavoriteModels(read);
-  const next = favorites.includes(key)
-    ? favorites.filter((f) => f !== key)
-    : [...favorites, key];
+  const next = favorites.includes(key) ? favorites.filter((f) => f !== key) : [...favorites, key];
   await upsert(FAVORITE_MODELS_CONFIG_KEY, next, false);
   return next;
 }

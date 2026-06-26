@@ -80,7 +80,8 @@ const i18n = defineMessages({
   },
   mlEndpointDescription: {
     id: 'securityToggle.mlEndpointDescription',
-    defaultMessage: 'Enter the full URL for your ML classification service (including model identifier)',
+    defaultMessage:
+      'Enter the full URL for your ML classification service (including model identifier)',
   },
   mlTokenDescription: {
     id: 'securityToggle.mlTokenDescription',
@@ -190,8 +191,7 @@ export const SecurityToggle = () => {
   const commandClassifierOverride = window.appConfig?.get(
     'SECURITY_COMMAND_CLASSIFIER_ENABLED_OVERRIDE'
   ) as string | undefined;
-  const isPromptOverridden =
-    promptEnabledOverride === 'true' || promptEnabledOverride === 'false';
+  const isPromptOverridden = promptEnabledOverride === 'true' || promptEnabledOverride === 'false';
   const isCommandClassifierOverridden =
     commandClassifierOverride === 'true' || commandClassifierOverride === 'false';
   const promptOverrideValue = promptEnabledOverride === 'true';

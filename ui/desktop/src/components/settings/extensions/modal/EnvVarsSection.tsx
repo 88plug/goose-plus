@@ -12,7 +12,8 @@ const i18n = defineMessages({
   },
   envVarsDescription: {
     id: 'envVarsSection.envVarsDescription',
-    defaultMessage: 'Add key-value pairs for environment variables. Click the "+" button to add after filling both fields. For existing secret values, click the edit button to modify.',
+    defaultMessage:
+      'Add key-value pairs for environment variables. Click the "+" button to add after filling both fields. For existing secret values, click the edit button to modify.',
   },
   variableName: {
     id: 'envVarsSection.variableName',

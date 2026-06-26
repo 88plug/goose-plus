@@ -146,7 +146,9 @@ const ParameterInput: React.FC<ParameterInputProps> = ({
                 title={intl.formatMessage(i18n.unusedWarningTitle)}
               >
                 <AlertTriangle className="w-4 h-4 text-orange-500" />
-                <span className="text-xs text-orange-500 font-normal">{intl.formatMessage(i18n.unused)}</span>
+                <span className="text-xs text-orange-500 font-normal">
+                  {intl.formatMessage(i18n.unused)}
+                </span>
               </div>
             )}
           </div>

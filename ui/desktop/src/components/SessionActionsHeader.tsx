@@ -505,7 +505,10 @@ export default function SessionActionsHeader({
             <Button variant="outline" onClick={() => setIsRenameOpen(false)} disabled={isRenaming}>
               {intl.formatMessage(i18n.cancel)}
             </Button>
-            <Button onClick={() => void handleRename()} disabled={isRenaming || !renameValue.trim()}>
+            <Button
+              onClick={() => void handleRename()}
+              disabled={isRenaming || !renameValue.trim()}
+            >
               {isRenaming ? intl.formatMessage(i18n.saving) : intl.formatMessage(i18n.save)}
             </Button>
           </DialogFooter>

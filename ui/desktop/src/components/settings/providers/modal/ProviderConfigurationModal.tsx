@@ -225,9 +225,12 @@ export default function ProviderConfigurationModal({
       });
       if (oauthResult.error) {
         const err = oauthResult.error as Record<string, unknown>;
-        const errDetail = typeof oauthResult.error === 'string'
-          ? oauthResult.error
-          : (err?.message as string) ?? (err?.detail as string) ?? JSON.stringify(oauthResult.error);
+        const errDetail =
+          typeof oauthResult.error === 'string'
+            ? oauthResult.error
+            : ((err?.message as string) ??
+              (err?.detail as string) ??
+              JSON.stringify(oauthResult.error));
         throw new Error(errDetail);
       }
       if (onConfigured) {

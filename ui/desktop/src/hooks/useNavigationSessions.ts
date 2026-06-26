@@ -22,7 +22,10 @@ export function getRecentSessionsLimit(): number {
   }
 }
 
-export function prependUnique(prev: SessionListItem[], session: SessionListItem): SessionListItem[] {
+export function prependUnique(
+  prev: SessionListItem[],
+  session: SessionListItem
+): SessionListItem[] {
   if (prev.some((s) => s.id === session.id)) return prev;
   return [session, ...prev].slice(0, getRecentSessionsLimit());
 }

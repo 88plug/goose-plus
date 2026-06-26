@@ -458,7 +458,10 @@ export const ModelSettingsPanel = ({ modelId }: { modelId: string }) => {
     if (mode === 'custom_inline') {
       next = { type: 'custom_inline', template: chatTemplateDraft };
     } else if (mode === 'builtin') {
-      next = { type: 'builtin', name: builtinTemplateDraft.trim() || builtinTemplateOptions[0] || 'chatml' };
+      next = {
+        type: 'builtin',
+        name: builtinTemplateDraft.trim() || builtinTemplateOptions[0] || 'chatml',
+      };
     } else {
       next = { type: 'embedded' };
     }
@@ -506,14 +509,23 @@ export const ModelSettingsPanel = ({ modelId }: { modelId: string }) => {
     : [builtinTemplateDraft, ...builtinTemplateOptions].filter(Boolean);
 
   if (loading) {
-    return <div className="py-2 text-xs text-text-muted">{intl.formatMessage(i18n.loadingSettings)}</div>;
+    return (
+      <div className="py-2 text-xs text-text-muted">{intl.formatMessage(i18n.loadingSettings)}</div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        {saving && <span className="text-xs text-text-muted mr-auto">{intl.formatMessage(i18n.saving)}</span>}
-        <Button variant="ghost" size="sm" onClick={resetDefaults} title={intl.formatMessage(i18n.resetToDefaults)}>
+        {saving && (
+          <span className="text-xs text-text-muted mr-auto">{intl.formatMessage(i18n.saving)}</span>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetDefaults}
+          title={intl.formatMessage(i18n.resetToDefaults)}
+        >
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
           <span className="text-xs">{intl.formatMessage(i18n.reset)}</span>
         </Button>
@@ -521,7 +533,9 @@ export const ModelSettingsPanel = ({ modelId }: { modelId: string }) => {
 
       {/* Context & Generation */}
       <div className="space-y-2">
-        <h5 className="text-xs font-medium text-text-default">{intl.formatMessage(i18n.contextAndGeneration)}</h5>
+        <h5 className="text-xs font-medium text-text-default">
+          {intl.formatMessage(i18n.contextAndGeneration)}
+        </h5>
         <div className="grid grid-cols-2 gap-3">
           <NumberField
             label={intl.formatMessage(i18n.contextSize)}
@@ -631,7 +645,9 @@ export const ModelSettingsPanel = ({ modelId }: { modelId: string }) => {
 
       {/* Repetition Penalty */}
       <div className="space-y-2">
-        <h5 className="text-xs font-medium text-text-default">{intl.formatMessage(i18n.repetitionPenalty)}</h5>
+        <h5 className="text-xs font-medium text-text-default">
+          {intl.formatMessage(i18n.repetitionPenalty)}
+        </h5>
         <div className="grid grid-cols-2 gap-3">
           <NumberField
             label={intl.formatMessage(i18n.repeatPenalty)}
@@ -671,7 +687,9 @@ export const ModelSettingsPanel = ({ modelId }: { modelId: string }) => {
 
       {/* Performance */}
       <div className="space-y-2">
-        <h5 className="text-xs font-medium text-text-default">{intl.formatMessage(i18n.performance)}</h5>
+        <h5 className="text-xs font-medium text-text-default">
+          {intl.formatMessage(i18n.performance)}
+        </h5>
         <div className="grid grid-cols-2 gap-3">
           <NumberField
             label={intl.formatMessage(i18n.batchSize)}

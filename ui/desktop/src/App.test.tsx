@@ -286,7 +286,9 @@ describe('App Component - Brand New State', () => {
       expect(mockElectron.reactReady).toHaveBeenCalled();
     });
 
-    const newChatHandler = mockElectron.on.mock.calls.find(([channel]) => channel === 'new-chat')?.[1];
+    const newChatHandler = mockElectron.on.mock.calls.find(
+      ([channel]) => channel === 'new-chat'
+    )?.[1];
     expect(newChatHandler).toBeDefined();
 
     newChatHandler?.({} as any);

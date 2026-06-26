@@ -45,7 +45,8 @@ const i18n = defineMessages({
   },
   activeProviderWarning: {
     id: 'authSettings.activeProviderWarning',
-    defaultMessage: 'This is the active provider. New requests may fail until you configure another credential.',
+    defaultMessage:
+      'This is the active provider. New requests may fail until you configure another credential.',
   },
   delete: {
     id: 'authSettings.delete',

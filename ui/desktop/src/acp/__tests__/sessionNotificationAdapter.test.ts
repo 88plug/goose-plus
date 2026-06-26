@@ -67,9 +67,7 @@ function expectOnlyMessagesChange(chatStateChanges: AcpChatStateChange[]): Messa
   return chatStateChange.messages;
 }
 
-function expectOnlyNotificationChange(
-  chatStateChanges: AcpChatStateChange[]
-): NotificationEvent {
+function expectOnlyNotificationChange(chatStateChanges: AcpChatStateChange[]): NotificationEvent {
   expect(chatStateChanges).toHaveLength(1);
 
   const [chatStateChange] = chatStateChanges;

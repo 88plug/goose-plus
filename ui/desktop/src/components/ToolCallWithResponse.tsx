@@ -24,10 +24,7 @@ import McpAppRenderer from './McpApps/McpAppRenderer';
 import ToolApprovalButtons from './ToolApprovalButtons';
 import { defineMessages, useIntl } from '../i18n';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import {
-  oneDark,
-  oneLight,
-} from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '../contexts/ThemeContext';
 
 const i18n = defineMessages({
@@ -901,7 +898,11 @@ function ToolCallView({
         <>
           {toolResults.map((result, index) => (
             <div key={index} className={cn('border-t border-border-primary')}>
-              <ToolResultView toolCall={toolCall} result={result} isStartExpanded={isExpandToolDetails} />
+              <ToolResultView
+                toolCall={toolCall}
+                result={result}
+                isStartExpanded={isExpandToolDetails}
+              />
             </div>
           ))}
         </>
@@ -1290,9 +1291,10 @@ function ToolLogsView({
   // down on the possibility of unwanted runs
 
   const subagentLogCount = logs.filter((l) => l.startsWith('[subagent:')).length;
-  const labelText = subagentLogCount > 0
-    ? intl.formatMessage(i18n.activityCount, { count: subagentLogCount })
-    : intl.formatMessage(i18n.logs);
+  const labelText =
+    subagentLogCount > 0
+      ? intl.formatMessage(i18n.activityCount, { count: subagentLogCount })
+      : intl.formatMessage(i18n.logs);
 
   return (
     <ToolCallExpandable

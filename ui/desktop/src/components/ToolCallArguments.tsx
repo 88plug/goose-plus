@@ -33,14 +33,18 @@ export function ToolCallArguments({ args }: ToolCallArgumentsProps) {
 
     return (
       <div className="font-sans text-sm mb-2">
-        <div className={`flex flex-row items-stretch ${!isExpanded && needsExpansion ? 'truncate min-w-0' : ''}`}>
+        <div
+          className={`flex flex-row items-stretch ${!isExpanded && needsExpansion ? 'truncate min-w-0' : ''}`}
+        >
           <button
             onClick={() => needsExpansion && toggleKey(key)}
             className={`flex text-left text-text-secondary min-w-[140px] ${needsExpansion ? 'cursor-pointer' : 'cursor-default'}`}
           >
             <span>{key}</span>
           </button>
-          <div className={`w-full flex items-stretch ${!isExpanded && needsExpansion ? 'truncate min-w-0' : ''}`}>
+          <div
+            className={`w-full flex items-stretch ${!isExpanded && needsExpansion ? 'truncate min-w-0' : ''}`}
+          >
             {isExpanded ? (
               <pre className="font-mono text-xs text-text-secondary whitespace-pre-wrap max-w-full overflow-x-auto">
                 {text}

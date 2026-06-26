@@ -101,9 +101,7 @@ function toNotificationEvent(
     request_id: toolCallId,
     message: {
       method:
-        toolNotification.type === 'message'
-          ? 'notifications/message'
-          : 'notifications/progress',
+        toolNotification.type === 'message' ? 'notifications/message' : 'notifications/progress',
       params: toolNotification.params,
     },
   };

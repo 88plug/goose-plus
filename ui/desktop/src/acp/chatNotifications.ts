@@ -6,9 +6,8 @@ import { acpChatSessionActions, acpChatSessionStore } from './chatSessionStore';
 
 export function handleAcpSessionNotification(notification: SessionNotification): Promise<void> {
   if (USE_ACP_CHAT) {
-    const sessionNameBeforeNotification = acpChatSessionStore.getSnapshot(
-      notification.sessionId
-    )?.session?.name;
+    const sessionNameBeforeNotification = acpChatSessionStore.getSnapshot(notification.sessionId)
+      ?.session?.name;
     const updatedName =
       notification.update.sessionUpdate === 'session_info_update'
         ? notification.update.title

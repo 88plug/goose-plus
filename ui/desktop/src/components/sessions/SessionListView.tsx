@@ -73,48 +73,104 @@ import {
 
 const i18n = defineMessages({
   editSessionTitle: { id: 'sessions.edit.title', defaultMessage: 'Edit Session Description' },
-  editSessionPlaceholder: { id: 'sessions.edit.placeholder', defaultMessage: 'Enter session description' },
+  editSessionPlaceholder: {
+    id: 'sessions.edit.placeholder',
+    defaultMessage: 'Enter session description',
+  },
   cancel: { id: 'sessions.cancel', defaultMessage: 'Cancel' },
   save: { id: 'sessions.save', defaultMessage: 'Save' },
   saving: { id: 'sessions.saving', defaultMessage: 'Saving...' },
-  sessionUpdated: { id: 'sessions.toast.updated', defaultMessage: 'Session description updated successfully' },
-  sessionUpdateFailed: { id: 'sessions.toast.updateFailed', defaultMessage: 'Failed to update session description: {error}' },
+  sessionUpdated: {
+    id: 'sessions.toast.updated',
+    defaultMessage: 'Session description updated successfully',
+  },
+  sessionUpdateFailed: {
+    id: 'sessions.toast.updateFailed',
+    defaultMessage: 'Failed to update session description: {error}',
+  },
   chatHistory: { id: 'sessions.chatHistory', defaultMessage: 'Chat history' },
   importSession: { id: 'sessions.import', defaultMessage: 'Import Session' },
   importNostrSession: { id: 'sessions.importNostr', defaultMessage: 'Import Link' },
   importNostrTitle: { id: 'sessions.importNostr.title', defaultMessage: 'Import Nostr Session' },
-  importNostrDesc: { id: 'sessions.importNostr.description', defaultMessage: 'Paste a Goose Nostr share link to fetch, decrypt, and import the session.' },
-  importNostrPlaceholder: { id: 'sessions.importNostr.placeholder', defaultMessage: 'goose://sessions/nostr?nevent=...&key=...' },
+  importNostrDesc: {
+    id: 'sessions.importNostr.description',
+    defaultMessage: 'Paste a Goose Nostr share link to fetch, decrypt, and import the session.',
+  },
+  importNostrPlaceholder: {
+    id: 'sessions.importNostr.placeholder',
+    defaultMessage: 'goose://sessions/nostr?nevent=...&key=...',
+  },
   importing: { id: 'sessions.importing', defaultMessage: 'Importing...' },
-  chatHistoryDesc: { id: 'sessions.chatHistoryDesc', defaultMessage: 'View and search your past conversations with Goose. {shortcut} to search.' },
+  chatHistoryDesc: {
+    id: 'sessions.chatHistoryDesc',
+    defaultMessage: 'View and search your past conversations with Goose. {shortcut} to search.',
+  },
   searchPlaceholder: { id: 'sessions.searchPlaceholder', defaultMessage: 'Search history...' },
   errorLoading: { id: 'sessions.error.loading', defaultMessage: 'Error Loading Sessions' },
   tryAgain: { id: 'sessions.error.tryAgain', defaultMessage: 'Try Again' },
   noSessions: { id: 'sessions.empty.title', defaultMessage: 'No chat sessions found' },
-  noSessionsDesc: { id: 'sessions.empty.description', defaultMessage: 'Your chat history will appear here' },
+  noSessionsDesc: {
+    id: 'sessions.empty.description',
+    defaultMessage: 'Your chat history will appear here',
+  },
   noMatching: { id: 'sessions.search.noResults', defaultMessage: 'No matching sessions found' },
-  noMatchingDesc: { id: 'sessions.search.noResultsDesc', defaultMessage: 'Try adjusting your search terms' },
+  noMatchingDesc: {
+    id: 'sessions.search.noResultsDesc',
+    defaultMessage: 'Try adjusting your search terms',
+  },
   loadingMore: { id: 'sessions.loadingMore', defaultMessage: 'Loading more sessions...' },
   deleteTitle: { id: 'sessions.delete.title', defaultMessage: 'Delete Session' },
-  deleteMessage: { id: 'sessions.delete.message', defaultMessage: 'Are you sure you want to delete the session "{name}"? This action cannot be undone.' },
-  duplicateSuccess: { id: 'sessions.toast.duplicated', defaultMessage: 'Session "{name}" duplicated successfully' },
-  duplicateFailed: { id: 'sessions.toast.duplicateFailed', defaultMessage: 'Failed to duplicate session: {error}' },
+  deleteMessage: {
+    id: 'sessions.delete.message',
+    defaultMessage:
+      'Are you sure you want to delete the session "{name}"? This action cannot be undone.',
+  },
+  duplicateSuccess: {
+    id: 'sessions.toast.duplicated',
+    defaultMessage: 'Session "{name}" duplicated successfully',
+  },
+  duplicateFailed: {
+    id: 'sessions.toast.duplicateFailed',
+    defaultMessage: 'Failed to duplicate session: {error}',
+  },
   deleteSuccess: { id: 'sessions.toast.deleted', defaultMessage: 'Session deleted successfully' },
-  deleteFailed: { id: 'sessions.toast.deleteFailed', defaultMessage: 'Failed to delete session "{name}": {error}' },
+  deleteFailed: {
+    id: 'sessions.toast.deleteFailed',
+    defaultMessage: 'Failed to delete session "{name}": {error}',
+  },
   importSuccess: { id: 'sessions.toast.imported', defaultMessage: 'Session imported successfully' },
-  importFailed: { id: 'sessions.toast.importFailed', defaultMessage: 'Failed to import session: {error}' },
+  importFailed: {
+    id: 'sessions.toast.importFailed',
+    defaultMessage: 'Failed to import session: {error}',
+  },
   exportSuccess: { id: 'sessions.toast.exported', defaultMessage: 'Session exported successfully' },
-  shareNostrSuccess: { id: 'sessions.toast.shareNostr', defaultMessage: 'Encrypted Nostr share link created' },
-  shareNostrFailed: { id: 'sessions.toast.shareNostrFailed', defaultMessage: 'Failed to create Nostr share link: {error}' },
+  shareNostrSuccess: {
+    id: 'sessions.toast.shareNostr',
+    defaultMessage: 'Encrypted Nostr share link created',
+  },
+  shareNostrFailed: {
+    id: 'sessions.toast.shareNostrFailed',
+    defaultMessage: 'Failed to create Nostr share link: {error}',
+  },
   copied: { id: 'sessions.toast.copied', defaultMessage: 'Copied to clipboard' },
   openInNewWindow: { id: 'sessions.action.openNewWindow', defaultMessage: 'Open in new window' },
   editSessionName: { id: 'sessions.action.editName', defaultMessage: 'Edit session name' },
   duplicateSession: { id: 'sessions.action.duplicate', defaultMessage: 'Duplicate session' },
   deleteSession: { id: 'sessions.action.delete', defaultMessage: 'Delete session' },
   exportSession: { id: 'sessions.action.export', defaultMessage: 'Export session' },
-  shareNostrSession: { id: 'sessions.action.shareNostr', defaultMessage: 'Share encrypted Nostr link' },
-  shareNostrTitle: { id: 'sessions.shareNostr.title', defaultMessage: 'Encrypted Nostr Share Link' },
-  shareNostrDesc: { id: 'sessions.shareNostr.description', defaultMessage: 'Anyone with this link can fetch and decrypt the session. Treat it like a secret.' },
+  shareNostrSession: {
+    id: 'sessions.action.shareNostr',
+    defaultMessage: 'Share encrypted Nostr link',
+  },
+  shareNostrTitle: {
+    id: 'sessions.shareNostr.title',
+    defaultMessage: 'Encrypted Nostr Share Link',
+  },
+  shareNostrDesc: {
+    id: 'sessions.shareNostr.description',
+    defaultMessage:
+      'Anyone with this link can fetch and decrypt the session. Treat it like a secret.',
+  },
   close: { id: 'sessions.close', defaultMessage: 'Close' },
   newFolder: { id: 'sessions.folders.new', defaultMessage: 'New Folder' },
   newFolderTitle: { id: 'sessions.folders.newTitle', defaultMessage: 'Create Folder' },
@@ -124,7 +180,10 @@ const i18n = defineMessages({
   removeFromFolder: { id: 'sessions.folders.remove', defaultMessage: 'Remove from folder' },
   noFolder: { id: 'sessions.folders.none', defaultMessage: 'No folder' },
   deleteFolderAction: { id: 'sessions.folders.delete', defaultMessage: 'Delete folder' },
-  folderCreated: { id: 'sessions.folders.toast.created', defaultMessage: 'Folder "{name}" created' },
+  folderCreated: {
+    id: 'sessions.folders.toast.created',
+    defaultMessage: 'Folder "{name}" created',
+  },
   folderDeleted: { id: 'sessions.folders.toast.deleted', defaultMessage: 'Folder deleted' },
 });
 
@@ -204,7 +263,9 @@ const EditSessionModal = React.memo<EditSessionModalProps>(
     return (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50">
         <div className="bg-background-primary border border-border-primary rounded-lg p-6 w-[500px] max-w-[90vw]">
-          <h3 className="text-lg font-medium text-text-primary mb-4">{intl.formatMessage(i18n.editSessionTitle)}</h3>
+          <h3 className="text-lg font-medium text-text-primary mb-4">
+            {intl.formatMessage(i18n.editSessionTitle)}
+          </h3>
 
           <div className="space-y-4">
             <div>
@@ -594,7 +655,11 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
           await loadSessions();
         } catch (error) {
           console.error('Error duplicating session:', error);
-          toast.error(intl.formatMessage(i18n.duplicateFailed, { error: errorMessage(error, 'Unknown error') }));
+          toast.error(
+            intl.formatMessage(i18n.duplicateFailed, {
+              error: errorMessage(error, 'Unknown error'),
+            })
+          );
         }
       },
       [loadSessions, intl]
@@ -620,7 +685,12 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
         acpChatSessionActions.deleteSnapshot(sessionToDeleteId);
       } catch (error) {
         console.error('Error deleting session:', error);
-        toast.error(intl.formatMessage(i18n.deleteFailed, { name: sessionName, error: errorMessage(error, 'Unknown error') }));
+        toast.error(
+          intl.formatMessage(i18n.deleteFailed, {
+            name: sessionName,
+            error: errorMessage(error, 'Unknown error'),
+          })
+        );
       }
       await loadSessions();
     }, [sessionToDelete, loadSessions, intl]);
@@ -630,21 +700,24 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
       setSessionToDelete(null);
     }, []);
 
-    const handleExportSession = useCallback(async (session: SessionListItem, e: React.MouseEvent) => {
-      e.stopPropagation();
+    const handleExportSession = useCallback(
+      async (session: SessionListItem, e: React.MouseEvent) => {
+        e.stopPropagation();
 
-      const json = await acpExportSession(session.id);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${session.name}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success(intl.formatMessage(i18n.exportSuccess));
-    }, [intl]);
+        const json = await acpExportSession(session.id);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${session.name}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success(intl.formatMessage(i18n.exportSuccess));
+      },
+      [intl]
+    );
 
     const handleShareSessionNostr = useCallback(
       async (session: SessionListItem, e: React.MouseEvent) => {
@@ -660,7 +733,11 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
           setShowShareLinkModal(true);
           toast.success(intl.formatMessage(i18n.shareNostrSuccess));
         } catch (error) {
-          toast.error(intl.formatMessage(i18n.shareNostrFailed, { error: errorMessage(error, 'Unknown error') }));
+          toast.error(
+            intl.formatMessage(i18n.shareNostrFailed, {
+              error: errorMessage(error, 'Unknown error'),
+            })
+          );
         } finally {
           setSharingSessionId(null);
         }
@@ -709,7 +786,9 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
         window.dispatchEvent(new CustomEvent(AppEvents.SESSION_CREATED));
         await loadSessions();
       } catch (error) {
-        toast.error(intl.formatMessage(i18n.importFailed, { error: errorMessage(error, 'Unknown error') }));
+        toast.error(
+          intl.formatMessage(i18n.importFailed, { error: errorMessage(error, 'Unknown error') })
+        );
       } finally {
         setIsImportingNostr(false);
       }
@@ -925,9 +1004,7 @@ const SessionListView: React.FC<SessionListViewProps> = React.memo(
                   </DropdownMenuItem>
                 ))}
                 {availableFolders.length === 0 && (
-                  <DropdownMenuItem disabled>
-                    {intl.formatMessage(i18n.noFolder)}
-                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled>{intl.formatMessage(i18n.noFolder)}</DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>

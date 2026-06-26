@@ -73,9 +73,8 @@ describe('ACP elicitation requests', () => {
 
     await expectStillPending(response);
 
-    const appliedRequest = vi.mocked(
-      acpChatSessionActions.applyElicitationRequest
-    ).mock.calls[0][0];
+    const appliedRequest = vi.mocked(acpChatSessionActions.applyElicitationRequest).mock
+      .calls[0][0];
 
     expect(appliedRequest.id).toMatch(/^acp_elicitation_/);
     expect(appliedRequest.sessionId).toBe('session-1');
@@ -142,9 +141,8 @@ describe('ACP elicitation requests', () => {
     vi.useFakeTimers();
     try {
       const response = requestAcpElicitation(formRequest('session-1'));
-      const appliedRequest = vi.mocked(
-        acpChatSessionActions.applyElicitationRequest
-      ).mock.calls[0][0];
+      const appliedRequest = vi.mocked(acpChatSessionActions.applyElicitationRequest).mock
+        .calls[0][0];
 
       await expectStillPending(response);
 

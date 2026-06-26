@@ -32,7 +32,10 @@ function execFileP(cmd: string, args: string[], opts: { timeout: number }): Prom
 
 export async function findBinary(): Promise<string | null> {
   try {
-    const binPath = execFileSync('which', ['mesh-llm'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const binPath = execFileSync('which', ['mesh-llm'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
     if (binPath) return binPath;
   } catch {
     // ignore — which returns non-zero if not found

@@ -104,10 +104,7 @@ const HelpText = () => {
               variant="link"
               className="text-blue-500 hover:text-blue-600 p-0 h-auto"
               onClick={() =>
-                window.open(
-                  'https://goose-docs.ai/docs/guides/using-goosehints/',
-                  '_blank'
-                )
+                window.open('https://goose-docs.ai/docs/guides/using-goosehints/', '_blank')
               }
             >
               {intl.formatMessage(i18n.helpTextLink)}

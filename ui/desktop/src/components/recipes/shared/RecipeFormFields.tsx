@@ -35,7 +35,8 @@ const i18n = defineMessages({
   },
   templateVarHint: {
     id: 'recipeFormFields.templateVarHint',
-    defaultMessage: "Use '{{parameter_name}}' to define parameters that can be filled in when running the recipe.",
+    defaultMessage:
+      "Use '{{parameter_name}}' to define parameters that can be filled in when running the recipe.",
   },
   initialPrompt: {
     id: 'recipeFormFields.initialPrompt',
@@ -63,7 +64,8 @@ const i18n = defineMessages({
   },
   parametersDescription: {
     id: 'recipeFormFields.parametersDescription',
-    defaultMessage: "Parameters will be automatically detected from '{{parameter_name}}' syntax in instructions/prompt/activities or you can manually add them below.",
+    defaultMessage:
+      "Parameters will be automatically detected from '{{parameter_name}}' syntax in instructions/prompt/activities or you can manually add them below.",
   },
   parameterNamePlaceholder: {
     id: 'recipeFormFields.parameterNamePlaceholder',
@@ -418,7 +420,9 @@ export function RecipeFormFields({
               advancedOpen ? 'rotate-0' : '-rotate-90'
             }`}
           />
-          <span className="text-sm font-medium text-textStandard">{intl.formatMessage(i18n.advancedOptions)}</span>
+          <span className="text-sm font-medium text-textStandard">
+            {intl.formatMessage(i18n.advancedOptions)}
+          </span>
           <span className="text-xs text-textSubtle">
             {intl.formatMessage(i18n.advancedOptionsHint)}
           </span>
@@ -445,7 +449,9 @@ export function RecipeFormFields({
                 if (newParameterName.trim()) {
                   const newParam: Parameter = {
                     key: newParameterName.trim(),
-                    description: intl.formatMessage(i18n.enterValueFor, { key: newParameterName.trim() }),
+                    description: intl.formatMessage(i18n.enterValueFor, {
+                      key: newParameterName.trim(),
+                    }),
                     input_type: 'string',
                     requirement: 'required',
                   };
