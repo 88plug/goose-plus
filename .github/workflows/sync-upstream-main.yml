@@ -25,8 +25,15 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # main is protected by the "Upstream mirror: protect main" ruleset,
+          # whose only bypass actor is the Admin role. The default GITHUB_TOKEN
+          # (github-actions[bot]) is NOT a bypass actor, so it cannot push to
+          # main — use an admin-owned fine-grained PAT (secret SYNC_PAT) which
+          # inherits the Admin-role bypass. Falls back to GITHUB_TOKEN when the
+          # secret is absent (push will be blocked until SYNC_PAT is set).
+          token: ${{ secrets.SYNC_PAT || github.token }}
 
-      - name: Fast-forward main from upstream
+      - name: Mirror main from upstream
         run: |
           set -euo pipefail
           git fetch --depth=1 https://github.com/aaif-goose/goose.git main
@@ -37,4 +44,6 @@ jobs:
             exit 0
           fi
           git reset --hard "$UPSTREAM_SHA"
-          git push origin HEAD:main
+          # force-with-lease so the mirror tracks upstream even across a history
+          # rewrite (rare); the Admin-role bypass permits the non-fast-forward.
+          git push --force-with-lease origin HEAD:main
