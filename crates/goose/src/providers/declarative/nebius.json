@@ -1,0 +1,52 @@
+{
+  "name": "nebius",
+  "engine": "openai",
+  "display_name": "Nebius Token Factory",
+  "description": "Hosted open models via Nebius Token Factory OpenAI-compatible API with dynamic model discovery.",
+  "api_key_env": "NEBIUS_API_KEY",
+  "base_url": "https://api.tokenfactory.nebius.com/v1",
+  "catalog_provider_id": "nebius",
+  "dynamic_models": true,
+  "models": [
+    {
+      "name": "Qwen/Qwen3.5-397B-A17B",
+      "context_limit": 262144,
+      "reasoning": true
+    },
+    {
+      "name": "deepseek-ai/DeepSeek-V4-Pro",
+      "context_limit": 1000000,
+      "reasoning": true
+    },
+    {
+      "name": "moonshotai/Kimi-K2.5",
+      "context_limit": 256000,
+      "reasoning": true
+    },
+    {
+      "name": "meta-llama/Llama-3.3-70B-Instruct",
+      "context_limit": 128000
+    },
+    {
+      "name": "zai-org/GLM-5",
+      "context_limit": 200000,
+      "reasoning": true
+    },
+    {
+      "name": "Qwen/Qwen3-235B-A22B-Instruct",
+      "context_limit": 262144
+    },
+    {
+      "name": "Qwen/Qwen2.5-VL-72B-Instruct",
+      "context_limit": 128000
+    }
+  ],
+  "preserves_thinking": true,
+  "supports_streaming": true,
+  "model_doc_link": "https://docs.tokenfactory.nebius.com/",
+  "setup_steps": [
+    "Sign in at https://tokenfactory.nebius.com",
+    "Open Project and create an API key",
+    "Copy the key and paste it above"
+  ]
+}

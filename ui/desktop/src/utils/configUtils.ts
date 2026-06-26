@@ -28,6 +28,9 @@ export const configLabels: Record<string, string> = {
   // groq
   GROQ_API_KEY: 'Groq API Key',
 
+  // nebius
+  NEBIUS_API_KEY: 'Nebius API Key',
+
   // openrouter
   OPENROUTER_API_KEY: 'OpenRouter API Key',
 
@@ -78,6 +81,7 @@ export const providerPrefixes: Record<string, string[]> = {
   anthropic: ['ANTHROPIC_'],
   google: ['GOOGLE_'],
   groq: ['GROQ_'],
+  nebius: ['NEBIUS_'],
   databricks: ['DATABRICKS_'],
   databricks_v2: ['DATABRICKS_'],
   openrouter: ['OPENROUTER_'],

@@ -41,6 +41,7 @@ goose is compatible with a wide range of LLM providers, allowing you to choose a
 | [LM Studio](https://lmstudio.ai/)                                          | Run local models with LM Studio's OpenAI-compatible server. **Because this provider runs locally, you must first [download a model](#local-llms).**                                                           | None required. Connects to local server at `localhost:1234` by default.                                                                                                             |
 | [Mistral AI](https://mistral.ai/)                                           | Provides access to Mistral models including general-purpose models, specialized coding models (Codestral), and multimodal models (Pixtral).                                                                   | `MISTRAL_API_KEY`                                                                                                 |
 | [NEAR AI Cloud](https://cloud.near.ai/)                                     | TEE-backed private inference through an OpenAI-compatible API with dynamic model discovery.                                                                                                                   | `NEARAI_API_KEY`                                                                                                                                                                  |
+| [Nebius Token Factory](https://tokenfactory.nebius.com/)                      | Hosted open models (Qwen, DeepSeek, Kimi, Llama, Nemotron, GLM, and more) through an OpenAI-compatible API with dynamic model discovery via `GET /v1/models`.                                                | `NEBIUS_API_KEY`                                                                                                                                                                  |
 | [Novita AI](https://novita.ai/)                                             | 90+ open-source models with OpenAI-compatible API and competitive pricing. Supports Kimi K2.5, DeepSeek, GLM, MiniMax, Qwen, and more.                                                                       | `NOVITA_API_KEY`                                                                                                  |
 | [Ollama](https://ollama.com/)                                               | Local model runner supporting Qwen, Llama, DeepSeek, and other open-source models. **Because this provider runs locally, you must first [download and run a model](#local-llms).**  | `OLLAMA_HOST`                                                                                                                                                                       |
 | [Ollama Cloud](https://ollama.com/)                                         | Access hosted models on ollama.com via OpenAI-compatible API. Requires an Ollama account and API key.  | `OLLAMA_CLOUD_API_KEY`                                                                                                                                                                       |
@@ -779,6 +780,45 @@ To set up FuturMix with goose, follow these steps:
     3. Follow the prompts to choose `FuturMix` as the provider.
     4. Enter your API key when prompted.
     5. Select the FuturMix model of your choice.
+  </TabItem>
+</Tabs>
+
+### Nebius Token Factory
+[Nebius Token Factory](https://tokenfactory.nebius.com/) provides hosted open models through an OpenAI-compatible API at `https://api.tokenfactory.nebius.com/v1`. Models are discovered dynamically from the provider's `/v1/models` endpoint, with a static fallback list in [nebius.json](https://github.com/88plug/goose-plus/blob/goose-plus/crates/goose/src/providers/declarative/nebius.json). To use Nebius with goose, create an API key at [tokenfactory.nebius.com](https://tokenfactory.nebius.com/project/api-keys).
+
+Flagship models include:
+- **Qwen/Qwen3.5-397B-A17B** - Qwen 3.5 flagship with 262K context
+- **deepseek-ai/DeepSeek-V4-Pro** - DeepSeek V4 Pro with 1M context
+- **moonshotai/Kimi-K2.5** - Kimi K2.5 with vision and reasoning
+- **meta-llama/Llama-3.3-70B-Instruct** - Meta Llama 3.3 70B
+- **zai-org/GLM-5** - Zhipu GLM-5 reasoning model
+
+Append `-fast` to a model ID for lower-latency variants. For the live catalog, see [Nebius models](https://tokenfactory.nebius.com/models) or call `GET /v1/models?verbose=true`.
+
+To set up Nebius Token Factory with goose, follow these steps:
+
+<Tabs groupId="interface">
+  <TabItem value="ui" label="goose Desktop" default>
+  **To update your LLM provider and API key:**
+
+    1. Click the <PanelLeft className="inline" size={16} /> button in the top-left to open the sidebar.
+    2. Click the `Settings` button on the sidebar.
+    3. Click the `Models` tab.
+    4. Click `Configure Providers`
+    5. Choose `Nebius Token Factory` as provider from the list.
+    6. Click `Configure`, enter your API key, and click `Submit`.
+    7. Select a Nebius model of your choice.
+
+  </TabItem>
+  <TabItem value="cli" label="goose CLI">
+    1. Run:
+    ```sh
+    goose configure
+    ```
+    2. Select `Configure Providers` from the menu.
+    3. Follow the prompts to choose `Nebius Token Factory` as the provider.
+    4. Enter your API key when prompted.
+    5. Select a Nebius model of your choice.
   </TabItem>
 </Tabs>
 

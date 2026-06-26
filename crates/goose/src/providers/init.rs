@@ -396,6 +396,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_nebius_declarative_provider_registry_wiring() {
+        let nebius = get_from_registry("nebius")
+            .await
+            .expect("nebius provider should be registered");
+        let meta = nebius.metadata();
+
+        assert_eq!(nebius.provider_type(), ProviderType::Declarative);
+        assert!(nebius.supports_inventory_refresh());
+        assert_eq!(meta.display_name, "Nebius Token Factory");
+        assert_eq!(meta.default_model, "Qwen/Qwen3.5-397B-A17B");
+        assert_eq!(meta.model_doc_link, "https://docs.tokenfactory.nebius.com/");
+        assert!(!meta.setup_steps.is_empty());
+
+        let api_key = meta
+            .config_keys
+            .iter()
+            .find(|k| k.name == "NEBIUS_API_KEY")
+            .expect("NEBIUS_API_KEY config key should exist");
+        assert!(api_key.required, "NEBIUS_API_KEY should be required");
+        assert!(api_key.secret, "NEBIUS_API_KEY should be secret");
+        assert!(api_key.primary, "NEBIUS_API_KEY should be primary");
+    }
+
+    #[tokio::test]
     async fn test_alibaba_declarative_provider_registry_wiring() {
         let alibaba = get_from_registry("alibaba")
             .await
