@@ -14,7 +14,6 @@ use axum::{
 use goose::agents::{Container, ExtensionLoadResult};
 use goose::goose_apps::{fetch_mcp_apps, GooseApp, McpAppCache};
 
-use base64::Engine;
 use goose::agents::reply_parts::is_tool_visible_to_app;
 use goose::agents::ExtensionConfig;
 use goose::config::resolve_extensions_for_new_session;
@@ -1142,15 +1141,7 @@ async fn read_resource(
             mime_type,
             blob,
             meta,
-        } => {
-            let decoded = match base64::engine::general_purpose::STANDARD.decode(&blob) {
-                Ok(bytes) => {
-                    String::from_utf8(bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-                }
-                Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-            };
-            (uri, mime_type, decoded, meta)
-        }
+        } => (uri, mime_type, blob, meta),
     };
 
     let meta_map = meta.map(|m| m.0);

@@ -349,7 +349,7 @@ fn to_bedrock_document(
         .unwrap_or(uri);
 
     // Return None if the file type is not supported
-    let (name, format) = match filename.split_once('.') {
+    let (name, format) = match filename.rsplit_once('.') {
         Some((name, "txt")) => (name, bedrock::DocumentFormat::Txt),
         Some((name, "csv")) => (name, bedrock::DocumentFormat::Csv),
         Some((name, "md")) => (name, bedrock::DocumentFormat::Md),

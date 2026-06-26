@@ -27,6 +27,7 @@ struct StoredPendingCode {
 
 pub struct PairingStore {
     pairings: RwLock<HashMap<PlatformUser, PairingState>>,
+    pending_codes_lock: tokio::sync::Mutex<()>,
 }
 
 impl PairingStore {
@@ -34,6 +35,7 @@ impl PairingStore {
         let pairings = Self::load_pairings_from_config();
         Ok(Self {
             pairings: RwLock::new(pairings),
+            pending_codes_lock: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -107,6 +109,7 @@ impl PairingStore {
         gateway_type: &str,
         expires_at: i64,
     ) -> anyhow::Result<()> {
+        let _g = self.pending_codes_lock.lock().await;
         let mut codes = Self::load_pending_codes();
         let now = chrono::Utc::now().timestamp();
         codes.retain(|c| c.code != code && c.expires_at > now);
@@ -119,6 +122,7 @@ impl PairingStore {
     }
 
     pub async fn consume_pending_code(&self, code: &str) -> anyhow::Result<Option<String>> {
+        let _g = self.pending_codes_lock.lock().await;
         let mut codes = Self::load_pending_codes();
         let pos = codes.iter().position(|c| c.code == code);
         let Some(pos) = pos else {

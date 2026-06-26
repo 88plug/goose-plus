@@ -26,6 +26,10 @@ const PRE_SUBSCRIBE_BUFFER_CAPACITY: usize = 1024;
 /// otherwise leak its entry forever.
 const MAX_PENDING_ROUTES: usize = 4096;
 
+/// Caps per-connection session streams; a peer fabricating `Acp-Session-Id`
+/// values could otherwise allocate streams without bound.
+const MAX_SESSION_STREAMS: usize = 4096;
+
 #[derive(Clone, Debug)]
 pub(crate) enum ResponseRoute {
     Connection,
@@ -253,6 +257,13 @@ impl Connection {
             return s.clone();
         }
         let mut w = self.session_streams.write().await;
+        if !w.contains_key(session_id) && w.len() >= MAX_SESSION_STREAMS {
+            warn!(
+                "Session stream table full ({} entries); refusing new session id",
+                MAX_SESSION_STREAMS
+            );
+            return Arc::new(OutboundStream::new());
+        }
         w.entry(session_id.to_string())
             .or_insert_with(|| Arc::new(OutboundStream::new()))
             .clone()

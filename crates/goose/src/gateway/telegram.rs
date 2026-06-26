@@ -158,19 +158,16 @@ impl TelegramGateway {
                 if !body.ok {
                     tracing::warn!(
                         error = body.description.as_deref().unwrap_or("unknown"),
-                        "Telegram rejected HTML, falling back to plain text"
+                        "Telegram rejected HTML, falling back to plain text for this chunk"
                     );
-                    for plain_chunk in split_message(text, MAX_MESSAGE_LENGTH) {
-                        self.client
-                            .post(self.api_url("sendMessage"))
-                            .json(&serde_json::json!({
-                                "chat_id": chat_id,
-                                "text": plain_chunk,
-                            }))
-                            .send()
-                            .await?;
-                    }
-                    return Ok(());
+                    self.client
+                        .post(self.api_url("sendMessage"))
+                        .json(&serde_json::json!({
+                            "chat_id": chat_id,
+                            "text": chunk,
+                        }))
+                        .send()
+                        .await?;
                 }
             }
         }

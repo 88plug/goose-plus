@@ -21,20 +21,20 @@ pub fn model_config_from_user_config_with_session_settings(
 ) -> Result<ModelConfig> {
     let config = Config::global();
     let model = base_model_config_from_user_config(model_name.as_ref())?;
-    let model = materialize_model_config_inner(model, false)?
+    let model = materialize_model_config_inner(provider_name, model, false)?
         .with_context_limit(context_limit)
         .with_inherited_session_settings_from(previous, request_params)
         .with_default_thinking_effort(config.get_goose_thinking_effort());
 
-    Ok(model.with_canonical_limits(provider_name))
+    Ok(model)
 }
 
 pub fn materialize_model_config(provider_name: &str, model: ModelConfig) -> Result<ModelConfig> {
-    let model = materialize_model_config_inner(model, true)?;
-    Ok(model.with_canonical_limits(provider_name))
+    materialize_model_config_inner(provider_name, model, true)
 }
 
 fn materialize_model_config_inner(
+    provider_name: &str,
     mut model: ModelConfig,
     include_default_thinking_effort: bool,
 ) -> Result<ModelConfig> {
@@ -49,6 +49,7 @@ fn materialize_model_config_inner(
     }
 
     model = model
+        .with_canonical_limits(provider_name)
         .with_default_context_limit(config.get_goose_context_limit()?)
         .with_default_max_tokens(config.get_goose_max_tokens()?);
 
