@@ -73,6 +73,10 @@ PR URL pattern: `https://github.com/aaif-goose/goose/compare/main...88plug:goose
 
 Sync the mirror manually: `just sync-upstream-main` or trigger **Sync upstream main** in Actions.
 
+`main` is ruleset-protected (no direct pushes, no force-push, no deletion). Only the
+**Sync upstream main** workflow (GitHub Actions admin bypass) and repository admins may
+update it. Never merge `goose-plus` into `main`.
+
 ## Build
 ```bash
 source bin/activate-hermit
