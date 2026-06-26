@@ -949,6 +949,28 @@ mod tests {
     }
 
     #[test]
+    fn test_nebius_json_deserializes() {
+        let json = include_str!("../providers/declarative/nebius.json");
+        let config: DeclarativeProviderConfig =
+            serde_json::from_str(json).expect("nebius.json should parse");
+        assert_eq!(config.name, "nebius");
+        assert_eq!(config.display_name, "Nebius Token Factory");
+        assert!(matches!(config.engine, ProviderEngine::OpenAI));
+        assert_eq!(config.api_key_env, "NEBIUS_API_KEY");
+        assert_eq!(config.base_url, "https://api.tokenfactory.nebius.com/v1");
+        assert_eq!(config.catalog_provider_id, Some("nebius".to_string()));
+        assert_eq!(config.dynamic_models, Some(true));
+        assert_eq!(config.supports_streaming, Some(true));
+        assert!(config.preserves_thinking);
+        assert_eq!(
+            config.model_doc_link,
+            Some("https://docs.tokenfactory.nebius.com/".to_string())
+        );
+        assert_eq!(config.models[0].name, "Qwen/Qwen3.5-397B-A17B");
+        assert!(config.models[0].reasoning);
+    }
+
+    #[test]
     fn test_vercel_ai_gateway_json_deserializes() {
         let json = include_str!("../providers/declarative/vercel_ai_gateway.json");
         let config: DeclarativeProviderConfig =
