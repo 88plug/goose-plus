@@ -24,6 +24,7 @@ release-plus-preflight:
 
 # Fast-forward origin/main from aaif-goose/goose (upstream mirror)
 sync-upstream-main:
+    @case "$(git remote get-url origin)" in *88plug/goose-plus*) ;; *) echo "ERROR: 'origin' must be the fork 88plug/goose-plus (got: $(git remote get-url origin)). Fix: git remote set-url origin https://github.com/88plug/goose-plus.git" >&2; exit 1;; esac
     @git remote add upstream https://github.com/aaif-goose/goose.git 2>/dev/null || true
     git fetch upstream main
     git push origin upstream/main:main

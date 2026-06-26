@@ -139,6 +139,17 @@ aaif-goose/goose  ──(weekly mirror)──►  goose-plus:main   (read-only, 
 
 Ports **always** branch from `main` (the clean upstream mirror), never from `goose-plus` — so the PR is a minimal, reviewable diff with none of the fork's branding or unrelated changes.
 
+### First, point your remotes correctly
+
+The tooling assumes the standard fork convention — `origin` = your fork, `upstream` = the source:
+
+```bash
+git remote set-url origin   https://github.com/88plug/goose-plus.git   # the fork (write here)
+git remote set-url upstream https://github.com/aaif-goose/goose.git     # the source (port from here)
+```
+
+If `origin` points at the source instead, `port-to-upstream.sh` and `just sync-upstream-main` would try to push to the real upstream — both now **abort with a clear error** if `origin` isn't the fork, so a mis-set remote fails safe instead of pushing to the wrong repo.
+
 ### Pick → port → PR (one example)
 
 1. **Pick** an item from a matrix above — say the Nebius provider, or bug #8503 (lost final text segment).

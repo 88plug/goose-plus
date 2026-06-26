@@ -27,6 +27,20 @@ fi
 
 BRANCH="port/${FEATURE}"
 
+# Guard against the inverted-remote trap: `origin` must be the FORK
+# (88plug/goose-plus). If origin is the upstream source instead, the pushes
+# below would write to aaif-goose/goose directly.
+ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+case "$ORIGIN_URL" in
+  *88plug/goose-plus*) ;;
+  *)
+    echo "ERROR: 'origin' must point at the fork 88plug/goose-plus, but is: ${ORIGIN_URL:-<unset>}" >&2
+    echo "  Fix: git remote set-url origin https://github.com/88plug/goose-plus.git" >&2
+    echo "       git remote set-url upstream https://github.com/aaif-goose/goose.git" >&2
+    exit 1
+    ;;
+esac
+
 if ! git remote get-url upstream &>/dev/null; then
   git remote add upstream https://github.com/aaif-goose/goose.git
 fi
