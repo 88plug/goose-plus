@@ -22,6 +22,16 @@ check-everything:
 release-plus-preflight:
     ./scripts/release-plus-preflight.sh
 
+# Fast-forward origin/main from aaif-goose/goose (upstream mirror)
+sync-upstream-main:
+    @git remote add upstream https://github.com/aaif-goose/goose.git 2>/dev/null || true
+    git fetch upstream main
+    git push origin upstream/main:main
+
+# Start a port/<feature> branch from upstream/main for PRs to aaif-goose/goose
+port-to-upstream FEATURE:
+    ./scripts/port-to-upstream.sh {{FEATURE}}
+
 # Default release command
 release-binary:
     @echo "Building release version..."

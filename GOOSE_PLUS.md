@@ -46,7 +46,32 @@ A community **plus fork** of [goose](https://github.com/aaif-goose/goose) — th
 - MCP Apps `ui/update-model-context` (#6472)
 
 ## Relationship to upstream
-This fork tracks upstream `main`; the plus work lives on top. Items already shipped by upstream maintainers (LM Studio, Mistral, Ollama, `/model`, Azure, PreToolUse hooks, Gemini ACP, …) are intentionally **not** re-implemented here.
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Read-only mirror of [aaif-goose/goose](https://github.com/aaif-goose/goose) `main` (synced weekly + on demand) |
+| `goose-plus` | Default branch — all plus work, releases (`plus-v*` tags) |
+| `port/<name>` | Short-lived branches for upstream PRs — **always** based on `main`, never `goose-plus` |
+
+Plus work lives on `goose-plus`. Items already shipped upstream (LM Studio, Mistral, Ollama, `/model`, Azure, PreToolUse hooks, Gemini ACP, …) are intentionally **not** re-implemented here.
+
+**See what we've added:** [compare main...goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)
+
+### Upstream ports
+
+To open a PR on real goose (e.g. Nebius provider):
+
+```bash
+git fetch upstream
+./scripts/port-to-upstream.sh nebius    # creates port/nebius from upstream/main
+# apply minimal patch, fix any 88plug-specific doc links → aaif-goose/goose
+cargo test -p goose nebius
+git push -u origin port/nebius
+```
+
+PR URL pattern: `https://github.com/aaif-goose/goose/compare/main...88plug:goose-plus:port/<name>`
+
+Sync the mirror manually: `just sync-upstream-main` or trigger **Sync upstream main** in Actions.
 
 ## Build
 ```bash

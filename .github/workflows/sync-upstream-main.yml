@@ -1,0 +1,40 @@
+# Mirror aaif-goose/goose main onto 88plug/goose-plus main.
+# main is read-only upstream truth — never merge goose-plus into it.
+# port/* branches for upstream PRs are based on main.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+name: Sync upstream main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Mirror aaif-goose/goose main
+    if: github.repository == '88plug/goose-plus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fast-forward main from upstream
+        run: |
+          set -euo pipefail
+          git fetch https://github.com/aaif-goose/goose.git main
+          UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
+          LOCAL_SHA="$(git rev-parse main)"
+          if [ "$UPSTREAM_SHA" = "$LOCAL_SHA" ]; then
+            echo "main already matches upstream ($UPSTREAM_SHA)"
+            exit 0
+          fi
+          git reset --hard "$UPSTREAM_SHA"
+          git push origin main
