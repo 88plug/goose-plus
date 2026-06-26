@@ -18,6 +18,10 @@ check-everything:
     @echo ""
     @echo "✅ All style checks passed!"
 
+# Pre-tag validation for goose-plus releases (naming + CI-equivalent cargo check)
+release-plus-preflight:
+    ./scripts/release-plus-preflight.sh
+
 # Default release command
 release-binary:
     @echo "Building release version..."
