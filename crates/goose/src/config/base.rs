@@ -1144,6 +1144,7 @@ config_value!(GOOSE_NATS_INSTANCE, Option<String>);
 config_value!(GOOSE_A2A_ENABLE, bool);
 config_value!(GOOSE_A2A_CLIENT_ENABLE, bool);
 config_value!(GOOSE_A2A_URL, Option<String>);
+config_value!(GOOSE_A2A_TOKEN, Option<String>);
 
 impl Config {
     pub fn get_goose_context_limit(&self) -> Result<Option<usize>, ConfigError> {

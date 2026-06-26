@@ -5,9 +5,12 @@
 //! bridges an inbound A2A message to `agent.reply(...)` and streams the result
 //! back as A2A events.
 //!
-//! Opt-in (mounted only when `GOOSE_A2A_ENABLE` is set) and intentionally
-//! mounted WITHOUT the `x-secret-key` middleware, since remote A2A clients
-//! authenticate per the Agent Card's own scheme, not goose's internal secret.
+//! Opt-in (mounted only when `GOOSE_A2A_ENABLE` is set) and deliberately not
+//! behind goose's internal `x-secret-key` middleware: A2A clients authenticate
+//! per the Agent Card's own scheme. When `GOOSE_A2A_TOKEN` is set, the
+//! rpc/rest/ws routes require a constant-time `Authorization: Bearer <token>`
+//! and the card advertises that bearer scheme; the `.well-known` agent card
+//! stays public for discovery. With no token configured, the routes are open.
 
 use a2a::{
     event::StreamResponse, A2AError, Message as A2aMessage, Part, Role, Task, TaskState,
@@ -18,20 +21,32 @@ use a2a_server::{
     rest::rest_router, AgentExecutor, DefaultRequestHandler, InMemoryTaskStore, StaticAgentCard,
 };
 use a2a_websocket::websocket_router;
-use axum::Router;
+use axum::{
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::Next,
+    response::Response,
+    Router,
+};
 use futures::stream::BoxStream;
 use futures::StreamExt;
+use goose::acp::transport::auth::token_matches;
 use goose::agents::{types::SessionConfig, AgentEvent};
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::task::AbortHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::state::AppState;
 
 /// Bridges A2A execution to goose's agent. Each `execute` drives one
-/// `agent.reply` to completion, emitting a `Working` status then a terminal
-/// `Completed` task carrying the agent's text.
+/// `agent.reply` to completion, emitting a `Working` status, streaming the
+/// agent's text deltas as `Working` updates, then a terminal `Completed` task
+/// carrying the full text.
 struct GooseExecutor {
     app: Arc<AppState>,
+    tasks: Arc<Mutex<HashMap<String, AbortHandle>>>,
 }
 
 impl AgentExecutor for GooseExecutor {
@@ -40,8 +55,10 @@ impl AgentExecutor for GooseExecutor {
         ctx: ExecutorContext,
     ) -> BoxStream<'static, Result<StreamResponse, A2AError>> {
         let app = self.app.clone();
+        let tasks = self.tasks.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(16);
-        tokio::spawn(async move {
+        let task_key = ctx.task_id.clone();
+        let handle = tokio::spawn(async move {
             let task_id = ctx.task_id.clone();
             let context_id = ctx.context_id.clone();
 
@@ -134,7 +151,13 @@ impl AgentExecutor for GooseExecutor {
                         // agent.reply streams incremental text deltas as separate
                         // messages; concatenate them directly (the model's own
                         // text carries its newlines).
-                        agent_text.push_str(&goose::a2a::goose_text(&m));
+                        let delta = goose::a2a::goose_text(&m);
+                        if !delta.is_empty() {
+                            let _ = tx
+                                .send(Ok(working_with_text(&task_id, &context_id, &delta)))
+                                .await;
+                            agent_text.push_str(&delta);
+                        }
                     }
                 }
             }
@@ -143,21 +166,43 @@ impl AgentExecutor for GooseExecutor {
                 .send(Ok(completed(&task_id, &context_id, agent_text)))
                 .await;
         });
+        // Register the spawned turn so cancel() can abort it mid-stream. The
+        // task removes its own entry once it finishes (below).
+        {
+            let tasks = tasks.clone();
+            let abort = handle.abort_handle();
+            let key = task_key.clone();
+            tokio::spawn(async move {
+                tasks.lock().await.insert(key.clone(), abort);
+                let _ = handle.await;
+                tasks.lock().await.remove(&key);
+            });
+        }
         Box::pin(ReceiverStream::new(rx))
     }
 
     fn cancel(&self, ctx: ExecutorContext) -> BoxStream<'static, Result<StreamResponse, A2AError>> {
-        let event = StreamResponse::StatusUpdate(TaskStatusUpdateEvent {
-            task_id: ctx.task_id,
-            context_id: ctx.context_id,
-            status: TaskStatus {
-                state: TaskState::Canceled,
-                message: None,
-                timestamp: Some(chrono::Utc::now()),
-            },
-            metadata: None,
-        });
-        Box::pin(futures::stream::once(async move { Ok(event) }))
+        let tasks = self.tasks.clone();
+        let task_id = ctx.task_id;
+        let context_id = ctx.context_id;
+        Box::pin(futures::stream::once(async move {
+            // Abort the in-flight turn, which drops the agent.reply stream and
+            // ends the spawned task. Removing the entry here is best-effort; the
+            // task's own cleanup also removes it.
+            if let Some(abort) = tasks.lock().await.remove(&task_id) {
+                abort.abort();
+            }
+            Ok(StreamResponse::StatusUpdate(TaskStatusUpdateEvent {
+                task_id,
+                context_id,
+                status: TaskStatus {
+                    state: TaskState::Canceled,
+                    message: None,
+                    timestamp: Some(chrono::Utc::now()),
+                },
+                metadata: None,
+            }))
+        }))
     }
 }
 
@@ -168,6 +213,22 @@ fn working(task_id: &str, context_id: &str) -> StreamResponse {
         status: TaskStatus {
             state: TaskState::Working,
             message: None,
+            timestamp: Some(chrono::Utc::now()),
+        },
+        metadata: None,
+    })
+}
+
+fn working_with_text(task_id: &str, context_id: &str, text: &str) -> StreamResponse {
+    let mut agent_msg = A2aMessage::new(Role::Agent, vec![Part::text(text)]);
+    agent_msg.task_id = Some(task_id.to_string());
+    agent_msg.context_id = Some(context_id.to_string());
+    StreamResponse::StatusUpdate(TaskStatusUpdateEvent {
+        task_id: task_id.to_string(),
+        context_id: context_id.to_string(),
+        status: TaskStatus {
+            state: TaskState::Working,
+            message: Some(agent_msg),
             timestamp: Some(chrono::Utc::now()),
         },
         metadata: None,
@@ -192,19 +253,60 @@ fn completed(task_id: &str, context_id: &str, text: String) -> StreamResponse {
     })
 }
 
+/// Require `Authorization: Bearer <token>`, comparing constant-time.
+async fn check_a2a_bearer(
+    State(expected): State<String>,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let presented = request
+        .headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    if token_matches(presented, &expected) {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
 /// Build the A2A router. `origin` is the externally reachable HTTP origin
 /// (e.g. `http://host:port`); the Agent Card derives its interface URLs from it.
+///
+/// When `GOOSE_A2A_TOKEN` is set and non-empty, the rpc/rest/ws routers require
+/// a matching `Authorization: Bearer` header and the Agent Card advertises the
+/// bearer scheme; the public agent-card discovery route stays open. When unset,
+/// everything mounts open, as before.
 pub fn router(app: Arc<AppState>, origin: String) -> Router {
+    let token = goose::config::Config::global()
+        .get_goose_a2a_token()
+        .ok()
+        .flatten()
+        .filter(|t| !t.is_empty());
+
     let handler = Arc::new(DefaultRequestHandler::new(
-        GooseExecutor { app },
+        GooseExecutor {
+            app,
+            tasks: Default::default(),
+        },
         InMemoryTaskStore::new(),
     ));
-    let card = goose::a2a::build_agent_card(&origin, env!("CARGO_PKG_VERSION"));
+    let card = goose::a2a::build_agent_card(&origin, env!("CARGO_PKG_VERSION"), token.as_deref());
     let card_producer = Arc::new(StaticAgentCard::new(card));
 
-    Router::new()
+    let mut protected = Router::new()
         .nest("/jsonrpc", jsonrpc_router(handler.clone()))
         .nest("/rest", rest_router(handler.clone()))
-        .nest("/a2a/ws", websocket_router(handler))
-        .merge(agent_card_router(card_producer))
+        .nest("/a2a/ws", websocket_router(handler));
+
+    if let Some(token) = token {
+        protected = protected.layer(axum::middleware::from_fn_with_state(
+            token,
+            check_a2a_bearer,
+        ));
+    }
+
+    protected.merge(agent_card_router(card_producer))
 }

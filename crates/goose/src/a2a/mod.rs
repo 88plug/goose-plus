@@ -11,24 +11,51 @@ pub mod client;
 
 use crate::conversation::message::{Message as GooseMessage, MessageContent};
 use a2a::{
-    AgentCapabilities, AgentCard, AgentInterface, AgentProvider, AgentSkill, Message as A2aMessage,
-    PartContent, Role, TRANSPORT_PROTOCOL_HTTP_JSON, TRANSPORT_PROTOCOL_JSONRPC,
+    AgentCapabilities, AgentCard, AgentInterface, AgentProvider, AgentSkill,
+    HttpAuthSecurityScheme, Message as A2aMessage, PartContent, Role, SecurityRequirement,
+    SecurityScheme, TRANSPORT_PROTOCOL_HTTP_JSON, TRANSPORT_PROTOCOL_JSONRPC,
     TRANSPORT_PROTOCOL_WEBSOCKET,
 };
 use base64::Engine;
+use std::collections::HashMap;
+
+/// Name of the HTTP bearer security scheme advertised on the Agent Card when a
+/// token is configured. Clients reference it from the security requirement.
+const BEARER_SCHEME_NAME: &str = "bearer";
 
 /// Build goose's Agent Card. `origin` is the externally reachable HTTP origin
 /// (e.g. `http://host:port`); the JSON-RPC, REST, and WebSocket interfaces are
 /// derived from it to match how [`crate::a2a`]'s server router mounts them.
-pub fn build_agent_card(origin: &str, version: &str) -> AgentCard {
+///
+/// When `auth_token` is `Some`, the card advertises an HTTP bearer security
+/// scheme so clients know to send `Authorization: Bearer <token>`. When `None`,
+/// the security fields stay empty (open access).
+pub fn build_agent_card(origin: &str, version: &str, auth_token: Option<&str>) -> AgentCard {
     let origin = origin.trim_end_matches('/');
     let ws_origin = origin
         .replacen("https://", "wss://", 1)
         .replacen("http://", "ws://", 1);
+    let (security_schemes, security_requirements) = if auth_token.is_some() {
+        let mut schemes = HashMap::new();
+        schemes.insert(
+            BEARER_SCHEME_NAME.to_string(),
+            SecurityScheme::HttpAuth(HttpAuthSecurityScheme {
+                scheme: "bearer".to_string(),
+                description: Some("Bearer token configured via GOOSE_A2A_TOKEN.".to_string()),
+                bearer_format: None,
+            }),
+        );
+        let mut requirement: SecurityRequirement = HashMap::new();
+        requirement.insert(BEARER_SCHEME_NAME.to_string(), vec![]);
+        (Some(schemes), Some(vec![requirement]))
+    } else {
+        (None, None)
+    };
     AgentCard {
-        name: "goose".to_string(),
+        name: "goose-plus".to_string(),
         description:
-            "goose — an open-source AI agent for code, workflows, and everything in between."
+            "goose-plus — an enhanced open-source AI agent for code, workflows, and everything \
+             in between."
                 .to_string(),
         version: version.to_string(),
         supported_interfaces: vec![
@@ -65,13 +92,13 @@ pub fn build_agent_card(origin: &str, version: &str) -> AgentCard {
             security_requirements: None,
         }],
         provider: Some(AgentProvider {
-            organization: "goose".to_string(),
-            url: "https://block.github.io/goose/".to_string(),
+            organization: "goose-plus".to_string(),
+            url: "https://github.com/88plug/goose-plus".to_string(),
         }),
-        documentation_url: Some("https://block.github.io/goose/".to_string()),
+        documentation_url: Some("https://github.com/88plug/goose-plus".to_string()),
         icon_url: None,
-        security_schemes: None,
-        security_requirements: None,
+        security_schemes,
+        security_requirements,
         signatures: None,
     }
 }
@@ -139,7 +166,7 @@ mod tests {
 
     #[test]
     fn agent_card_advertises_v1_interfaces() {
-        let card = build_agent_card("http://localhost:3000", "1.0.0");
+        let card = build_agent_card("http://localhost:3000", "1.0.0", None);
         assert_eq!(card.version, "1.0.0");
         let bindings: Vec<&str> = card
             .supported_interfaces
@@ -150,6 +177,25 @@ mod tests {
         assert!(bindings.contains(&TRANSPORT_PROTOCOL_WEBSOCKET));
         assert!(!card.skills.is_empty());
         assert_eq!(card.capabilities.streaming, Some(true));
+    }
+
+    #[test]
+    fn agent_card_omits_security_without_token() {
+        let card = build_agent_card("http://localhost:3000", "1.0.0", None);
+        assert!(card.security_schemes.is_none());
+        assert!(card.security_requirements.is_none());
+    }
+
+    #[test]
+    fn agent_card_advertises_bearer_with_token() {
+        let card = build_agent_card("http://localhost:3000", "1.0.0", Some("secret"));
+        let schemes = card.security_schemes.expect("schemes advertised");
+        assert!(matches!(
+            schemes.get(BEARER_SCHEME_NAME),
+            Some(SecurityScheme::HttpAuth(s)) if s.scheme == "bearer"
+        ));
+        let reqs = card.security_requirements.expect("requirements advertised");
+        assert!(reqs.iter().any(|r| r.contains_key(BEARER_SCHEME_NAME)));
     }
 
     #[test]
