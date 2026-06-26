@@ -1,4 +1,6 @@
-> **🦆 goose-plus** — the community **[88plug/goose-plus](https://github.com/88plug/goose-plus)** fork of [aaif-goose/goose](https://github.com/aaif-goose/goose): every dependency on its latest version, first-class **A2A (Agent2Agent)** support (JSON-RPC + REST + WebSocket), native **NATS** event publishing, and a self-maintaining CI/CD + supply-chain pipeline. The install instructions below pull from goose-plus releases. See **[GOOSE_PLUS.md](GOOSE_PLUS.md)** for what's added.
+> **🦆 goose-plus** — the community **[88plug/goose-plus](https://github.com/88plug/goose-plus)** fork of [aaif-goose/goose](https://github.com/aaif-goose/goose): *the version of goose the maintainers had in flight, finished.* It drives every provider's model catalog from the live API (xAI SuperGrok + API key, Nebius Token Factory), adds first-class **A2A (Agent2Agent)** and native **NATS** agent-interop, keeps deps current, and ships a self-maintaining CI/release pipeline — on top of ~70 fixes mined from the upstream issue/PR graveyard.
+>
+> **Why & how we differ, with full feature / bug / community matrices → [GOOSE_PLUS.md](GOOSE_PLUS.md).** Everything here is built to be upstream-acceptable: each fix/feature is a tested, isolated **[port candidate](GOOSE_PLUS.md#contribute-by-porting)** you can carry back to real goose in one command. The install instructions below pull from goose-plus releases.
 
 <div align="center">
 
