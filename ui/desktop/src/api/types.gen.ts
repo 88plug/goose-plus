@@ -1432,6 +1432,9 @@ export type Settings = {
     goose_model?: string | null;
     goose_provider?: string | null;
     max_turns?: number | null;
+    request_params?: {
+        [key: string]: unknown;
+    } | null;
     temperature?: number | null;
 };
 

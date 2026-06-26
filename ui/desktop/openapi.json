@@ -8280,6 +8280,11 @@
             "nullable": true,
             "minimum": 0
           },
+          "request_params": {
+            "type": "object",
+            "additionalProperties": {},
+            "nullable": true
+          },
           "temperature": {
             "type": "number",
             "format": "float",

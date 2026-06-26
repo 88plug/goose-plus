@@ -5183,9 +5183,11 @@ dependencies = [
  "chrono",
  "docx-rs",
  "etcetera",
+ "ignore",
  "image",
  "include_dir",
  "indoc",
+ "libc",
  "lopdf",
  "once_cell",
  "process-wrap",
@@ -5196,12 +5198,15 @@ dependencies = [
  "serde_json",
  "shell-words",
  "tempfile",
+ "test-case",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "umya-spreadsheet",
  "url",
+ "which 8.0.4",
 ]
 
 [[package]]

@@ -19,7 +19,16 @@ native-tls = ["reqwest/native-tls"]
 [dependencies]
 rmcp = { workspace = true, features = ["server", "client", "transport-io", "macros"] }
 anyhow = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "process",
+    "io-util",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "macros",
+    "fs",
+] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing-appender = { workspace = true }
@@ -40,4 +49,13 @@ docx-rs = { version = "0.4.18", default-features = false, features = ["image"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "dds", "ff", "gif", "hdr", "ico", "jpeg", "exr", "png", "pnm", "tga", "tiff", "webp"] }
 umya-spreadsheet = { version = "3", default-features = false }
 shell-words = { workspace = true }
-process-wrap = { version = "9", default-features = false, features = ["std"] }
+process-wrap = { version = "9", default-features = false, features = ["std", "process-session"] }
+tokio-stream = { workspace = true, features = ["io-util"] }
+which = { workspace = true }
+ignore = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }

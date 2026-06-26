@@ -228,6 +228,7 @@ subtle = { version = "2.5", default-features = false, features = ["std"] }
 gethostname = "1.1.0"
 async-nats = "0.49.1"
 bytes.workspace = true
+goose-mcp = { path = "../goose-mcp", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.9", default-features = false, features = ["wincred", "std", "jobapi2", "winbase", "winnt", "processthreadsapi", "handleapi", "minwindef"] }
@@ -259,7 +260,6 @@ opentelemetry_sdk = { workspace = true, features = ["testing"] }
 goose-test-support = { path = "../goose-test-support", default-features = false }
 bytes = { workspace = true }
 http = { workspace = true }
-goose-mcp = { path = "../goose-mcp", default-features = false }
 insta = { version = "1", default-features = false }
 dtor = { version = "1.0.5", default-features = false, features = ["proc_macro"] }
 tower = { version = "0.5.2", default-features = false, features = ["util"] }

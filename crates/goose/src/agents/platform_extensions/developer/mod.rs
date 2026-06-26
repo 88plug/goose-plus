@@ -1,7 +1,4 @@
-pub mod edit;
-pub mod image;
-pub mod shell;
-pub mod tree;
+pub use goose_mcp::developer::{edit, image, shell, tree};
 
 use crate::agents::extension::PlatformExtensionContext;
 use crate::agents::mcp_client::{Error, McpClientTrait};

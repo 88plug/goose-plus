@@ -13,6 +13,7 @@ pub static APP_STRATEGY: Lazy<AppStrategyArgs> = Lazy::new(|| AppStrategyArgs {
 
 pub mod autovisualiser;
 pub mod computercontroller;
+pub mod developer;
 pub mod mcp_server_runner;
 mod memory;
 #[cfg(target_os = "macos")]
@@ -24,6 +25,7 @@ pub mod windows_job;
 
 pub use autovisualiser::AutoVisualiserRouter;
 pub use computercontroller::ComputerControllerServer;
+pub use developer::DeveloperServer;
 pub use memory::MemoryServer;
 pub use tutorial::TutorialServer;
 
