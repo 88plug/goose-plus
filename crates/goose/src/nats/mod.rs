@@ -13,13 +13,22 @@
 use crate::config::Config;
 use crate::conversation::message::{Message, MessageContent};
 use bytes::Bytes;
-use std::sync::OnceLock;
+use futures::StreamExt;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::mpsc;
 
 const DEFAULT_SUBJECT_PREFIX: &str = "goose";
 const CHANNEL_CAPACITY: usize = 10_000;
 /// Cap published text so a large tool output never produces an oversized message.
 const MAX_TEXT_BYTES: usize = 8 * 1024;
+/// Queue group so multiple goose instances share inbound drive work.
+const DRIVE_QUEUE_GROUP: &str = "goose-drive";
+
+/// Process-global monotonic sequence stamped on every published envelope.
+static SEQ: AtomicU64 = AtomicU64::new(0);
+/// Count of events dropped because the publish channel was full.
+static DROPPED: AtomicU64 = AtomicU64::new(0);
 
 /// A single event to publish. Subject is `{prefix}.{session}.{kind}`.
 struct NatsEvent {
@@ -36,7 +45,13 @@ pub struct NatsPublisher {
 impl NatsPublisher {
     /// Hot-path call: synchronous, non-blocking, drop-on-full.
     fn emit(&self, event: NatsEvent) {
-        let _ = self.tx.try_send(event);
+        if self.tx.try_send(event).is_err() {
+            let total = DROPPED.fetch_add(1, Ordering::Relaxed) + 1;
+            tracing::debug!(
+                "nats event dropped (channel full); total dropped: {}",
+                total
+            );
+        }
     }
 }
 
@@ -60,13 +75,41 @@ fn init_from_config() -> Option<NatsPublisher> {
         .filter(|s: &String| !s.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_SUBJECT_PREFIX.to_string());
 
+    let instance = instance_identity(config);
+
     let (tx, rx) = mpsc::channel::<NatsEvent>(CHANNEL_CAPACITY);
-    tokio::spawn(run_publisher(url, subject_prefix.clone(), rx));
-    tracing::info!("NATS publishing enabled (prefix '{}')", subject_prefix);
+    tokio::spawn(run_publisher(
+        url,
+        subject_prefix.clone(),
+        instance.clone(),
+        rx,
+    ));
+    tracing::info!(
+        "NATS publishing enabled (prefix '{}', instance '{}')",
+        subject_prefix,
+        instance
+    );
     Some(NatsPublisher { tx })
 }
 
-async fn run_publisher(url: String, subject_prefix: String, mut rx: mpsc::Receiver<NatsEvent>) {
+/// Stable identity for this process: `GOOSE_NATS_INSTANCE` when set, else
+/// `{hostname}:{pid}`. Avoids a hostname crate by reading `$HOSTNAME`.
+fn instance_identity(config: &Config) -> String {
+    if let Ok(Some(name)) = config.get_param::<Option<String>>("GOOSE_NATS_INSTANCE") {
+        if !name.trim().is_empty() {
+            return name;
+        }
+    }
+    let host = std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".to_string());
+    format!("{}:{}", host, std::process::id())
+}
+
+async fn run_publisher(
+    url: String,
+    subject_prefix: String,
+    instance: String,
+    mut rx: mpsc::Receiver<NatsEvent>,
+) {
     let client = match async_nats::ConnectOptions::new()
         .name("goose")
         .retry_on_initial_connect()
@@ -92,6 +135,8 @@ async fn run_publisher(url: String, subject_prefix: String, mut rx: mpsc::Receiv
         let envelope = serde_json::json!({
             "v": 1,
             "type": event.kind,
+            "seq": SEQ.fetch_add(1, Ordering::Relaxed),
+            "instance": instance,
             "ts": chrono::Utc::now().to_rfc3339(),
             "session_id": event.session_id,
             "payload": event.payload,
@@ -119,9 +164,21 @@ fn sanitize_token(s: &str) -> String {
         .collect()
 }
 
+/// Publish an arbitrary event. No-op unless NATS is configured.
+pub fn publish_event(session_id: &str, kind: &'static str, payload: serde_json::Value) {
+    let Some(pubr) = publisher() else { return };
+    pubr.emit(NatsEvent {
+        session_id: session_id.to_string(),
+        kind,
+        payload,
+    });
+}
+
 /// Publish a conversation message event. No-op unless NATS is configured.
 pub fn publish_message(session_id: &str, message: &Message) {
-    let Some(pubr) = publisher() else { return };
+    if publisher().is_none() {
+        return;
+    }
 
     let kind = if message.is_tool_call() {
         "tool.requested"
@@ -151,11 +208,7 @@ pub fn publish_message(session_id: &str, message: &Message) {
         "content_kinds": content_kinds,
     });
 
-    pubr.emit(NatsEvent {
-        session_id: session_id.to_string(),
-        kind,
-        payload,
-    });
+    publish_event(session_id, kind, payload);
 }
 
 fn content_kind(c: &MessageContent) -> &'static str {
@@ -170,6 +223,134 @@ fn content_kind(c: &MessageContent) -> &'static str {
         MessageContent::Thinking(_) => "thinking",
         MessageContent::RedactedThinking(_) => "redacted_thinking",
         MessageContent::SystemNotification(_) => "system_notification",
+    }
+}
+
+/// Inbound command parsed from a `{prefix}.cmd` message.
+#[derive(serde::Deserialize)]
+struct DriveCommand {
+    session_id: Option<String>,
+    prompt: String,
+}
+
+/// Subscribe to `{prefix}.cmd` and let NATS DRIVE goose: each command runs the
+/// injected `handler` (which bridges to `agent.reply`) and the reply is
+/// published back to the message's reply subject (or `{prefix}.{session}.reply`).
+///
+/// Opt-in: the caller only invokes this when `GOOSE_NATS_DRIVE` is enabled, but
+/// it is also defensive — returns immediately if `GOOSE_NATS_URL` is unset.
+/// Runs forever (until the process exits or the connection permanently closes).
+pub async fn run_drive_loop<H, F>(handler: H)
+where
+    H: Fn(String, String) -> F + Send + Sync + 'static,
+    F: std::future::Future<Output = anyhow::Result<String>> + Send + 'static,
+{
+    let config = Config::global();
+    let Ok(url) = config.get_param::<String>("GOOSE_NATS_URL") else {
+        return;
+    };
+    if url.trim().is_empty() {
+        return;
+    }
+    let subject_prefix: String = config
+        .get_param("GOOSE_NATS_SUBJECT")
+        .ok()
+        .filter(|s: &String| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_SUBJECT_PREFIX.to_string());
+
+    let client = match async_nats::ConnectOptions::new()
+        .name("goose")
+        .retry_on_initial_connect()
+        .max_reconnects(None)
+        .connect(&url)
+        .await
+    {
+        Ok(client) => client,
+        Err(e) => {
+            tracing::warn!("NATS drive disabled: connect to {} failed: {}", url, e);
+            return;
+        }
+    };
+
+    let cmd_subject = format!("{}.cmd", subject_prefix);
+    let mut subscription = match client
+        .queue_subscribe(cmd_subject.clone(), DRIVE_QUEUE_GROUP.to_string())
+        .await
+    {
+        Ok(sub) => sub,
+        Err(e) => {
+            tracing::warn!(
+                "NATS drive disabled: subscribe to {} failed: {}",
+                cmd_subject,
+                e
+            );
+            return;
+        }
+    };
+
+    tracing::info!(
+        "NATS drive loop listening on '{}' (queue '{}')",
+        cmd_subject,
+        DRIVE_QUEUE_GROUP
+    );
+
+    let handler = Arc::new(handler);
+    while let Some(msg) = subscription.next().await {
+        let cmd: DriveCommand = match serde_json::from_slice(&msg.payload) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("nats drive: invalid command payload: {}", e);
+                continue;
+            }
+        };
+
+        let session_id = match cmd.session_id.filter(|s| !s.trim().is_empty()) {
+            Some(s) => s,
+            None => match &msg.reply {
+                Some(reply) => sanitize_token(reply.as_str()),
+                None => {
+                    tracing::warn!(
+                        "nats drive: command missing session_id and reply subject; skipping"
+                    );
+                    continue;
+                }
+            },
+        };
+
+        let handler = handler.clone();
+        let client = client.clone();
+        let prefix = subject_prefix.clone();
+        let reply_subject = msg.reply.clone();
+        let prompt = cmd.prompt;
+        tokio::spawn(async move {
+            let envelope = match handler(session_id.clone(), prompt).await {
+                Ok(text) => serde_json::json!({
+                    "v": 1,
+                    "type": "drive.reply",
+                    "session_id": session_id,
+                    "payload": { "text": text },
+                }),
+                Err(e) => serde_json::json!({
+                    "v": 1,
+                    "type": "drive.error",
+                    "session_id": session_id,
+                    "payload": { "error": e.to_string() },
+                }),
+            };
+            let body = match serde_json::to_vec(&envelope) {
+                Ok(b) => Bytes::from(b),
+                Err(e) => {
+                    tracing::debug!("nats drive: serialize reply failed: {}", e);
+                    return;
+                }
+            };
+            let subject = reply_subject
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("{}.{}.reply", prefix, sanitize_token(&session_id)));
+            if let Err(e) = client.publish(subject, body).await {
+                tracing::debug!("nats drive: publish reply failed: {}", e);
+            }
+        });
     }
 }
 
@@ -188,5 +369,22 @@ mod tests {
         // With GOOSE_NATS_URL unset in the test env, this must not panic.
         let msg = Message::user().with_text("hello");
         publish_message("test-session", &msg);
+    }
+
+    #[test]
+    fn emit_on_full_channel_increments_dropped() {
+        let (tx, rx) = mpsc::channel::<NatsEvent>(1);
+        drop(rx);
+        let publisher = NatsPublisher { tx };
+
+        let before = DROPPED.load(Ordering::Relaxed);
+        publisher.emit(NatsEvent {
+            session_id: "s".to_string(),
+            kind: "test",
+            payload: serde_json::json!({}),
+        });
+        let after = DROPPED.load(Ordering::Relaxed);
+
+        assert_eq!(after, before + 1);
     }
 }

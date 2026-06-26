@@ -3,10 +3,13 @@ use crate::state;
 use anyhow::Result;
 use axum::middleware;
 use axum_server::Handle;
+use futures::StreamExt;
 use goose::acp::server_factory::{AcpServer, AcpServerFactoryConfig};
 use goose::acp::transport::create_acp_router;
-use goose::agents::GoosePlatform;
+use goose::agents::types::SessionConfig;
+use goose::agents::{AgentEvent, GoosePlatform};
 use goose::config::paths::Paths;
+use goose::conversation::message::Message;
 use goose_server::auth::{check_acp_token, check_token};
 #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
 use goose_server::tls::setup_tls;
@@ -118,6 +121,8 @@ pub async fn run() -> Result<()> {
         gateway_manager.check_auto_start().await;
     });
 
+    spawn_nats_drive_loop(app_state.clone());
+
     if settings.tls {
         #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
         {
@@ -177,4 +182,87 @@ pub async fn run() -> Result<()> {
 
     info!("server shutdown complete");
     Ok(())
+}
+
+/// Opt-in: when `GOOSE_NATS_DRIVE` is enabled and `GOOSE_NATS_URL` is set, let
+/// NATS drive the agent. Mirrors the A2A executor: each inbound command runs one
+/// `agent.reply` to completion and the concatenated assistant text is returned.
+fn spawn_nats_drive_loop(app_state: Arc<state::AppState>) {
+    let cfg = goose::config::Config::global();
+    let drive_enabled = cfg
+        .get_param::<Option<bool>>("GOOSE_NATS_DRIVE")
+        .ok()
+        .flatten()
+        .unwrap_or(false);
+    let nats_configured = cfg
+        .get_param::<String>("GOOSE_NATS_URL")
+        .map(|u| !u.trim().is_empty())
+        .unwrap_or(false);
+    if !(drive_enabled && nats_configured) {
+        return;
+    }
+
+    info!("NATS drive loop enabled");
+    tokio::spawn(async move {
+        goose::nats::run_drive_loop(move |session_id, prompt| {
+            let app = app_state.clone();
+            async move {
+                let agent = app.get_agent(session_id.clone()).await?;
+
+                let working_dir =
+                    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                app.session_manager()
+                    .ensure_session(&session_id, working_dir)
+                    .await?;
+
+                if agent.provider().await.is_err() {
+                    let cfg = goose::config::Config::global();
+                    match (cfg.get_goose_provider(), cfg.get_goose_model()) {
+                        (Ok(provider_name), Ok(model)) => {
+                            let model_config = goose::model_config::model_config_from_user_config(
+                                &provider_name,
+                                &model,
+                            )?;
+                            let extensions = goose::session::EnabledExtensionsState::for_session(
+                                app.session_manager(),
+                                &session_id,
+                                cfg,
+                            )
+                            .await;
+                            let provider =
+                                goose::providers::create(&provider_name, model_config, extensions)
+                                    .await?;
+                            agent.update_provider(provider, &session_id).await?;
+                        }
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "no provider configured (set GOOSE_PROVIDER and GOOSE_MODEL)"
+                            ));
+                        }
+                    }
+                }
+
+                let session_config = SessionConfig {
+                    id: session_id.clone(),
+                    schedule_id: None,
+                    max_turns: Some(50),
+                    retry_config: None,
+                };
+
+                let user_message = Message::user().with_text(prompt);
+                let mut stream = agent.reply(user_message, session_config, None).await?;
+
+                let mut agent_text = String::new();
+                while let Some(event) = stream.next().await {
+                    if let Ok(AgentEvent::Message(m)) = event {
+                        if m.role == rmcp::model::Role::Assistant {
+                            agent_text.push_str(&m.as_concat_text());
+                        }
+                    }
+                }
+                Ok(agent_text)
+            }
+        })
+        .await;
+    });
 }

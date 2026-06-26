@@ -56,6 +56,42 @@ Built on `async-nats` 0.49 (Core NATS, at-most-once):
 - **Best-effort telemetry**, not a transactional log. (JetStream/at-least-once is
   a future opt-in for those who need durability.)
 
+Every published envelope also carries:
+
+- `seq` — a process-global monotonic counter, so a subscriber can order events
+  from one instance even if NATS delivery reorders them.
+- `instance` — who produced it: `GOOSE_NATS_INSTANCE` if set, else
+  `<HOSTNAME>:<pid>`. Lets a fleet attribute each event to a specific goose.
+
+Dropped events (broker slow/full channel) increment an internal counter and are
+logged at debug, so silent loss is observable rather than invisible.
+
+## Drive goose over NATS (inbound)
+
+The bus is bidirectional. A `goosed` instance can be **driven** over NATS:
+publish a command and it runs a turn and publishes the reply. Opt-in and
+**off by default**:
+
+```bash
+export GOOSE_NATS_URL="nats://localhost:4222"
+export GOOSE_NATS_DRIVE=true          # enable the inbound subscriber (goosed)
+export GOOSE_PROVIDER=... GOOSE_MODEL=...   # used to bootstrap a turn headlessly
+goosed agent
+```
+
+`goosed` queue-subscribes (group `goose-drive`, so multiple instances share the
+work) to `<prefix>.cmd`. Send a JSON command — request/reply gets the answer on
+your inbox, or omit the reply subject and read `<prefix>.<session>.reply`:
+
+```bash
+# request/reply: drives a turn and returns the reply
+nats req goose.cmd '{"session_id":"demo","prompt":"What is 2+2?"}'
+```
+
+The reply is a `drive.reply` envelope (`payload.text`), or `drive.error` on
+failure. Driving is gated separately from publishing because it is more
+sensitive — treat the NATS subject as a trusted control plane.
+
 ## Try it
 
 ```bash
@@ -64,5 +100,5 @@ nats-server
 # terminal 2
 nats sub 'goose.>'
 # terminal 3
-GOOSE_NATS_URL=nats://localhost:4222 goose run -t "hello"
+GOOSE_NATS_URL=nats://localhost:4222 goose-plus run -t "hello"
 ```

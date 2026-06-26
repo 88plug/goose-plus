@@ -386,9 +386,19 @@ impl SessionManager {
         session_type: SessionType,
         goose_mode: GooseMode,
     ) -> Result<Session> {
-        self.storage
+        let session = self
+            .storage
             .create_session(working_dir, name, session_type, goose_mode)
-            .await
+            .await?;
+        crate::nats::publish_event(
+            &session.id,
+            "session.created",
+            serde_json::json!({
+                "name": session.name,
+                "working_dir": session.working_dir.display().to_string(),
+            }),
+        );
+        Ok(session)
     }
 
     /// Idempotently ensure a session row exists for an explicit `id`. Entry
