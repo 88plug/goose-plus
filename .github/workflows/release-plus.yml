@@ -65,7 +65,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libvulkan-dev libvulkan1
+          # GGML_VULKAN's CMake find_package(Vulkan) requires the glslc shader
+          # compiler (libvulkan-dev alone => "Could NOT find Vulkan (missing:
+          # glslc)"). Matches build-cli.yml / bundle-desktop-linux.yml.
+          sudo apt-get install -y libvulkan-dev libvulkan1 glslc
           cargo check -p goose-cli --features vulkan
 
   build-cli:
