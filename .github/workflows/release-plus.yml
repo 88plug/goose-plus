@@ -276,11 +276,22 @@ jobs:
             CLI install:
             `curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/download_cli.sh | bash`
 
+      # Recreate the rolling "stable" release fresh each run. Updating it in
+      # place makes ncipollo delete same-named assets before re-upload, and that
+      # delete-by-id 404s when GitHub's asset list is stale (the publish job's
+      # only failure mode). Deleting first means there is never an asset to
+      # delete, so the recreate is always clean.
+      - name: Reset stable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete stable --repo ${{ github.repository }} --yes --cleanup-tag || true
+
       # Rolling "stable" release used by the install script.
       - name: Release stable
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           tag: stable
+          commit: ${{ github.sha }}
           name: Stable (goose-plus)
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: |
