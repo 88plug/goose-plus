@@ -18,15 +18,17 @@
 
 use reqwest::Client;
 use rmcp::{
-    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
-        CallToolResult, Content, ErrorCode, ErrorData, Implementation, InitializeResult,
-        ListResourcesResult, PaginatedRequestParams, RawResource, ReadResourceRequestParams,
+        CallToolRequestParams, CallToolResult, Content, ErrorCode, ErrorData, Implementation,
+        InitializeResult, ListResourcesResult, ListToolsResult, LoggingLevel,
+        LoggingMessageNotificationParam, Notification, NumberOrString, PaginatedRequestParams,
+        ProgressNotificationParam, ProgressToken, RawResource, ReadResourceRequestParams,
         ReadResourceResult, Resource, ResourceContents, ServerCapabilities, ServerInfo,
+        ServerNotification, Tool,
     },
     schemars::JsonSchema,
     service::RequestContext,
-    tool, tool_handler, tool_router, RoleServer, ServerHandler,
+    RoleServer, ServerHandler,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -90,8 +92,6 @@ pub struct SearchUpdate {
 
 #[derive(Clone)]
 pub struct SearxngServer {
-    #[allow(dead_code)]
-    tool_router: ToolRouter<Self>,
     http: Client,
     free_providers: Vec<String>,
 }
@@ -128,7 +128,6 @@ impl SearxngServer {
             });
 
         Self {
-            tool_router: Self::tool_router(),
             http,
             free_providers,
         }
@@ -234,6 +233,9 @@ impl SearxngServer {
 
     /// Non-streaming parallel search. Collects the final merged set.
     /// Internally driven by the streaming implementation so behavior stays identical.
+    /// Kept for symmetry / future use even if the primary tool path now uses the stream directly
+    /// to emit live progress/logging notifications.
+    #[allow(dead_code)]
     async fn parallel_search(&self, query: &str, language: &str) -> Vec<merge::MergedResult> {
         let mut stream = self.parallel_search_stream(query, language).await;
         let mut final_results: Vec<merge::MergedResult> = vec![];
@@ -247,17 +249,110 @@ impl SearxngServer {
     }
 }
 
-#[tool_router(router = tool_router)]
+// We implement tools manually (instead of relying solely on #[tool] macro)
+// so we can access RequestContext and emit Progress + Logging notifications
+// during the parallel free search. This is critical for ACP clients and
+// goose's McpNotification path to see live updates as each of the 8 free
+// providers responds.
 impl SearxngServer {
-    #[tool(
-        description = "SearXNG search. All configured free providers are always run in full parallel (no limit) with fast-fail + HTML fallback + merge. Only verified working providers by default. Streaming updates available for A2A/ACP agents."
-    )]
-    async fn searxng_search(
+    fn make_search_tool() -> rmcp::model::Tool {
+        // Build tool using rmcp constructors to satisfy non-exhaustive + schema requirements.
+        use rmcp::model::{JsonObject, Tool, ToolAnnotations};
+        let schema = schemars::schema_for!(SearxngSearchParams);
+        // Convert schemars Schema to the raw JSON Schema object expected by MCP.
+        let schema_value = serde_json::to_value(&schema).unwrap_or_else(|_| serde_json::json!({}));
+        let input_schema: Arc<JsonObject> =
+            Arc::new(schema_value.as_object().cloned().unwrap_or_default());
+
+        Tool::new(
+            "searxng_search",
+            "SearXNG metasearch. All configured free providers (default 8 verified working) \
+             are always run in full parallel (no limit) with fast-fail + HTML fallback + merge. \
+             Returns richer results than any single instance. \
+             When called over MCP, live progress and logging notifications are emitted as \
+             each provider responds (great for ACP / goose clients).",
+            input_schema,
+        )
+        .with_title("SearXNG Parallel Search (8 free providers)")
+        .with_annotations(
+            ToolAnnotations::new()
+                .read_only(true)
+                .destructive(false)
+                .idempotent(false)
+                .open_world(true),
+        )
+    }
+
+    async fn execute_searxng_search_with_notifications(
         &self,
-        Parameters(params): Parameters<SearxngSearchParams>,
+        params: SearxngSearchParams,
+        context: &RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        let results = self.parallel_search(&params.query, &params.language).await;
-        let limited: Vec<_> = results
+        let mut stream = self
+            .parallel_search_stream(&params.query, &params.language)
+            .await;
+
+        // Try to honor a progressToken from the caller (meta), otherwise use a stable one for this call.
+        let progress_token: ProgressToken = context
+            .meta
+            .0
+            .get("progressToken")
+            .and_then(|v| serde_json::from_value::<ProgressToken>(v.clone()).ok())
+            .unwrap_or_else(|| {
+                // context.id is RequestId = NumberOrString; use Display for a stable token.
+                ProgressToken(NumberOrString::String(Arc::from(format!(
+                    "searxng-{}",
+                    context.id
+                ))))
+            });
+
+        let total_backends = self.build_targets().len().max(1) as f64;
+        let mut done = 0.0f64;
+        let mut final_merged: Vec<merge::MergedResult> = vec![];
+
+        while let Some(update) = stream.next().await {
+            done += 1.0;
+            let pct = ((done / total_backends) * 100.0).clamp(0.0, 100.0);
+
+            // Logging notification (human + structured) — flows to goose as McpNotification
+            let log_data = serde_json::json!({
+                "type": "searxng_parallel_progress",
+                "backend": update.backend,
+                "added": update.added,
+                "total_merged_so_far": update.total_merged,
+                "is_final": update.is_final,
+                "query": params.query,
+            });
+            let log_notif = LoggingMessageNotificationParam::new(LoggingLevel::Info, log_data)
+                .with_logger("searxng-mcp");
+            let _ = context
+                .peer
+                .send_notification(ServerNotification::LoggingMessageNotification(
+                    Notification::new(log_notif),
+                ))
+                .await;
+
+            // Progress notification — used by ACP tool notifications and MCP progress subscribers
+            let prog_notif = ProgressNotificationParam::new(progress_token.clone(), pct)
+                .with_message(format!(
+                    "SearXNG parallel: {} responded ({} unique results so far)",
+                    update.backend, update.total_merged
+                ))
+                .with_total(100.0);
+            let _ = context
+                .peer
+                .send_notification(ServerNotification::ProgressNotification(Notification::new(
+                    prog_notif,
+                )))
+                .await;
+
+            if update.is_final {
+                final_merged = update.merged_preview;
+                break;
+            }
+        }
+
+        let limited: Vec<_> = final_merged
             .into_iter()
             .take(params.max_results as usize)
             .collect();
@@ -297,7 +392,11 @@ impl SearxngServer {
     }
 }
 
-#[tool_handler]
+// We do not use the #[tool] + generated router for the main search tool
+// because we need the full RequestContext<RoleServer> during execution
+// to emit ProgressNotification and LoggingMessageNotification in real time.
+// We manually implement list_tools / get_tool / call_tool.
+
 impl ServerHandler for SearxngServer {
     fn get_info(&self) -> ServerInfo {
         InitializeResult::new(
@@ -312,8 +411,54 @@ impl ServerHandler for SearxngServer {
              with fast-fail + HTML fallback + merge. \
              Only the 8 verified working providers are in DEFAULT_FREE_PROVIDERS (dead list is only in docs). \
              Streaming updates via parallel_search_stream for fast delivery to A2A and ACP agents. \
-             Resources: searxng://free-providers"
+             Resources: searxng://free-providers. \
+             Progress + logging notifications are emitted during searxng_search for live ACP / goose updates."
         )
+    }
+
+    async fn list_tools(
+        &self,
+        _pagination: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        Ok(ListToolsResult {
+            tools: vec![Self::make_search_tool()],
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    fn get_tool(&self, name: &str) -> Option<Tool> {
+        if name == "searxng_search" {
+            Some(Self::make_search_tool())
+        } else {
+            None
+        }
+    }
+
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if request.name.as_ref() == "searxng_search" {
+            let params: SearxngSearchParams = if let Some(args) = request.arguments {
+                serde_json::from_value(serde_json::Value::Object(args))
+                    .map_err(|e| ErrorData::invalid_params(format!("bad params: {e}"), None))?
+            } else {
+                SearxngSearchParams {
+                    query: String::new(),
+                    language: "en".to_string(),
+                    max_results: 10,
+                }
+            };
+            return self
+                .execute_searxng_search_with_notifications(params, &context)
+                .await;
+        }
+        Err(ErrorData::method_not_found::<
+            rmcp::model::CallToolRequestMethod,
+        >())
     }
 
     async fn list_resources(
