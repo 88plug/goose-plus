@@ -25,18 +25,20 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          # main is protected by the "Upstream mirror: protect main" ruleset,
-          # whose only bypass actor is the Admin role. The default GITHUB_TOKEN
-          # (github-actions[bot]) is NOT a bypass actor, so it cannot push to
-          # main — use an admin-owned fine-grained PAT (secret SYNC_PAT) which
-          # inherits the Admin-role bypass. Falls back to GITHUB_TOKEN when the
-          # secret is absent (push will be blocked until SYNC_PAT is set).
+          # Optional belt-and-suspenders: if the "protect main" ruleset's
+          # `update` rule rejects the default token, set repo secret SYNC_PAT
+          # (admin fine-grained PAT, contents:write) — it inherits the Admin-role
+          # bypass. Falls back to GITHUB_TOKEN, which is enough for a plain
+          # fast-forward mirror push.
           token: ${{ secrets.SYNC_PAT || github.token }}
 
       - name: Mirror main from upstream
         run: |
           set -euo pipefail
-          git fetch --depth=1 https://github.com/aaif-goose/goose.git main
+          # Full fetch (NOT --depth=1): a shallow fetch of upstream's tip omits
+          # the commits linking it to the current main, so git can't prove the
+          # push is a fast-forward and wrongly rejects it as non-fast-forward.
+          git fetch https://github.com/aaif-goose/goose.git main
           UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
           LOCAL_SHA="$(git rev-parse HEAD)"
           if [ "$UPSTREAM_SHA" = "$LOCAL_SHA" ]; then
@@ -44,6 +46,6 @@ jobs:
             exit 0
           fi
           git reset --hard "$UPSTREAM_SHA"
-          # force-with-lease so the mirror tracks upstream even across a history
-          # rewrite (rare); the Admin-role bypass permits the non-fast-forward.
-          git push --force-with-lease origin HEAD:main
+          # Plain fast-forward push (no --force) so the non_fast_forward rule is
+          # never triggered; the mirror only ever fast-forwards anyway.
+          git push origin HEAD:main
