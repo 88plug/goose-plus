@@ -423,6 +423,25 @@ impl Agent {
             .await;
     }
 
+    /// Fire the `AfterAgentResponse` hook with the agent's final response text
+    /// for this turn. No-op when the message is empty or no such hook is
+    /// registered.
+    async fn emit_after_agent_response_hook(&self, session_id: &str, message: &str) {
+        if message.is_empty()
+            || !self
+                .hook_manager
+                .has_hooks(crate::hooks::HookEvent::AfterAgentResponse)
+        {
+            return;
+        }
+        let ctx =
+            crate::hooks::HookContext::new(crate::hooks::HookEvent::AfterAgentResponse, session_id)
+                .with_message(message.to_string());
+        self.hook_manager
+            .emit(crate::hooks::HookEvent::AfterAgentResponse, ctx)
+            .await;
+    }
+
     pub async fn steer(&self, session_id: &str, message: Message) {
         self.pending_steers
             .lock()
@@ -2661,6 +2680,22 @@ impl Agent {
                     exit_chat = false;
                 }
 
+                // AfterAgentResponse fires once per final assistant response
+                // (no tool calls this turn). take() guarantees a single emit
+                // across the non-exit and exit (Stop-allow) paths.
+                let mut after_response_text = if no_tools_called && !last_assistant_text.is_empty() {
+                    Some(last_assistant_text.clone())
+                } else {
+                    None
+                };
+
+                if !exit_chat {
+                    if let Some(text) = after_response_text.take() {
+                        self.emit_after_agent_response_hook(&session_config.id, &text)
+                            .await;
+                    }
+                }
+
                 if exit_chat {
                     let ctx = crate::hooks::HookContext::new(
                         crate::hooks::HookEvent::Stop,
@@ -2672,6 +2707,10 @@ impl Agent {
                         .await
                     {
                         crate::hooks::HookDecision::Allow => {
+                            if let Some(text) = after_response_text.take() {
+                                self.emit_after_agent_response_hook(&session_config.id, &text)
+                                    .await;
+                            }
                             stop_hook_handled_for_exit = true;
                             break;
                         }

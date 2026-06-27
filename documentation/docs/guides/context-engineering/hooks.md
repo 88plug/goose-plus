@@ -135,6 +135,7 @@ Use `${PLUGIN_ROOT}` in a command to reference the plugin directory. goose also 
 | `SessionEnd` | A session ends | None |
 | `Stop` | goose receives a stop event | None |
 | `UserPromptSubmit` | The user submits a prompt | Prompt text |
+| `AfterAgentResponse` | After goose produces a final response (no tool calls that turn) | Response text |
 | `PreToolUse` | Before goose runs a tool | Tool name |
 | `PostToolUse` | After a tool succeeds | Tool name |
 | `PostToolUseFailure` | After a tool fails | Tool name |

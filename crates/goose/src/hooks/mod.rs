@@ -54,6 +54,7 @@ pub enum HookEvent {
     SessionStart,
     SessionEnd,
     UserPromptSubmit,
+    AfterAgentResponse,
     BeforeReadFile,
     AfterFileEdit,
     BeforeShellExecution,
@@ -70,6 +71,7 @@ impl HookEvent {
             HookEvent::SessionStart => "SessionStart",
             HookEvent::SessionEnd => "SessionEnd",
             HookEvent::UserPromptSubmit => "UserPromptSubmit",
+            HookEvent::AfterAgentResponse => "AfterAgentResponse",
             HookEvent::BeforeReadFile => "BeforeReadFile",
             HookEvent::AfterFileEdit => "AfterFileEdit",
             HookEvent::BeforeShellExecution => "BeforeShellExecution",
@@ -86,6 +88,7 @@ impl HookEvent {
             "SessionStart" => HookEvent::SessionStart,
             "SessionEnd" => HookEvent::SessionEnd,
             "UserPromptSubmit" => HookEvent::UserPromptSubmit,
+            "AfterAgentResponse" => HookEvent::AfterAgentResponse,
             "BeforeReadFile" => HookEvent::BeforeReadFile,
             "AfterFileEdit" => HookEvent::AfterFileEdit,
             "BeforeShellExecution" => HookEvent::BeforeShellExecution,
@@ -735,6 +738,36 @@ mod tests {
 
         let written = std::fs::read_to_string(&marker).unwrap();
         assert_eq!(written.trim(), root.to_string_lossy());
+    }
+
+    #[tokio::test]
+    async fn after_agent_response_hook_fires_with_message() {
+        let tmp = tempfile::tempdir().unwrap();
+        let payload = tmp.path().join("payload.json");
+        let payload_path = payload.to_string_lossy().into_owned();
+        let hooks = format!(
+            r#"{{"hooks":{{"AfterAgentResponse":[{{"hooks":[{{"type":"command","command":"sh -c 'cat > {p}'"}}]}}]}}}}"#,
+            p = payload_path,
+        );
+        let root = write_plugin(tmp.path(), "p", &hooks);
+        let mgr = make_manager(vec![DiscoveredPlugin {
+            name: "p".into(),
+            root,
+            scope: PluginScope::User,
+        }]);
+
+        assert!(mgr.has_hooks(HookEvent::AfterAgentResponse));
+        mgr.emit(
+            HookEvent::AfterAgentResponse,
+            HookContext::new(HookEvent::AfterAgentResponse, "s").with_message("hello world"),
+        )
+        .await;
+
+        let written = std::fs::read_to_string(&payload).unwrap();
+        assert!(
+            written.contains("hello world"),
+            "AfterAgentResponse payload should carry the response message: {written}"
+        );
     }
 
     #[tokio::test]
