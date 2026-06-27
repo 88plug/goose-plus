@@ -76,8 +76,15 @@ Dead/unreliable providers are tracked only in `DEAD_PROVIDERS.md` (never in acti
 ## Remaining / Future (non-blocking)
 - Optional: emit `ProgressNotification` / `LoggingMessageNotification` during tool-path parallel execution for live ACP updates.
 - Unit/integration tests for the streaming path.
-- Rendered/Playwright fallback for heavily protected instances.
 - Upstream 88plug/searxng-mcp sync.
+
+## Delivered (optional rendered fallback)
+- Optional FlareSolverr support added to the Rust client.
+- New environment variable: `SEARXNG_FLARESOLVERR_URL`.
+- Non-blocking per-backend last-resort path (after JSON + HTML fail) that does not block the "full parallel, no limit" free provider pool.
+- Reusable `parse_simple_theme_html` + `try_flaresolverr` implementation.
+- Unit tests for the HTML parser (in `crates/goose-mcp/src/searxng/client.rs`).
+- Documented in `documentation/docs/mcp/searxng-mcp.md` and `docs/searxng-mcp/FLARESOLVERR_RESEARCH.md` (with live test data showing why it must stay optional/last-resort).
 
 ---
 

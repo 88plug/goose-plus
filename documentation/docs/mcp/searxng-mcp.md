@@ -75,6 +75,13 @@ export SEARXNG_MCP_FREE_PROVIDERS="https://searx.tiekoetter.com,https://baresear
 
 # Your own instance (still works; free pool is added in parallel by default)
 export SEARXNG_MCP_BASE_URL=http://127.0.0.1:8890
+
+# Optional FlareSolverr (rendered Chrome proxy) as a last-resort per-backend fallback
+# Only used for providers that fail direct JSON + direct HTML (e.g. heavy Cloudflare protection).
+# Does not block other parallel providers — runs independently per-backend.
+# Use only when you need to reach additional "dead" public instances.
+# Set this to the base URL of a running FlareSolverr instance (default port 8191).
+export SEARXNG_FLARESOLVERR_URL=http://localhost:8191
 ```
 
 If you only want your own instance without the free pool:
@@ -87,12 +94,32 @@ export SEARXNG_MCP_USE_FREE_PROVIDERS=false
 - The built-in Rust searxng server (`crates/goose-mcp/src/searxng/`) implements the same logic as the reference Python version.
 - `parallel_search_stream()` fans the query out to all targets concurrently.
 - Every backend uses fast-fail: JSON first, then HTML fallback.
+- Optional third path (only when `SEARXNG_FLARESOLVERR_URL` is set): FlareSolverr rendered fetch as a last-resort for individual backends that fail the first two paths (e.g. heavy Cloudflare protection). This path is per-backend only and does not block the other providers running in parallel.
 - Results are merged on the fly; updates are emitted after each provider responds.
 - The non-streaming `searxng_search` tool still works for normal in-turn tool use.
 
 ### HTML Fallback (Why It Matters)
 
 Many public instances disable or block `format=json`. The HTML parser understands the standard "simple" SearXNG theme and produces a payload shape that satisfies validation and merge logic.
+
+### Optional Rendered Fallback via FlareSolverr
+
+When you set `SEARXNG_FLARESOLVERR_URL`, searxng-mcp gains a **third, last-resort path** for individual backends that fail both direct JSON and direct HTML fetches (typically due to Cloudflare / Turnstile protection).
+
+- It is **per-backend only** — a slow solve for one provider never blocks the other providers running in the same parallel query.
+- It is **only attempted** after the two fast paths return no usable results for that specific backend.
+- Results coming through this path are tagged with engine `flaresolverr`.
+- Because FlareSolverr launches real Chrome, solves are much slower (seconds to tens of seconds) and heavier than direct calls. This path is intended for the providers that "need it" (many entries in `DEAD_PROVIDERS.md`, or the 8 when they are temporarily heavily protected).
+- Keep the core "8 free providers in full parallel, no limit" behavior on the fast paths.
+
+See `docs/searxng-mcp/FLARESOLVERR_RESEARCH.md` for live measurements, trade-offs, and recommendations.
+
+Usage example (point at a running FlareSolverr instance):
+
+```bash
+export SEARXNG_FLARESOLVERR_URL=http://localhost:8191
+# now searxng_search (or searxng: queries over A2A) will try FS for any backend that needs it
+```
 
 ### Usage from goose
 
@@ -113,6 +140,20 @@ For direct agent-to-agent use, enable A2A on goose (`GOOSE_A2A_ENABLE=true`) and
 See `docs/searxng-mcp/demo_parallel_free.py` (in the goose-plus repo) for a standalone demonstration of the parallel + merge behavior.
 
 See the A2A section in the documentation for examples of calling goose directly for searxng results.
+
+### Using the Optional FlareSolverr Fallback
+
+If you have FlareSolverr running (e.g. `docker run -p 8191:8191 -d flaresolverr/flaresolverr`), you can enable the last-resort rendered path:
+
+```bash
+export SEARXNG_FLARESOLVERR_URL=http://localhost:8191
+```
+
+With this set, any of the configured providers (the default 8 or your own list) that return no usable results via direct JSON or HTML will automatically try FlareSolverr for that backend only. The other providers continue in full parallel without waiting.
+
+This is the recommended way to "revive" many of the historically dead public instances listed in `docs/searxng-mcp/DEAD_PROVIDERS.md` without changing the fast-path behavior for the healthy ones.
+
+See `docs/searxng-mcp/FLARESOLVERR_RESEARCH.md` for real-world timing and resource measurements that explain why this must remain optional and last-resort.
 
 ### Comparison to Other Search MCPs
 

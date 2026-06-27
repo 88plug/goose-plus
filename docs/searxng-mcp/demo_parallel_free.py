@@ -105,3 +105,20 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+# Optional: FlareSolverr rendered fallback
+#
+# Set SEARXNG_FLARESOLVERR_URL=http://localhost:8191 (or your instance)
+# to enable a last-resort rendered path for backends that fail direct
+# JSON + HTML (e.g. Cloudflare-protected "dead" instances).
+#
+# This is completely optional and per-backend only.
+# It does not change the default full-parallel behavior of the 8 free providers.
+#
+# Example:
+#   SEARXNG_FLARESOLVERR_URL=http://localhost:8191 \
+#   python docs/searxng-mcp/demo_parallel_free.py "ai agents"
+#
+# When enabled, any backend that would otherwise return no results
+# will be retried through FlareSolverr (long timeout). Other backends
+# continue in parallel as usual.
