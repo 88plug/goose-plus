@@ -1,17 +1,48 @@
-# WISHLIST.md — Context Cortex PRD
+# WISHLIST.md — Autopoietic Relevance Ecology (ARE) PRD
 
-**Product:** goose-plus context management evolution  
-**Status:** Draft PRD (research + repo forensics, June 2026)  
-**Baseline:** `9fd61b3ab` (`plus-v1.39.22`)  
-**Authors:** Research synthesis (SearXNG + Edgar Morin + local repomix forensics)
+**Product:** goose-plus session cognition evolution  
+**Status:** Draft PRD  
+**Baseline:** `9fd61b3ab` (`plus-v1.39.22`) · wishlist committed at `4de94604c`  
+**Synthesis:** SearXNG research · Edgar Morin complex thought · local repomix forensics (goose-plus, Crush, OpenCode)
 
 ---
 
 ## Executive Summary
 
-Long-running coding-agent sessions degrade before they overflow. Every major TUI (OpenCode, Crush, Codex, Claude Code) optimizes **crash prevention at ~80–95% context**, not **coherence preservation at ~40%**. goose-plus is already the most advanced local implementation — dual visibility metadata, incremental tool-pair eviction, MOIM early warning — but still relies on lossy prose summaries and positional heuristics.
+Coding-agent sessions degrade at **40–60% context utilization** while every major TUI waits until **80–95%** to act. The industry treats the problem as **buffer management** — compact, truncate, summarize. That is the wrong ontology.
 
-**Context Cortex** is the proposed evolution: TUI-agnostic middleware that treats chat as disposable L1 cache, git/filesystem as canonical memory, and evicts **typed episode surrogates** via a dependency graph — not narrative compaction. This document is the wishlist / PRD for building it on goose-plus's existing `context_mgmt/` foundation.
+**Autopoietic Relevance Ecology (ARE)** reframes the harness + repo + tools + user as a **coupled cognitive system**. The context window is not memory. It is a **broadcast channel** for beliefs and surprises that demand action *this turn*. Everything else lives in a graded belief ecology at tunable confidence until task perturbations pull it back.
+
+goose-plus is the seed codebase: dual visibility metadata, incremental tool-pair eviction, MOIM early warning. ARE extends those primitives into belief atoms, per-turn selection-broadcast, ecological eviction, offline metagraph consolidation, and deuterolearning — with narrative compaction demoted to rare emergency surgery.
+
+**Default operation:** belief revision + attention selection.  
+**Rare operation:** L3 narrative compact (manual or irrecoverable prose only).
+
+---
+
+## The Level-Shift
+
+### What engineering asks
+
+> How do we replace messages smarter than compaction?
+
+### What Morin / Bateson / Goertzel / Friston ask
+
+> What is the cognitive system, and what role does a context window play in it?
+
+| Framework | Core insight | ARE implication |
+|---|---|---|
+| **Morin** — pensée complexe | Systems are dialogic; observer is inside; preserve contradictions ([Codex Numeris](https://codexnumeris.org/46-cultiver-la-pensee-complexe/)) | Eviction preserves tension — abandoned approaches become low-confidence ghost constraints, not deletions |
+| **Bateson** — ecology of mind | Information is difference; **deuterolearning** = learning about learning | Session learns meta-policies for its own memory management |
+| **Goertzel** — cognitive synergy | Memory processes unstick each other via shared [Atomspace metagraph](https://hyperon.opencog.org/) ([paper](https://arxiv.org/pdf/1703.04361)) | Background consolidation merges belief atoms; compaction = graph chunking when stuck, not prose |
+| **Friston** — active inference | Minimize surprise via generative world-model ([free energy principle](https://en.wikipedia.org/wiki/Free_energy_principle)) | Context carries **beliefs + prediction errors**, not transcripts |
+| **Pei Wang** — NARS | [Non-axiomatic reasoning](https://cis.temple.edu/~pwang/NARS-Intro.html): all knowledge provisional; bag-memory under resource limits | Eviction lowers confidence and archives — never binary delete |
+| **LIDA / GWT** | [Selection-broadcast cognitive cycle](https://aaai.org/papers/0011-fs07-01-011-%EF%80%A0lida-a-computational-model-of-global-workspace-theory-and-developmental-learning/) | Per-turn competition for workspace slots — not static hot/warm/cold zones |
+| **Vervaeke** — relevance realization | Salience is participatory, telos-dependent ([Frontiers 2024](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2024.1362658/full)) | Broadcast scoring weights user intent, surprises, coupling sensors |
+| **Clark / Hutchins** | [Extended mind](https://link.springer.com/article/10.1007/s11229-025-05046-y) + [distributed cognition](https://en.wikipedia.org/wiki/Distributed_cognition) | Unit of analysis = agent + repo + git + tools + user |
+| **Maturana** — structural coupling | Cognition = effective action under perturbation ([autopoiesis paper](https://reflexus.org/wp-content/uploads/Autopoiesis-structural-coupling-and-cognition.pdf)) | Belief decay driven by git/test perturbations, not timers alone |
+
+**Dialogic tension (Morin):** Friston says don't store history. Goertzel says store everything in a metagraph. JetBrains says mask and done. **All three are right at different timescales** — light ecology per-turn, heavy consolidation offline.
 
 ---
 
@@ -19,496 +50,546 @@ Long-running coding-agent sessions degrade before they overflow. Every major TUI
 
 ### Symptoms
 
-- Agents lose causal chains after compaction ("you told me X three pages ago" when X was summarized away).
-- Quality collapses at 40–60% context utilization while harnesses wait until 80–95% to act ([Chroma context rot](https://research.trychroma.com/context-rot), [OpenCode #10016](https://github.com/anomalyco/opencode/issues/10016)).
-- Tool outputs dominate token budget; blunt truncation or middle-drop destroys recoverability.
-- Prompt-cache economics punish arbitrary middle-edits ([Don't Break the Cache](https://arxiv.org/html/2601.06007v2)).
+- Causal chains break after compaction ("you told me X" when X was summarized away).
+- Quality collapses at 40–60% utilization; harnesses act at 80–95% ([Chroma context rot](https://research.trychroma.com/context-rot), [OpenCode #10016](https://github.com/anomalyco/opencode/issues/10016)).
+- Tool outputs dominate token budget; truncation destroys recoverability.
+- Middle-edits break prompt-cache prefix ([Don't Break the Cache](https://arxiv.org/html/2601.06007v2)).
 
-### Root Cause
+### Root cause
 
-Harnesses optimize `messages[]` length. The real object is an **episode DAG**: user decisions → tool calls → file mutations → git state. Full compaction **flattens a graph into prose**, destroying structure ([CWL paper](https://arxiv.org/html/2606.11213v1)).
+Harnesses optimize `messages[]` length. The real object is a **coupled belief ecology** distributed across chat, git, filesystem, tests, and user intent. Full compaction **flattens an ecology into prose**, destroying structure ([CWL](https://arxiv.org/html/2606.11213v1)).
 
-### Opportunity
+### Why "Context Cortex" was insufficient
 
-goose-plus already has the right primitive: **dual visibility** (`agent_visible` / `user_visible`) plus incremental tool-pair replacement. Extend that into typed surrogates, graph-aware eviction, and agent recoverability — then port as middleware for other harnesses.
-
----
-
-## Goals
-
-| # | Goal |
-|---|------|
-| G1 | Preserve causal coherence through 4+ hour coding sessions without quality cliff at 40–50% context |
-| G2 | Evict context incrementally with **typed surrogates**, not lossy prose summaries |
-| G3 | Guarantee **recoverability**: every eviction has a re-fetch path or pinned surrogate |
-| G4 | Maintain **prefix stability** for prompt-cache economics |
-| G5 | Trigger eviction at **~40%** context, not 80–95% |
-| G6 | Ship a **Context Inspector** TUI panel for pin/drop/rehydrate |
-| G7 | Keep goose-plus as seed codebase; design for eventual TUI-agnostic extraction |
-
-## Non-Goals
-
-- KV-cache eviction research (H₂O, SAGE-KV, StreamingLLM) — wrong layer for API-based agents
-- Full MemGPT/Letta-style virtual memory OS — filesystem + git is the archive
-- Multi-agent context splitting — telephone problem; single agent + cold-zone eviction
-- Replacing goose-plus's provider/A2A/NATS work — context cortex is orthogonal
-- Upstream Block goose parity tracking in this doc (optional follow-up)
+Context Cortex (prior draft of this doc) improved buffer management: typed surrogates, episode DAG, recoverability oracle, hot/warm/cold zones. That is a better garbage collector — still a **transcript manager**. ARE supersedes it by changing the unit of memory from **messages** to **belief atoms**.
 
 ---
 
-## Research Background
+## Vision: Autopoietic Relevance Ecology
 
-### Selective replacement is real — at multiple layers
+### One sentence
 
-| Layer | Examples | Relevance to goose-plus |
-|---|---|---|
-| Inference KV eviction | H₂O, SAGE-KV, StreamingLLM, FoX | Low — API clients never touch KV |
-| Application/API editing | Anthropic context editing, MemGPT, A-Mem | High — patterns for selective removal |
-| Structural access | Landmark Attention, CacheBlend | Medium — informs surrogate/pointer design |
-| Agent memory surveys | [Memory for Autonomous LLM Agents](https://arxiv.org/html/2603.07670v1) | High — formalizes write/manage/read loop |
+> The repo is the body; beliefs are the nervous system; the context window is whatever currently demands action; everything else lives in the ecology at graded confidence until the task perturbs it back.
 
-### What prior attempts missed
+### Three invariants
 
-| Attempt | Missed |
+| Invariant | Meaning |
 |---|---|
-| Compaction (all TUIs) | Destroys causal structure; lossy prose |
-| Crush middle-drop ([#2240](https://github.com/charmbracelet/crush/issues/2240)) | No semantics, no recovery |
-| Codex 256-line truncation ([#6426](https://github.com/openai/codex/issues/6426)) | Arbitrary cuts |
-| DCP plugin | Heuristics, no DAG, not core |
-| pi-context-prune | Good recoverability (`context_tree_query`), no causal eviction policy |
-| CWL / pi-cwl | Good episode graph, requires full protocol rewrite |
-| KV eviction research | Wrong layer for API agents |
-| MemGPT | Heavy; agent must actively cooperate |
-| Observation masking alone ([JetBrains](https://arxiv.org/html/2508.21433v3)) | Insufficient for 4hr sessions; excellent L0 foundation |
+| **CANONICALITY** | Truth lives in git + filesystem. Chat is disposable working surface. |
+| **RECOVERABILITY** | Nothing removed without surrogate, re-fetch path, or explicit confidence archive. |
+| **PREFIX STABILITY** | System prompt + pinned invariants = immutable broadcast prefix. Eviction happens in belief ecology, not by mutating the prefix. |
 
-### Why TUIs haven't "solved it"
+### Distributed cognitive unit
 
-1. Products optimize **"don't crash"** not **"stay coherent"**
-2. Selective deletion is semantically dangerous without recoverability guarantees
-3. Prompt caching breaks on middle-edits without zone architecture
-4. Plugins (DCP, pi-context-prune) fill the gap instead of core integration
-5. Research solved inference KV — harnesses are API clients
+```
+Agent ⟷ git repo ⟷ filesystem ⟷ tool outputs ⟷ user intent
+         ↑________________ coupling sensors ________________↑
+              (diff, mtime, test status, CI)
+```
+
+The context window is LIDA's **conscious workspace** — a narrow broadcast, not the whole mind.
+
+### Four operating layers
+
+```
+L0  Observation Masking      — hide stale tool outputs (zero LLM cost)
+    [JetBrains: halves cost, matches summarization]
+
+L1  Belief Extraction         — tool outputs → typed belief atoms with confidence
+    invariant | state | constraint | surprise | digest
+
+L2  Selection-Broadcast       — per-turn codelet competition for workspace slots
+    [LIDA/GWT: attention oscillates, not static zones]
+
+L3  Ecological Consolidation   — background metagraph merge when processes stuck
+    [Goertzel cognitive synergy: offline, off hot path]
+
+L4  Narrative Compact         — LAST RESORT for irrecoverable prose only
+    [current Codex/Claude/OpenCode — demoted, not deleted]
+```
+
+**Trigger L0–L2 at ~40% context.** Reserve L4 for ~85%+ or manual `/compact`.
+
+---
+
+## How ARE Works
+
+### Belief atoms (replace transcripts)
+
+After each tool call or user turn, extract beliefs — not store raw output:
+
+```yaml
+beliefs:
+  - id: b-47
+    type: invariant          # user decision — Morin: pin dialogic tension
+    text: "auth uses JWT refresh, 7d TTL"
+    confidence: 0.95
+    source: user@turn-12
+    pinned: true
+
+  - id: b-48
+    type: state              # recoverable world-state
+    text: "middleware.ts exports withAuth, withRateLimit"
+    confidence: 0.7
+    source: read_file@turn-34
+    recover: "read_file middleware.ts"
+    last_verified_sha: a3f2c1
+
+  - id: b-49
+    type: surprise           # Friston: prediction error → must resolve
+    text: "tests fail: rate limit not applied to /api/v2"
+    confidence: 1.0
+    source: test_run@turn-41
+    action_required: true
+
+  - id: b-50
+    type: constraint         # Bateson ghost: abandoned approach
+    text: "Redis session store broke tests — do not retry"
+    confidence: 0.25
+    source: failed_attempt@turn-8
+    pinned: false            # kept at low confidence, not deleted
+```
+
+**What enters the LLM prompt each turn:**
+- Pinned invariants and constraints
+- Open surprises (prediction errors)
+- Broadcast winners from salience competition
+- **Not** 200 turns of tool logs
+
+Raw messages stay in DB for user scroll. Agent sees beliefs.
+
+### Selection-broadcast (per turn, not zones)
+
+Codelets compete for workspace slots:
+
+| Codelet | Salience drivers |
+|---|---|
+| Open test failure | surprise × urgency |
+| User's latest instruction | recency × authority |
+| File changed since last belief | structural coupling (git delta) |
+| Constraint violation risk | pinned × task relevance |
+| Stale state belief | confidence decay (NARS) |
+
+Winners → context. Losers → archived beliefs (confidence ↓, recover path kept).
+
+### Ecological eviction (not graph surgery)
+
+Beliefs participate in an ecology:
+
+| Role | Eviction priority |
+|---|---|
+| **Parasites** — redundant reads of same file | First to decay |
+| **Symbionts** — mutually reinforcing beliefs | Decay together slowly |
+| **Keystones** — architectural decisions | Never evict without user pin |
+| **Ghosts** — failed approaches | Low confidence forever (Morin dialogic) |
+
+Eviction = **succession**, not deletion. NARS: confidence approaches zero; belief archived, not erased.
+
+### Structural coupling (Maturana)
+
+Recoverability is not "can we re-run grep?" It is:
+
+> Does evicting this belief break the agent's ability to compensate for repo perturbations?
+
+Coupling sensors: `git diff`, file mtime, test status, CI signal. A `read_file` belief auto-decays when its file changes — perturbation-driven, not timer-only.
+
+### Cognitive synergy offline (Goertzel)
+
+Background task (extends goose's `maybe_summarize_tool_pairs`):
+
+- Consolidate archived beliefs into metagraph chunks
+- When episodic beliefs bottleneck procedural action, cross-feed (synergy unsticks processes)
+- Runs off hot path — never blocks the turn loop
+
+### Deuterolearning (Bateson) — the missing layer everywhere
+
+Session learns meta-policies from its own eviction history:
+
+```
+observed: auth refactors → constraint beliefs needed 3× longer
+learned:  task_class=refactor + domain=auth → pin_constraints_ttl=2h
+
+observed: exploratory grep → 90% read beliefs never referenced again
+learned:  task_class=explore → state_belief_ttl=5min
+```
+
+Second-order memory management. No current TUI has this.
+
+### One turn under ARE
+
+```
+1. Coupling sensors: 3 files changed, 1 test red
+2. Belief update: b-48 confidence 0.7 → 0.3 (stale sha)
+3. New surprise belief from test failure
+4. Codelet competition: user intent > test failure > stale middleware
+5. Broadcast ~2k tokens to LLM
+6. Agent acts (fix rate limit)
+7. Background: consolidate 40 archived grep beliefs → 1 metagraph chunk
+8. Deutero: "rate-limit bugs → keep test beliefs pinned until green"
+```
+
+No compact. No prose summary. No middle-out.
+
+L4 fires only for irrecoverable prose (long design debates) or manual `/compact`.
 
 ---
 
 ## Current State: goose-plus Baseline
 
-**Repo:** `/home/andrew/goose-plus`  
-**HEAD:** `9fd61b3ab` — `fix(release-plus): pin makeLatest (plus-v1.39.22)`  
-**Context core unchanged** in `a4b566f5c → 9fd61b3ab` pull (168 files elsewhere).
+**HEAD:** `9fd61b3ab` (`plus-v1.39.22`)
 
 ### Key files
 
 | File | Role |
 |---|---|
-| `crates/goose/src/context_mgmt/mod.rs` | Compaction, tool-pair summarization, middle-out filter (820 lines) |
-| `crates/goose/src/agents/moim.rs` | `<turn-context>` injection, compaction countdown (352 lines) |
-| `crates/goose/src/agents/agent.rs` | Orchestration, async eviction per turn |
-| `crates/goose/src/prompts/compaction.md` | LLM compaction prompt (9-section structured summary) |
-| `crates/goose/src/session/last_message_snippet.rs` | Session list UI only — **not** agent memory |
+| `crates/goose/src/context_mgmt/mod.rs` | Compaction, tool-pair summarization, middle-out filter |
+| `crates/goose/src/agents/moim.rs` | `<turn-context>` injection, compaction countdown |
+| `crates/goose/src/agents/agent.rs` | Orchestration, async eviction, `AfterAgentResponse` hook |
+| `crates/goose/src/prompts/compaction.md` | L4 compaction prompt |
+| `crates/goose/src/session/last_message_snippet.rs` | Session list UI only — not agent cognition |
 
-### Tier 1 — Incremental tool-pair replacement ✅
+### What exists today
 
-- `maybe_summarize_tool_pairs()` — background `tokio` task per reply loop
-- Batch: 10 pairs (`TOOLCALL_SUMMARIZATION_BATCH_SIZE`)
-- Cutoff: `compute_tool_call_cutoff(context_limit × threshold)` — clamp(10, 500)
-- On completion: originals → `with_agent_invisible()`, summary → `agent_only`
-- Protects current turn: `protect_last_n` — never summarize last N tool calls
-- Toggle: `GOOSE_TOOL_PAIR_SUMMARIZATION` (default **on**)
+| Tier | Mechanism | ARE mapping |
+|---|---|---|
+| T1 | `maybe_summarize_tool_pairs()` — batch 10, background async | Proto-L1: replace tool pairs, but lossy prose |
+| T2 | Auto-compact at **80%**, middle-out tool removal, `compaction.md` | L4 today — should become rare |
+| T3 | MOIM `<turn-context>` countdown after 50% of threshold | Proto-broadcast warning |
+| — | Dual `MessageMetadata` visibility | Proto-belief hiding |
+| — | `AfterAgentResponse` hook | Extension point for ARE middleware |
+| — | Recovery compact on `ContextLengthExceeded` | Emergency L4 |
 
-### Tier 2 — Full auto-compaction ✅
+### Gap to ARE
 
-- Trigger: `check_if_compaction_needed()` at **80%** (`DEFAULT_COMPACTION_THRESHOLD = 0.8`)
-- Override: `GOOSE_AUTO_COMPACT_THRESHOLD`
-- Pre-compact: `filter_tool_responses()` — **middle-out** removal at 0→10→20→50→100%
-- `do_compact()` → `compaction.md` → LLM prose summary
-- Visibility: originals `agent_invisible`, user still sees; summary + continuation assistant injected
-- Preserves latest user text message on auto-compact
-- Manual: `/compact` slash command, ACP `conversation/truncate`
-
-### Tier 3 — MOIM turn-context ✅
-
-- Injects `<turn-context>` into latest user message each turn
-- Compaction countdown after **50%** of threshold (`total_tokens / compaction_at >= 0.5`)
-- Skips context limits < 32K (`MIN_CONTEXT_FOR_MOIM`)
-- Agent warned early; compaction still fires at 80%
-
-### Tier 3b — Recovery compact ✅
-
-- On `ContextLengthExceeded`: retry compact up to 2 attempts
-- `did_recovery_compact_this_iteration` — continues from last user message
-
-### New in latest pull (extension point, not eviction)
-
-- `AfterAgentResponse` hook in `agent.rs` — fires once per final assistant text response
-- Enables external middleware to observe/capture responses
-- Deleted: `CONTEXT_RECOVERY_REPORT.md` (was internal doc)
-
-### What goose-plus got right (closest to Context Cortex)
-
-- Dual visibility metadata — selective agent removal without deleting user history
-- Incremental replacement **before** full compact
-- Protects current turn
-- Recovery compact on context-length errors mid-loop
-
-### What goose-plus still misses
-
-- Summaries are **prose**, not typed surrogates
-- No **dependency graph** — middle-out is positional, not causal
-- No **recoverability oracle** — agent cannot re-fetch evicted tool output
-- Trigger still **80%** — past context-rot danger zone
-- Tool-pair summaries are **lossy** ("A call to github was made…")
+| Have | Need |
+|---|---|
+| Message visibility layers | Belief atom store with confidence |
+| Lossy tool-pair prose summaries | Typed `ToolDigest` / `FileAnchor` beliefs |
+| Static 80% compact trigger | 40% L0–L2 + 85% L4 |
+| Middle-out positional heuristic | Selection-broadcast + ecological succession |
+| No meta-learning | Deuterolearning policies |
+| No coupling sensors | Git/test-driven confidence decay |
 
 ---
 
 ## Competitive Landscape
 
-### Crush (`/home/andrew/crush`)
-
-**Mechanism:** Summary pointer handoff only.
-
-- `StopWhen` checks remaining tokens each step
-- Small windows (<200K): trigger at **20% remaining**
-- Large windows: trigger at **20K tokens remaining**
-- `Summarize()` → `session.SummaryMessageID` → `getSessionMessages()` slices from summary onward
-- Everything before summary **gone** from agent view (not visibility-layered)
-- `disable_auto_summarize` config flag
-- `compact_mode` = TUI display density, **not** context management
-
-**Verdict:** Simplest. Lossy nuclear. No selective replacement.
-
-### OpenCode (`/home/andrew/opencode`)
-
-**Mechanism:** Standard 90% full summarization.
-
-- Auto-summarize at **90%** of `(context - output)` in `chat.ts`
-- `summarize.ts` — filter since last `summary: true`, LLM prose, recursive `chat()`
-- No prune/compact/visibility in core session module
-- [DCP plugin](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning) (3.5k stars) — external, heuristic
-
-**Verdict:** Same paradigm as Crush. Community wants prune-before-summarize ([#14825](https://github.com/anomalyco/opencode/issues/14825)) — not in core.
-
-### Comparative Matrix
-
 | Capability | goose-plus | Crush | OpenCode core | DCP plugin |
 |---|---|---|---|---|
-| Selective tool eviction | ✅ tool-pair | ❌ | ❌ | ✅ heuristic |
-| Dual visibility (agent/user) | ✅ | ❌ | ❌ | partial |
-| Incremental (before full compact) | ✅ | ❌ | ❌ | ✅ |
-| Full compaction fallback | ✅ 80% | ✅ ~80–90% | ✅ 90% | ✅ |
-| Typed surrogates | ❌ | ❌ | ❌ | ❌ |
-| Dependency graph | ❌ | ❌ | ❌ | ❌ |
-| Agent recoverability | ❌ | ❌ | ❌ | partial (TUI) |
+| Incremental eviction | ✅ tool-pair | ❌ | ❌ | ✅ heuristic |
+| Dual visibility | ✅ | ❌ | ❌ | partial |
+| Belief / surrogate layer | ❌ (prose only) | ❌ | ❌ | ❌ |
+| Selection-broadcast | ❌ | ❌ | ❌ | ❌ |
+| Full compact fallback | ✅ 80% | ✅ ~80–90% | ✅ 90% | ✅ |
+| Coupling sensors | ❌ | ❌ | ❌ | ❌ |
+| Deuterolearning | ❌ | ❌ | ❌ | ❌ |
 | Trigger timing | 80% | 80–90% | 90% | configurable |
-| Context Inspector TUI | ❌ | ❌ | ❌ | ✅ |
 
-**Conclusion:** goose-plus on this machine is the **seed codebase**. Crush/OpenCode core do not have incremental eviction primitives.
+**Crush:** summary-pointer handoff — `SummaryMessageID` slices history ([`agent.go`](../../crush/internal/agent/agent.go)). Nuclear, not layered.
+
+**OpenCode:** 90% full summarization in `chat.ts` / `summarize.ts`. DCP plugin proves demand; core deferred the hard problem.
+
+**Verdict:** goose-plus remains the only local codebase with incremental eviction + visibility primitives. ARE builds here first.
 
 ---
 
-## Vision: Context Cortex
+## Goals & Non-Goals
 
-Not one algorithm. A **TUI-agnostic middleware OS** between any harness (OpenCode/Crush/Codex/Pi) and any provider API.
+### Goals
 
-### Three invariants (non-negotiable)
-
-| Invariant | Meaning |
+| # | Goal |
 |---|---|
-| **CANONICALITY** | Truth lives in git/filesystem. Chat is disposable working set. |
-| **RECOVERABILITY** | Nothing removed without a surrogate OR re-fetch path (file:line, git sha, pointer URI, `context_tree_query`). |
-| **PREFIX STABILITY** | System prompt + pinned decisions = immutable hot prefix. Eviction only in cold zone. Cache-safe by construction. |
+| G1 | Coherence through 4+ hour sessions — no quality cliff at 40–50% utilization |
+| G2 | Default: belief revision + broadcast — not compaction |
+| G3 | Every eviction: confidence archive + recover path or pin |
+| G4 | Prefix stability for prompt-cache economics |
+| G5 | L0–L2 active at ~40%; L4 rare at ~85% or manual |
+| G6 | Coupling sensors (git, tests) drive belief decay |
+| G7 | Deuterolearning of session-specific eviction meta-policy |
+| G8 | Context Inspector TUI: inspect beliefs, pin, rehydrate, preview broadcast |
+| G9 | Design for TUI-agnostic extraction after goose-plus proves it |
 
-### Four layers (tiered, not either/or)
+### Non-Goals
 
-```
-L0  Observation Masking     — hide stale tool outputs (zero LLM cost)
-    [JetBrains: halves cost, matches summarization]
-
-L1  Typed Surrogates        — replace episodes with 10–50 token cards, not 500-token summaries
-    DecisionCard | FileAnchor | ToolDigest | GitSnapshot | ConstraintCard
-
-L2  Dependency Eviction     — LLM-free policy on episode DAG
-    [CWL: shed persisted actions, keep active reasoning + user turns]
-
-L3  Narrative Compaction    — last resort only for irrecoverable prose
-    [current Codex/Claude/OpenCode approach — demoted, not deleted]
-```
-
-**Trigger at ~40% context**, not 95%. Quality preservation, not crash prevention.
-
-### Request zone architecture
-
-```
-[HOT PREFIX — cached, never mutated]
-  system + AGENTS.md + pinned DecisionCards
-
-[WARM ZONE — append-only during session]
-  recent turns + active file context
-
-[COLD ZONE — eviction target]
-  completed tool episodes with persisted effects
-```
-
-### One sentence
-
-**Stop managing tokens. Start managing episodes with recoverability guarantees — chat is cache, git is memory, eviction is graph surgery not summarization, and you trigger at 40% not 95%.**
+- KV-cache eviction (H₂O, SAGE-KV, StreamingLLM) — wrong layer for API agents
+- Full Hyperon/Atomspace rewrite — borrow synergy *pattern*, not full stack
+- MemGPT virtual memory OS — filesystem + git is the archive
+- Multi-agent context splitting — telephone problem ([Cognition](https://jxnl.co/writing/2025/09/11/why-cognition-does-not-use-multi-agent-systems/))
+- Solving embodied relevance realization (Vervaeke) — approximate via salience under coupling
+- Upstream Block goose diff in this doc
 
 ---
 
 ## Feature Wishlist
 
-### F1 — Recoverability Oracle
+### F1 — Belief Atom Store
 
-**Description:** Before evicting any turn, answer deterministically: *Can this episode be reconstructed from environment state alone?*
+**Description:** Session-scoped belief DB parallel to message history. Messages become provenance; beliefs become agent-facing memory.
 
-| Episode type | Recoverable? | Action |
-|---|---|---|
-| `read_file` after file edited | Yes — re-read | Replace with `FileAnchor{path, mtime, sha}` |
-| `grep` / search output | Yes — re-run | Replace with `ToolDigest{cmd, hit_count}` |
-| User decision ("use JWT not sessions") | **No** | Pin as `DecisionCard` — never evict |
-| Failed approach (tried X, broke Y) | **No** | Pin as `ConstraintCard` |
-| `write_file` / `git commit` | Yes — diff exists | Replace with `GitSnapshot{sha, files}` |
-
-**Acceptance criteria:**
-- [ ] Every eviction path calls oracle before mutating visibility
-- [ ] Non-recoverable episodes auto-pinned to hot prefix
-- [ ] Recoverable episodes always produce typed surrogate with `recover_cmd`
-- [ ] Agent can invoke recover_cmd via existing tool surface (read_file, bash, etc.)
-
----
-
-### F2 — Typed Surrogates (L1)
-
-**Description:** Replace evicted episodes with structured 10–50 token cards, not prose summaries.
-
-**Surrogate types:**
+**Schema (illustrative):**
 
 ```rust
-// Illustrative — actual schema TBD
-DecisionCard   { id, text, turn, pinned: bool }
-FileAnchor     { path, line_range, sha, mtime }
-ToolDigest     { tool, args_hash, hit_count, recover_cmd }
-GitSnapshot    { sha, files[], message }
-ConstraintCard { what_failed, why, turn }
-```
-
-**Example output in context:**
-
-```
-[DECISION] auth=JWT, refresh=7d, decided@turn-12
-[ANCHOR] src/auth.ts:47-120 (sha:a3f2c1)
-[DIGEST] grep "middleware" → 3 hits in 2 files (re-run: grep -r middleware src/)
+struct Belief {
+    id: BeliefId,
+    belief_type: Invariant | State | Constraint | Surprise | Digest,
+    text: String,
+    confidence: f32,          // 0.0–1.0, NARS-style
+    source: Provenance,       // message_id, turn, tool_call_id
+    recover: Option<RecoverCmd>,
+    pinned: bool,
+    last_verified_sha: Option<String>,
+    coupling_tags: Vec<String>,  // files, test suites
+}
 ```
 
 **Acceptance criteria:**
-- [ ] `summarize_tool_call()` emits `ToolDigest` surrogate, not free-form prose
-- [ ] Surrogates serialize to compact single-line format (<50 tokens typical)
-- [ ] Surrogates stored in `MessageMetadata` extension field (backward compatible)
-- [ ] Unit tests: surrogate round-trip preserves recover_cmd
-- [ ] Eliminates compression-induced hallucination vs prose rewrite
+- [ ] Beliefs persist in session DB alongside messages
+- [ ] Every tool pair can emit ≥1 belief atom
+- [ ] Agent prompt assembled from beliefs, not raw message scrollback
+- [ ] User UI still shows full message history unchanged
 
 ---
 
-### F3 — Episode DAG (L2)
+### F2 — Belief Extraction (L1)
 
-**Description:** Model each tool call + result as a typed node with edges.
+**Description:** Replace `summarize_tool_call()` prose with typed belief emission.
 
-**Edge types:**
-- `depends_on` → prior reads/decisions
-- `mutates` → files changed
-- `supersedes` → obsolete approaches
-
-**Eviction policy:** Drop leaf nodes whose `mutates` are reflected in current git tree. Keep active reasoning chains and unpinned user turns.
+| Tool pattern | Belief type | Example |
+|---|---|---|
+| `read_file` | `State` | `middleware.ts:47-120 exports withAuth (sha:a3f2)` |
+| `grep` / `bash` | `Digest` | `grep "auth" → 3 hits (re-run: …)` |
+| `write_file` / commit | `State` + coupling tag | file + sha |
+| test failure | `Surprise` | `action_required: true` |
+| user decision | `Invariant` | auto-pinned |
 
 **Acceptance criteria:**
-- [ ] DAG built incrementally per tool pair (no full-session replay)
-- [ ] Eviction policy is **LLM-free** (deterministic graph walk)
-- [ ] Middle-out heuristic replaced by graph-leaf shedding
-- [ ] Pinned `DecisionCard` / `ConstraintCard` nodes never evicted
-- [ ] Integration test: 4hr simulated session retains decision chain after 60% eviction
+- [ ] `GOOSE_BELIEF_EXTRACTION=true` (default on, replaces prose summarization)
+- [ ] Typical belief <50 tokens
+- [ ] `GOOSE_BELIEF_FORMAT=typed|prose` legacy fallback
+- [ ] Unit tests per tool pattern
 
 ---
 
-### F4 — Observation Masking (L0)
+### F3 — Coupling Sensors
 
-**Description:** Hide stale tool outputs from agent view with zero LLM cost before any summarization.
-
-**Rules (initial):**
-- Mask `read_file` output when file mtime > read timestamp
-- Mask completed grep/search when newer edits touched matched files
-- Mask duplicate identical tool calls within session
+**Description:** Git diff, file mtime, test status update belief confidence each turn.
 
 **Acceptance criteria:**
-- [ ] L0 runs before L1 on every turn
-- [ ] Masked messages use existing `agent_invisible` metadata
-- [ ] Token savings logged per session (target: ≥30% on read-heavy sessions)
-- [ ] No LLM calls in L0 path
+- [ ] `State` beliefs decay when `last_verified_sha` ≠ current HEAD blob
+- [ ] `Surprise` beliefs auto-pin until test green or user dismiss
+- [ ] Sensor run is LLM-free, <100ms typical
+- [ ] MOIM reports coupling deltas in `<turn-context>`
 
 ---
 
-### F5 — Cold-Zone Architecture + Prefix Stability
+### F4 — Selection-Broadcast Engine (L2)
 
-**Description:** Structural zones in conversation assembly; eviction never mutates hot prefix.
+**Description:** Per-turn codelet competition replaces static hot/warm/cold zones and middle-out heuristic.
+
+**Salience formula (initial):**
+
+```
+score = w1·surprise + w2·user_recency + w3·pin + w4·coupling_delta
+        - w5·confidence_decay - w6·redundancy
+```
 
 **Acceptance criteria:**
-- [ ] Hot prefix = system + project instructions + pinned cards (immutable per session)
-- [ ] `agent.rs` prompt assembly respects zone ordering
-- [ ] Eviction operations only touch cold zone messages
-- [ ] Anthropic/OpenAI cache breakpoints align with zone boundaries
-- [ ] Config: `GOOSE_CONTEXT_HOT_PREFIX_PIN` for user-pinned turns
+- [ ] Broadcast budget configurable (default: 40% of context limit)
+- [ ] Winning beliefs injected as structured block, not message replay
+- [ ] `protect_last_n` tool turns still honored
+- [ ] Deterministic given same beliefs + sensors (testable without LLM)
 
 ---
 
-### F6 — 40% Trigger Threshold
+### F5 — Ecological Eviction + NARS Confidence
 
-**Description:** Begin L0→L1→L2 eviction at ~40% context utilization; reserve L3 compaction for >85% or manual `/compact`.
+**Description:** Eviction lowers confidence and archives. Ghost constraints stay at low confidence. Keystones require explicit unpin.
 
 **Acceptance criteria:**
-- [ ] New default: `DEFAULT_EVICTION_THRESHOLD = 0.4` (separate from L3 compact threshold)
-- [ ] `GOOSE_AUTO_EVICTION_THRESHOLD` env override
-- [ ] MOIM countdown starts at 25% (not 50% of 80%)
-- [ ] L3 full compact remains at 80% as last resort
-- [ ] E2E test: session quality benchmark at 50% utilization vs baseline
+- [ ] No belief hard-deleted during session (archive only)
+- [ ] `confidence < 0.1` → excluded from broadcast, recover path retained
+- [ ] Redundant `State` beliefs on same file merge (parasite culling)
+- [ ] User pin sets `confidence = 1.0, pinned = true`
 
 ---
 
-### F7 — GREP-don't-hoard Primitive
+### F6 — Observation Masking (L0)
 
-**Description:** Treat every `read_file` as cache entry with TTL, not permanent context.
-
-**Default TTL:** Until next edit to that file (via git status / mtime watch).
+**Description:** Zero-LLM stale output masking before belief extraction.
 
 **Acceptance criteria:**
-- [ ] `read_file` episodes auto-eligible for L0 mask after TTL
-- [ ] Surrogate `FileAnchor` always emitted on eviction
-- [ ] Agent prompted (via MOIM) to re-read on demand, not hoard
-- [ ] Configurable TTL override per session
+- [ ] Mask `read_file` content when file changed since read
+- [ ] Mask duplicate identical tool calls within session
+- [ ] Uses existing `agent_invisible` metadata
+- [ ] Runs before F2 on every turn
+- [ ] Token savings logged (target: ≥30% on read-heavy sessions)
 
 ---
 
-### F8 — Context Inspector TUI Panel
+### F7 — Threshold Rebalance
 
-**Description:** Ship DCP-style inspector as first-class goose-plus UI.
+| Threshold | Today | Target |
+|---|---|---|
+| L0–L2 activation | 80% (compact) | **40%** (`GOOSE_AUTO_EVICTION_THRESHOLD`) |
+| MOIM countdown start | 50% of 80% | **25%** of context |
+| L4 compact | 80% | **85%** (`GOOSE_AUTO_COMPACT_THRESHOLD`) |
+
+**Acceptance criteria:**
+- [ ] Separate env vars for eviction vs compact
+- [ ] L4 compact unchanged in behavior, just rarer
+- [ ] E2E benchmark: task continuation score at 50% utilization vs baseline
+
+---
+
+### F8 — Cognitive Synergy Consolidator (L3)
+
+**Description:** Background metagraph merge of archived beliefs. Fires when belief count exceeds budget or synergy heuristic detects stuckness (Goertzel).
+
+**Acceptance criteria:**
+- [ ] Runs in background `tokio` task (extends tool-pair pattern)
+- [ ] Produces consolidated belief clusters, not prose
+- [ ] Never mutates pinned/invariant beliefs
+- [ ] Consolidation logged with before/after atom count
+
+---
+
+### F9 — Deuterolearning Meta-Policy
+
+**Description:** Session-end or periodic update of eviction TTL weights from observed patterns.
+
+**Acceptance criteria:**
+- [ ] Per-project policy file (e.g. `.goose/belief-policy.toml`)
+- [ ] At least 3 tunable params: `state_ttl`, `constraint_pin_duration`, `explore_vs_refactor bias`
+- [ ] Policy influences F4 salience weights next session
+- [ ] User can inspect and override in Context Inspector
+
+---
+
+### F10 — Context Inspector TUI
+
+**Description:** Belief ecology dashboard — not just message list.
 
 **Capabilities:**
-- View hot / warm / cold zone contents
-- Pin / unpin any turn
-- Preview eviction impact before applying
-- One-key "rehydrate" any surrogate (re-run recover_cmd)
-- Show token budget per zone
+- View beliefs by type, confidence, coupling tags
+- Pin / unpin / rehydrate (run `recover_cmd`)
+- Preview what broadcast would select this turn
+- Show parasite/redundant clusters
+- One-key force L4 compact (with structured handoff preview)
 
 **Acceptance criteria:**
-- [ ] Desktop UI panel in session view
-- [ ] CLI/TUI equivalent for headless mode
-- [ ] Pin action promotes message to hot prefix
-- [ ] Rehydrate restores full tool output to warm zone temporarily
-- [ ] Works with existing `MessageMetadata` visibility layers
+- [ ] Desktop UI panel
+- [ ] Headless CLI: `goose-plus session beliefs <id>`
+- [ ] Rehydrate temporarily promotes belief to full tool output in warm broadcast
 
 ---
 
-### F9 — Structured Session Handoff (L3 upgrade)
+### F11 — Structured Handoff (L4 upgrade)
 
-**Description:** When L3 compaction must fire, output machine-readable handoff (YAML/JSON), not prose-only.
+**Description:** When L4 compact fires, emit machine-readable artifact alongside prose.
 
 ```yaml
-decisions: [{id, text, turn}]
-constraints: [{what_failed, why}]
-active_files: [{path, sha, role}]
-open_tasks: [{id, status, blocked_by}]
-evicted_surrogates: [{type, pointer, recover_cmd}]
+invariants: [{id, text, turn}]
+constraints: [{text, confidence, why}]
+active_beliefs: [{id, type, confidence, recover}]
+coupling_state: {sha, dirty_files, test_status}
+open_surprises: [{text, action_required}]
+archived_count: 1247
 ```
 
 **Acceptance criteria:**
-- [ ] `compaction.md` produces parallel structured artifact alongside prose summary
-- [ ] Handoff artifact stored in session DB
-- [ ] Session resume loads structured handoff into hot prefix
-- [ ] Import compatible with Claude Code / Codex / Pi session formats (extend existing import)
+- [ ] Stored in session DB, loadable on resume
+- [ ] Import compatible with existing Claude Code / Codex / Pi session import
+- [ ] Prose summary optional when structured handoff present
 
 ---
 
-### F10 — AfterAgentResponse Middleware Hook
+### F12 — AfterAgentResponse Middleware Contract
 
-**Description:** Leverage new `AfterAgentResponse` hook as extension point for Context Cortex plugins.
+**Description:** Document and expose hook for external ARE plugins.
 
 **Acceptance criteria:**
-- [ ] Document hook contract for context middleware
-- [ ] Example plugin: log zone token counts post-response
-- [ ] Hook receives session_id, message_id, token usage — sufficient for external cortex
-- [ ] No regression in hook latency (<5ms overhead)
+- [ ] Hook receives: session_id, message_id, beliefs_broadcast, token_usage
+- [ ] Example plugin: confidence calibration from outcome
+- [ ] <5ms overhead
 
 ---
 
-### F11 — TUI-Agnostic Middleware Extraction (future)
+### F13 — TUI-Agnostic Extraction (future)
 
-**Description:** Extract Context Cortex as standalone crate / MCP server usable by Crush, OpenCode, Pi.
+**Description:** `goose-are` crate — belief ecology engine with no UI deps.
 
 **Acceptance criteria:**
-- [ ] `goose-context-cortex` crate with no UI dependencies
-- [ ] stdin/stdout or MCP interface: `ingest(messages) → emit(messages')`
-- [ ] Reference integration doc for OpenCode plugin wrapper
-- [ ] Shared surrogate schema (JSON Schema published)
+- [ ] API: `ingest(turn) → beliefs' + broadcast`
+- [ ] JSON Schema for belief atoms published
+- [ ] Reference OpenCode/Crush adapter doc
 
 ---
 
 ## Implementation Phases
 
-### Phase 0 — Foundation (extend existing)
+### Phase 0 — Belief Foundation
 
-**Build on:** `MessageMetadata`, `maybe_summarize_tool_pairs`, MOIM, `AfterAgentResponse`
+*Extend existing `context_mgmt/` + `MessageMetadata`*
 
-| Item | Effort | Dependencies |
-|---|---|---|
-| F2 typed surrogates for tool-pair path | M | `context_mgmt/mod.rs` |
-| F6 40% eviction threshold (config only) | S | `context_mgmt/mod.rs`, `moim.rs` |
-| F4 L0 observation masking (read_file TTL) | M | `context_mgmt/`, git/mtime |
-| F10 hook documentation + example | S | `agent.rs`, docs |
+| Item | Features |
+|---|---|
+| Belief atom store in session DB | F1 |
+| Typed extraction replaces prose tool-pair summary | F2 |
+| L0 observation masking | F6 |
+| Threshold rebalance (40% / 85%) | F7 |
+| Hook documentation | F12 |
 
-**Exit criteria:** Tool-pair summaries emit `ToolDigest`; eviction starts at 40%; L0 masks stale reads.
+**Exit:** Tool pairs emit beliefs; eviction starts at 40%; stale reads masked.
 
-### Phase 1 — Graph + Oracle
+### Phase 1 — Attention & Coupling
 
-| Item | Effort | Dependencies |
-|---|---|---|
-| F1 recoverability oracle | L | episode classifier |
-| F3 episode DAG | L | tool pair tracking, git integration |
-| F5 cold-zone assembly | M | `agent.rs` prompt builder |
-| Replace middle-out with graph eviction | M | F3 |
+| Item | Features |
+|---|---|
+| Coupling sensors (git sha, mtime) | F3 |
+| Selection-broadcast engine | F4 |
+| NARS confidence eviction | F5 |
+| MOIM shows belief ecology summary | F3 |
 
-**Exit criteria:** Eviction is graph-based; non-recoverable decisions pinned; middle-out deprecated.
+**Exit:** Per-turn broadcast; no middle-out; git-driven decay.
 
-### Phase 2 — UX + Handoff
+### Phase 2 — Ecology & UX
 
-| Item | Effort | Dependencies |
-|---|---|---|
-| F8 Context Inspector TUI | L | desktop UI, session API |
-| F9 structured handoff | M | `compaction.md`, session DB |
-| F7 GREP-don't-hoard polish | S | F4 + MOIM messaging |
+| Item | Features |
+|---|---|
+| Background synergy consolidator | F8 |
+| Context Inspector TUI | F10 |
+| Structured L4 handoff | F11 |
+| Test-surprise auto-pin | F3 |
 
-**Exit criteria:** Users can inspect/pin/rehydrate; L3 produces structured artifact.
+**Exit:** Users inspect/pin/rehydrate beliefs; L4 produces structured artifact.
 
-### Phase 3 — Extraction
+### Phase 3 — Learning & Extraction
 
-| Item | Effort | Dependencies |
-|---|---|---|
-| F11 middleware crate | L | Phase 0–2 stable API |
-| OpenCode/Crush adapter docs | M | F11 |
+| Item | Features |
+|---|---|
+| Deuterolearning meta-policy | F9 |
+| `goose-are` crate | F13 |
+| OpenCode/Crush adapter | F13 |
 
-**Exit criteria:** Third-party harness can consume Context Cortex without forking goose.
+**Exit:** Sessions improve eviction policy over time; engine portable.
 
 ---
 
-## What to Take / Leave (per competitor)
+## Configuration
 
-| Source | Take | Leave |
+| Env / Config | Default | Purpose |
 |---|---|---|
-| **Goose `context_mgmt`** | visibility metadata, tool-pair batching, MOIM early warning | prose summaries, middle-out heuristic |
-| **Goose `agent.rs`** | async background eviction per turn | 80% as primary trigger |
-| **DCP** | TUI inspector, user pin/drop | relevance heuristics without graph |
-| **CWL / pi-cwl** | episode typing, LLM-free eviction policy | full protocol rewrite |
-| **Crush** | summary pointer as L3 last resort only | as primary mechanism |
-| **JetBrains** | observation masking as L0 | as entire solution |
-| **pi-context-prune** | `context_tree_query` recoverability | lack of causal policy |
-| **Anthropic context editing** | selective tool-result clearing pattern | provider lock-in |
+| `GOOSE_TOOL_PAIR_SUMMARIZATION` | `true` | Legacy; superseded by `GOOSE_BELIEF_EXTRACTION` |
+| `GOOSE_BELIEF_EXTRACTION` | `true` | L1 belief emission |
+| `GOOSE_BELIEF_FORMAT` | `typed` | `typed` \| `prose` |
+| `GOOSE_AUTO_EVICTION_THRESHOLD` | `0.4` | L0–L2 start |
+| `GOOSE_AUTO_COMPACT_THRESHOLD` | `0.85` | L4 compact (was 0.8) |
+| `GOOSE_CONTEXT_L0_MASKING` | `true` | Observation masking |
+| `GOOSE_BROADCAST_BUDGET` | `0.4` | Fraction of context for beliefs |
+| `GOOSE_COUPLING_SENSORS` | `true` | Git/test-driven decay |
+| `GOOSE_SYNERGY_CONSOLIDATE` | `true` | Background L3 |
+| `GOOSE_DEUTERO_LEARN` | `true` | Meta-policy learning |
+| `GOOSE_CONTEXT_INSPECTOR` | `true` | TUI panel |
 
 ---
 
@@ -516,104 +597,91 @@ evicted_surrogates: [{type, pointer, recover_cmd}]
 
 | Metric | Baseline (today) | Target |
 |---|---|---|
-| Eviction trigger | 80% | 40% (L0–L2), 80% (L3 only) |
-| Tool-pair surrogate size | ~100–500 tokens prose | 10–50 tokens typed |
-| Decision retention after 50% eviction | Unmeasured; known failures | 100% pinned decisions present |
-| Agent recoverability | User scroll only | Agent can re-fetch via recover_cmd |
-| LLM calls per eviction cycle | 1 per tool-pair + 1 compact | 0 for L0/L2; 1 only for L1 digest (optional) |
-| 4hr session coherence (LLM-judge) | TBD benchmark | ≥80% task continuation score |
-| Token cost vs baseline | 1.0× | ≤0.6× on read-heavy sessions (L0) |
-
----
-
-## Configuration Wishlist
-
-| Env / Config | Default | Purpose |
-|---|---|---|
-| `GOOSE_TOOL_PAIR_SUMMARIZATION` | `true` | Tier 1 on/off (existing) |
-| `GOOSE_AUTO_COMPACT_THRESHOLD` | `0.8` | L3 full compact (existing) |
-| `GOOSE_AUTO_EVICTION_THRESHOLD` | `0.4` | **New** — L0–L2 start |
-| `GOOSE_CONTEXT_HOT_PREFIX_PIN` | `[]` | **New** — turn IDs pinned to hot zone |
-| `GOOSE_CONTEXT_L0_MASKING` | `true` | **New** — observation masking |
-| `GOOSE_CONTEXT_SURROGATE_FORMAT` | `typed` | **New** — `typed` \| `prose` (legacy) |
-| `GOOSE_CONTEXT_INSPECTOR` | `true` | **New** — TUI panel |
+| Primary strategy | Compact at 80% | Broadcast at 40%; compact rare |
+| Agent-facing unit | Messages | Belief atoms |
+| Typical belief size | 100–500 tokens prose | 10–50 tokens typed |
+| Decision retention at 50% util | Unmeasured; known failures | 100% pinned invariants |
+| Agent recoverability | User scroll only | `recover_cmd` + rehydrate |
+| LLM calls per eviction cycle | 1+ per tool-pair + compact | 0 for L0/L2; optional for L1 |
+| 4hr session coherence (LLM-judge) | TBD | ≥80% task continuation |
+| Token cost vs baseline | 1.0× | ≤0.6× read-heavy sessions |
 
 ---
 
 ## Open Questions
 
-1. **Upstream Block goose:** Has `aaif-goose/goose` main shipped context work not in goose-plus? (Diff follow-up.)
-2. **Surrogate schema:** JSON in message text vs `MessageMetadata` extension vs separate session table?
-3. **DAG persistence:** In-memory per session vs SQLite episode graph?
-4. **LLM for L1:** Zero-LLM surrogates only, or optional LLM for `DecisionCard` extraction from user text?
-5. **ACP/NATS:** Should Context Cortex state publish on NATS bus for fleet observability?
-6. **Benchmark:** Which goose-plus e2e tests (`enhanced-context-management.spec.ts`) to extend?
+1. Belief schema: inline in `MessageMetadata` vs separate SQLite table vs both?
+2. Broadcast block format: YAML in user message vs system injection vs MOIM extension?
+3. Deuterolearning: per-repo `.goose/belief-policy.toml` vs global user profile?
+4. Synergy consolidator: LLM-assisted chunk naming or purely structural merge?
+5. NATS/A2A: publish belief ecology state for fleet observability?
+6. Upstream `aaif-goose/goose` main: context work to port or supersede?
 
 ---
 
 ## References
 
-### Papers & Research
+### Thought Leaders & Frameworks
 
-- [H₂O: Heavy-Hitter Oracle](https://arxiv.org/abs/2306.14048) — KV eviction (wrong layer, informative)
-- [SAGE-KV](https://arxiv.org/html/2503.08879v1) — attention-driven KV eviction
-- [StreamingLLM](https://openreview.net/forum?id=NG7sS51zVF) — attention sinks
-- [MemGPT](https://arxiv.org/pdf/2310.08560) — virtual context paging
-- [CWL — Context Window Layer](https://arxiv.org/html/2606.11213v1) — episode DAG eviction
-- [JetBrains Complexity Trap](https://arxiv.org/html/2508.21433v3) — observation masking
-- [Don't Break the Cache](https://arxiv.org/html/2601.06007v2) — prompt cache stability
-- [Chroma Context Rot](https://research.trychroma.com/context-rot) — quality degradation curve
-- [Memory for Autonomous LLM Agents](https://arxiv.org/html/2603.07670v1) — survey
-- [CodeCompass](https://arxiv.org/html/2602.20048v1) — graph navigation vs hoarding
+- [Morin — pensée complexe face à l'IA](https://codexnumeris.org/46-cultiver-la-pensee-complexe/)
+- [Goertzel — Cognitive Synergy (arXiv:1703.04361)](https://arxiv.org/pdf/1703.04361)
+- [OpenCog Hyperon](https://hyperon.opencog.org/)
+- [Friston — Free Energy Principle](https://en.wikipedia.org/wiki/Free_energy_principle)
+- [VERSES — Active Inference](https://www.verses.ai/blog/tag/active-inference)
+- [Pei Wang — NARS Introduction](https://cis.temple.edu/~pwang/NARS-Intro.html)
+- [LIDA — Global Workspace cognitive cycle](https://aaai.org/papers/0011-fs07-01-011-%EF%80%A0lida-a-computational-model-of-global-workspace-theory-and-developmental-learning/)
+- [Vervaeke — Relevance Realization (Frontiers 2024)](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2024.1362658/full)
+- [Clark — Extended Mind + LLMs (Synthese 2025)](https://link.springer.com/article/10.1007/s11229-025-05046-y)
+- [Hutchins — Distributed Cognition](https://en.wikipedia.org/wiki/Distributed_cognition)
+- [Maturana — Autopoiesis & Structural Coupling](https://reflexus.org/wp-content/uploads/Autopoiesis-structural-coupling-and-cognition.pdf)
+- [Bateson — Ecology of Mind](https://en.wikipedia.org/wiki/Gregory_Bateson)
 
-### Production Systems & Docs
+### Engineering & Context Rot
 
+- [Chroma — Context Rot](https://research.trychroma.com/context-rot)
+- [CWL — Context Window Layer](https://arxiv.org/html/2606.11213v1)
+- [JetBrains — Complexity Trap / observation masking](https://arxiv.org/html/2508.21433v3)
+- [Don't Break the Cache](https://arxiv.org/html/2601.06007v2)
 - [Anthropic Context Editing](https://platform.claude.com/docs/en/build-with-claude/context-editing)
-- [Justin3go — Context Compaction in Codex, Claude Code, OpenCode](https://justin3go.com/en/posts/2026/04/09-context-compaction-in-codex-claude-code-and-opencode)
-- [badlogic compaction research gist](https://gist.github.com/badlogic/cd2ef65b0697c4dbe2d13fbecb0a0a5f)
+- [Justin3go — Compaction in Codex, Claude Code, OpenCode](https://justin3go.com/en/posts/2026/04/09-context-compaction-in-codex-claude-code-and-opencode)
 - [OpenCode DCP plugin](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)
-- [OpenCode #10016 — early compaction](https://github.com/anomalyco/opencode/issues/10016)
-- [OpenCode #14825 — prune before summarize](https://github.com/anomalyco/opencode/issues/14825)
-- [Crush #2240 — middle drop](https://github.com/charmbracelet/crush/issues/2240)
-- [Codex #6426 — 256-line truncation](https://github.com/openai/codex/issues/6426)
-- [AWS — Why AI Agents Fail](https://dev.to/aws/why-ai-agents-fail-3-failure-modes-that-cost-you-tokens-and-time-1flb)
-- [Hindsight — Agent Harness Needs Memory](https://hindsight.vectorize.io/blog/2026/05/04/agent-harness-needs-memory)
-- [Cognition — Why Not Multi-Agent](https://jxnl.co/writing/2025/09/11/why-cognition-does-not-use-multi-agent-systems/)
+- [OpenCode #10016](https://github.com/anomalyco/opencode/issues/10016) · [#14825](https://github.com/anomalyco/opencode/issues/14825)
+- [Crush #2240](https://github.com/charmbracelet/crush/issues/2240)
+- [Codex #6426](https://github.com/openai/codex/issues/6426)
 
-### Local Source (goose-plus @ 9fd61b3ab)
+### goose-plus Source (@ 9fd61b3ab)
 
 - `crates/goose/src/context_mgmt/mod.rs`
 - `crates/goose/src/agents/moim.rs`
 - `crates/goose/src/agents/agent.rs`
 - `crates/goose/src/prompts/compaction.md`
-- `crates/goose/src/session/last_message_snippet.rs`
 - `ui/desktop/tests/e2e/enhanced-context-management.spec.ts`
 - `ui/desktop/tests/e2e/context-management.spec.ts`
 
-### Local Comparators (forensics, June 2026)
+---
 
-- `/home/andrew/crush` — `internal/agent/agent.go` (summary pointer)
-- `/home/andrew/opencode` — `packages/opencode/src/session/chat.ts`, `summarize.ts`
+## Appendix: Evolution from Context Cortex
 
-### Research Tools Used
+Context Cortex (commit `4de94604c` first draft) proposed:
+- Episode DAG eviction
+- Typed surrogates (`DecisionCard`, `FileAnchor`, `ToolDigest`)
+- Recoverability oracle
+- Hot/warm/cold zones
+- 40% trigger
 
-- SearXNG MCP (`searxng-mcp` @ `http://192.168.1.211:8890`)
-- Edgar Morin MCP (complex thought synthesis, transcendence 0.88–0.93)
-- Repomix MCP (local codebase packs)
+ARE preserves those as **mechanisms inside a larger model**:
+
+| Context Cortex concept | ARE upgrade |
+|---|---|
+| Typed surrogates | **Belief atoms** with confidence + provenance |
+| Episode DAG | **Belief ecology** (parasite/symbiont/keystone) |
+| Recoverability oracle | **Structural coupling** + `recover_cmd` |
+| Hot/warm/cold zones | **Selection-broadcast** per turn |
+| 40% trigger | Unchanged — but triggers belief ecology, not just replacement |
+| Compaction as L3 | **L4 last resort** — beliefs are default |
+
+Context Cortex was Phase 0 thinking. ARE is the destination.
 
 ---
 
-## Appendix: Edgar Morin Synthesis
-
-**Dialogic tension resolved:** Goose's incremental visibility path and Crush/OpenCode's summary-pointer path are **different memory models**, not competing implementations of the same idea.
-
-1. **Goose invented the right primitive** — visibility metadata + incremental eviction — but stopped at prose summaries and positional heuristics.
-2. **Crush/OpenCode optimized ship speed** — summary pointer is one code path until it isn't.
-3. **Plugins validate demand** but cannot fix cache economics or episode graphs without harness cooperation.
-4. **`goose-plus` is the seed** — `context_mgmt/` has ~80% of Context Cortex L0+L1; competitors' cores do not.
-
-**Outsmart move:** Extend `MessageMetadata` + `maybe_summarize_tool_pairs` into typed surrogates with git-backed `FileAnchor` recoverability, drop trigger to 40%, port as middleware — don't restart from Crush's summary-pointer or OpenCode's 90% compact.
-
----
-
-*This document captures research and wishlist items from a June 2026 investigation into selective context replacement for coding agents. It is not a commitment to implement all features — priority order follows Implementation Phases above.*
+*Replace first. Broadcast what matters. Compact only when the ecology cannot breathe. Chat is surface; git is body; beliefs are mind.*
