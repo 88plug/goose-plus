@@ -1,0 +1,11 @@
+{
+  "name": "goose-plus-tools",
+  "version": "1.39.21",
+  "description": "goose-plus built-in MCP tool servers (developer, computercontroller, memory, tutorial, autovisualiser), each runnable standalone over stdio via `goose-plus mcp <name>`. Requires the goose-plus binary on PATH (https://github.com/88plug/goose-plus/releases).",
+  "author": {
+    "name": "88plug",
+    "url": "https://github.com/88plug"
+  },
+  "homepage": "https://github.com/88plug/goose-plus",
+  "license": "Apache-2.0"
+}

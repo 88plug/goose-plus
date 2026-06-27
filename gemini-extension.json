@@ -1,0 +1,27 @@
+{
+  "name": "goose-plus",
+  "version": "1.39.21",
+  "description": "goose-plus built-in MCP tool servers (developer, computer control, memory, tutorial, autovisualiser), each runnable standalone over stdio via `goose-plus mcp <name>`. Requires the goose-plus binary on PATH (https://github.com/88plug/goose-plus/releases).",
+  "mcpServers": {
+    "goose-developer": {
+      "command": "goose-plus",
+      "args": ["mcp", "developer"]
+    },
+    "goose-computercontroller": {
+      "command": "goose-plus",
+      "args": ["mcp", "computercontroller"]
+    },
+    "goose-memory": {
+      "command": "goose-plus",
+      "args": ["mcp", "memory"]
+    },
+    "goose-tutorial": {
+      "command": "goose-plus",
+      "args": ["mcp", "tutorial"]
+    },
+    "goose-autovisualiser": {
+      "command": "goose-plus",
+      "args": ["mcp", "autovisualiser"]
+    }
+  }
+}

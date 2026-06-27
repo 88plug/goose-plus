@@ -1,0 +1,14 @@
+{
+  "name": "goose-plus",
+  "owner": {
+    "name": "88plug",
+    "url": "https://github.com/88plug"
+  },
+  "plugins": [
+    {
+      "name": "goose-plus-tools",
+      "source": "./plugins/goose-plus-tools",
+      "description": "goose-plus built-in MCP tool servers: developer, computer control, memory, tutorial, autovisualiser. Exposed over stdio via `goose-plus mcp <name>`; requires the goose-plus binary on PATH."
+    }
+  ]
+}

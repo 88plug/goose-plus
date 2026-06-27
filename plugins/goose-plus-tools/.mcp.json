@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "goose-developer": {
+      "command": "goose-plus",
+      "args": ["mcp", "developer"]
+    },
+    "goose-computercontroller": {
+      "command": "goose-plus",
+      "args": ["mcp", "computercontroller"]
+    },
+    "goose-memory": {
+      "command": "goose-plus",
+      "args": ["mcp", "memory"]
+    },
+    "goose-tutorial": {
+      "command": "goose-plus",
+      "args": ["mcp", "tutorial"]
+    },
+    "goose-autovisualiser": {
+      "command": "goose-plus",
+      "args": ["mcp", "autovisualiser"]
+    }
+  }
+}

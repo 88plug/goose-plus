@@ -46,6 +46,34 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 
 ---
 
+## Use goose-plus's tools in Claude Code & Gemini CLI
+
+goose-plus's built-in tools are real MCP servers, each runnable standalone over
+stdio (`goose-plus mcp <name>`), so any MCP host can use them. This repo ships
+the marketplace manifests:
+
+- **Claude Code** — `.claude-plugin/marketplace.json` + `plugins/goose-plus-tools/`:
+  ```
+  /plugin marketplace add 88plug/goose-plus
+  /plugin install goose-plus-tools@goose-plus
+  ```
+- **Gemini CLI** — `gemini-extension.json`:
+  ```
+  gemini extensions install https://github.com/88plug/goose-plus
+  ```
+
+Both just need the **`goose-plus` binary on PATH** (from the [releases](https://github.com/88plug/goose-plus/releases)) — the same model Claude Code's official LSP plugins use. The five servers exposed (verified standalone — `initialize` + `tools/list`):
+
+| Server | `goose-plus mcp …` | tools |
+|---|---|--:|
+| developer | `developer` | 5 |
+| computer control | `computercontroller` | 7 |
+| memory | `memory` | 4 |
+| tutorial | `tutorial` | 1 |
+| autovisualiser | `autovisualiser` | 8 |
+
+No server refactor was needed — the standalone `goose-plus mcp <name>` exposure (above) already speaks MCP; the marketplaces are thin manifests over it.
+
 ## Feature matrix (capabilities)
 
 ✓ = present · ◑ = partial · – = absent
@@ -63,6 +91,7 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 | Native NATS event firehose | – | ✓ |
 | NATS bidirectional drive (run a turn over the bus) | – | ✓ |
 | Builtin tools as standalone MCP servers | – | ✓ |
+| Installable in Claude Code + Gemini CLI (marketplace manifests) | – | ✓ |
 | `reasoning_effort` actually transmitted to provider | ◑ | ✓ |
 | Dependencies kept on latest + consistent lockfiles | ◑ | ✓ |
 | Workspace-wide lint gate (all crates + prettier + feature code) | ◑ | ✓ |
