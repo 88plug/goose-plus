@@ -38,7 +38,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
 indoc = { workspace = true }
-reqwest = { workspace = true, features = ["json", "system-proxy"] }
+reqwest = { workspace = true, features = ["json", "system-proxy", "query"] }
 chrono = { workspace = true }
 etcetera = { workspace = true }
 tempfile = { workspace = true }
