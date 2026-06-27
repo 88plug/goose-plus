@@ -29,7 +29,7 @@ pub use autovisualiser::AutoVisualiserRouter;
 pub use computercontroller::ComputerControllerServer;
 pub use developer::DeveloperServer;
 pub use memory::MemoryServer;
-pub use searxng::SearxngServer;
+pub use searxng::{SearchUpdate, SearxngServer};
 pub use tutorial::TutorialServer;
 
 /// Type definition for a function that spawns and serves a builtin extension server

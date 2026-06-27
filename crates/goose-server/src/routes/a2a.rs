@@ -13,8 +13,8 @@
 //! stays public for discovery. With no token configured, the routes are open.
 
 use a2a::{
-    event::StreamResponse, A2AError, Message as A2aMessage, Part, Role, Task, TaskState,
-    TaskStatus, TaskStatusUpdateEvent,
+    event::StreamResponse, A2AError, Message as A2aMessage, Part, PartContent, Role, Task,
+    TaskState, TaskStatus, TaskStatusUpdateEvent,
 };
 use a2a_server::{
     agent_card::agent_card_router, executor::ExecutorContext, jsonrpc::jsonrpc_router,
@@ -32,6 +32,7 @@ use futures::stream::BoxStream;
 use futures::StreamExt;
 use goose::acp::transport::auth::token_matches;
 use goose::agents::{types::SessionConfig, AgentEvent};
+use goose_mcp::{SearchUpdate, SearxngServer};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -39,6 +40,97 @@ use tokio::task::AbortHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::state::AppState;
+
+/// Extract concatenated text from an A2A message (for intent detection).
+fn extract_text(msg: &A2aMessage) -> String {
+    msg.parts
+        .iter()
+        .filter_map(|p| {
+            if let PartContent::Text(t) = &p.content {
+                Some(t.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Detect an explicit searxng direct-search query.
+/// Supports prefixes like "searxng: query", "searx query", "search: query".
+/// Returns the query string if matched.
+fn parse_searxng_query(text: &str) -> Option<String> {
+    let t = text.trim();
+    let lower = t.to_lowercase();
+    if let Some(rest) = lower.strip_prefix("searxng:") {
+        let q = rest.trim();
+        if !q.is_empty() {
+            return Some(q.to_string());
+        }
+    }
+    if let Some(rest) = lower.strip_prefix("searx ") {
+        let q = rest.trim();
+        if !q.is_empty() {
+            return Some(q.to_string());
+        }
+    }
+    if let Some(rest) = lower.strip_prefix("search:") {
+        let q = rest.trim();
+        if !q.is_empty() {
+            return Some(q.to_string());
+        }
+    }
+    None
+}
+
+/// Format a partial (non-final) SearchUpdate for A2A Working status.
+fn format_searxng_partial(update: &SearchUpdate, query: &str) -> String {
+    let mut lines = vec![
+        format!(
+            "SearXNG parallel ({} providers) — partial from {}",
+            update.total_merged, update.backend
+        ),
+        format!("Query: {}", query),
+    ];
+    for (i, r) in update.merged_preview.iter().take(5).enumerate() {
+        let title = r.title.as_deref().unwrap_or(&r.url);
+        lines.push(format!("{}. {} — {}", i + 1, title, r.url));
+    }
+    if update.merged_preview.len() > 5 {
+        lines.push(format!("... +{} more", update.merged_preview.len() - 5));
+    }
+    lines.join("\n")
+}
+
+/// Format the final merged results (similar shape to the MCP tool output).
+fn format_searxng_final(update: &SearchUpdate, query: &str) -> String {
+    if update.merged_preview.is_empty() {
+        return format!("No results for '{}'", query);
+    }
+    let mut lines = vec![
+        format!("Query: {}", query),
+        format!("Free providers (full parallel, no limit): 8"),
+        "".to_string(),
+    ];
+    for (i, r) in update.merged_preview.iter().enumerate() {
+        let title = r.title.as_deref().unwrap_or(&r.url);
+        lines.push(format!(
+            "{}. {} — {} {}",
+            i + 1,
+            title,
+            r.url,
+            if !r.engines.is_empty() {
+                format!("(via {})", r.engines.join(","))
+            } else {
+                "".into()
+            }
+        ));
+        if let Some(sn) = &r.snippet {
+            lines.push(format!("   {}", sn));
+        }
+    }
+    lines.join("\n")
+}
 
 /// Bridges A2A execution to goose's agent. Each `execute` drives one
 /// `agent.reply` to completion, emitting a `Working` status, streaming the
@@ -70,6 +162,40 @@ impl AgentExecutor for GooseExecutor {
                     .await;
                 return;
             };
+
+            let msg_text = extract_text(&a2a_msg);
+
+            // === Direct fast path for searxng_parallel_search skill / prefixed queries ===
+            // This bypasses a full LLM turn and streams partial merged results immediately.
+            // One query → all 8 free providers in full parallel → incremental results over A2A.
+            if let Some(q) = parse_searxng_query(&msg_text) {
+                // Indicate we are starting the parallel free search
+                let _ = tx
+                    .send(Ok(working_with_text(
+                        &task_id,
+                        &context_id,
+                        &format!("Searching 8 free SearXNG providers in full parallel (no limit) for: {}", q),
+                    )))
+                    .await;
+
+                let searx = SearxngServer::new();
+                let mut stream = searx.parallel_search_stream(&q, "en").await;
+
+                while let Some(update) = stream.next().await {
+                    if update.is_final {
+                        let final_text = format_searxng_final(&update, &q);
+                        let _ = tx
+                            .send(Ok(completed(&task_id, &context_id, final_text)))
+                            .await;
+                    } else {
+                        let partial = format_searxng_partial(&update, &q);
+                        let _ = tx
+                            .send(Ok(working_with_text(&task_id, &context_id, &partial)))
+                            .await;
+                    }
+                }
+                return; // fast path done — no full agent turn
+            }
 
             let user_message = goose::a2a::a2a_message_to_goose(&a2a_msg);
 

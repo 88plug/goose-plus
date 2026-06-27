@@ -62,6 +62,41 @@ plus WebSocket which goose registers explicitly — sends the message, and retur
 the reply text (from the result `Message`, the `Task.status.message`, or the last
 agent turn in `history`, in that order).
 
+## Built-in Skills — SearXNG Parallel Search
+
+goose advertises a dedicated skill `searxng_parallel_search` on its Agent Card
+(when A2A is enabled). This skill exposes the secret sauce of searxng-mcp directly
+to other agents:
+
+- One query is fanned out to **all 8 verified free public SearXNG providers at once**.
+- Full parallel (no concurrency limit whatsoever) + fast-fail + HTML fallback.
+- Incremental merged results are streamed back as `Working` updates for the
+  lowest possible time-to-first-useful-result.
+- Final `Completed` task carries the full deduplicated, engine-aggregated set.
+
+### Using the skill (example)
+
+```bash
+curl -X POST http://localhost:3000/jsonrpc -H 'content-type: application/json' -d '{
+  "jsonrpc":"2.0","id":1,"method":"message:send",
+  "params":{"message":{"role":"ROLE_USER","messageId":"m1",
+    "parts":[{"text":"searxng: best open source ai agent frameworks 2026"}]}}
+}'
+```
+
+You can also use the skill ID in client libraries that support A2A skills.
+
+Prefix shortcuts that trigger the fast path without a full LLM turn:
+- `searxng: <query>`
+- `searx <query>`
+- `search: <query>`
+
+These are handled directly by the A2A executor, streaming partial results
+immediately as each free provider responds.
+
+See `documentation/docs/mcp/searxng-mcp.md` for the full explanation of the
+parallel free design and A2A/ACP integration.
+
 ## Notes & limitations
 
 - **Binding:** A2A **v1.0** (uppercase `ROLE_*` / `TASK_STATE_*` enums,

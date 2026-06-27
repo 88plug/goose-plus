@@ -29,6 +29,35 @@ These 8 high-coverage public instances are enabled out of the box:
 
 **Behavior**: All are queried **concurrently** on every search (no limit — all always in full parallel). Results are merged.
 
+### A2A / ACP: Smarter and Faster Results Over the Wire
+
+The parallel free provider design shines brightest when goose is used as an A2A agent or via ACP clients.
+
+- **Dedicated skill**: `searxng_parallel_search`
+  - Advertised on the Agent Card when goose is exposed over A2A.
+  - Remote agents can target this skill directly for fast, privacy-first metasearch without requiring a full LLM turn inside goose.
+
+- **Direct fast path (A2A)**:
+  - Send a message prefixed with `searxng:`, `searx `, or `search:` (e.g. `searxng: best open source ai agents 2026`).
+  - goose runs the query against **all 8 free providers in full parallel immediately**.
+  - Partial merged results are streamed back as `Working` TaskStatusUpdateEvents as soon as the fastest providers reply.
+  - The terminal `Completed` task contains the full merged set.
+
+- **Incremental streaming**:
+  - The Rust implementation (built into goose) exposes `parallel_search_stream()`.
+  - Each `SearchUpdate` carries the current merged snapshot + which backend just contributed.
+  - This gives agents the lowest possible time-to-first-useful-result.
+
+- **MCP resources** (when using searxng as an MCP server):
+  - `searxng://free-providers` — the current list of 8 + parallel mode flags.
+  - `searxng://status` — live configuration and merge strategy.
+
+- **ACP clients**:
+  - Tool calls to `searxng_search` (or the direct A2A path) surface progress via tool notifications when bridged by goose.
+  - The same merged results and engine aggregation are available.
+
+This combination — full parallel to 8 free providers + incremental wire delivery over A2A/ACP — makes searxng-mcp the most powerful search surface for agent-to-agent and client-to-agent scenarios.
+
 ### Configuration (Environment Variables)
 
 ```bash
@@ -55,18 +84,15 @@ export SEARXNG_MCP_USE_FREE_PROVIDERS=false
 
 ### How It Works (Technical)
 
-- `client.py` maintains clients for both your configured backend(s) **and** the entire free pool.
-- `search_parallel()` fires the identical query to all of them concurrently using `asyncio` + semaphore.
-- Every backend uses `_try_search_one()`:
-  1. Attempt `format=json`
-  2. On 403/429/non-JSON/etc → automatically fetch raw HTML and parse it with the built-in HTML results parser.
-- Successful payloads are turned into `QueryOutcome`s.
-- `service.py` calls the existing powerful `_merge_query_outcomes()` (same logic used by `search_many` / `research`).
-- Health and structured output report how many free backends were used.
+- The built-in Rust searxng server (`crates/goose-mcp/src/searxng/`) implements the same logic as the reference Python version.
+- `parallel_search_stream()` fans the query out to all targets concurrently.
+- Every backend uses fast-fail: JSON first, then HTML fallback.
+- Results are merged on the fly; updates are emitted after each provider responds.
+- The non-streaming `searxng_search` tool still works for normal in-turn tool use.
 
 ### HTML Fallback (Why It Matters)
 
-Many public instances disable or block `format=json`. The HTML parser (`html_search.py`) understands the standard "simple" SearXNG theme and produces a payload shape that satisfies the MCP client's validation.
+Many public instances disable or block `format=json`. The HTML parser understands the standard "simple" SearXNG theme and produces a payload shape that satisfies validation and merge logic.
 
 ### Usage from goose
 
@@ -80,16 +106,21 @@ SEARXNG_MCP_USE_FREE_PROVIDERS=true SEARXNG_MCP_FREE_PARALLEL=true uvx searxng-m
 
 Then in goose you can use tools like `search`, `search_many`, `research`, etc. provided by the searxng-mcp server. Because of the parallel free pool, even a basic `search` call becomes a multi-instance aggregated search.
 
+For direct agent-to-agent use, enable A2A on goose (`GOOSE_A2A_ENABLE=true`) and call the `searxng_parallel_search` skill or use a prefixed query.
+
 ### Demo
 
 See `docs/searxng-mcp/demo_parallel_free.py` (in the goose-plus repo) for a standalone demonstration of the parallel + merge behavior.
+
+See the A2A section in the documentation for examples of calling goose directly for searxng results.
 
 ### Comparison to Other Search MCPs
 
 - Brave, Tavily, Exa, etc.: single commercial backend, rate-limited, paid.
 - This: many independent public metasearchers + your own instance(s), all hit in parallel, merged, free/privacy-respecting by default.
+- Over A2A/ACP: incremental results delivered to peer agents as fast as the quickest backends respond.
 
-The parallel free provider design is the differentiator that makes searxng-mcp the most powerful search surface available to goose.
+The parallel free provider design + streaming wire path is the differentiator that makes searxng-mcp the most powerful search surface available to goose.
 
 ### Self-Hosting Recommendation
 
@@ -97,15 +128,20 @@ For maximum reliability and to avoid public instance bot protection, run your ow
 
 ### Files (Reference Implementation)
 
-The core changes live in the 88plug/searxng-mcp repository:
+The core changes live in the 88plug/searxng-mcp repository (Python reference) and are mirrored in goose's built-in:
 
 - `src/searxng_mcp/settings.py` — free provider defaults + flags
 - `src/searxng_mcp/client.py` — `search_parallel()`, `_try_search_one()` (JSON + HTML)
 - `src/searxng_mcp/service.py` — parallel path inside `search()`, health reporting
 - `src/searxng_mcp/html_search.py` — HTML results parser
 
+In goose:
+- `crates/goose-mcp/src/searxng/` — production Rust implementation with streaming and A2A fast path.
+- `crates/goose/src/a2a/mod.rs` — skill advertisement.
+- `crates/goose-server/src/routes/a2a.rs` — direct parallel execution for prefixed queries and the skill.
+
 Copies of the key files from the implementation are also kept under `docs/searxng-mcp/` in this repo for reference.
 
 ---
 
-**This is what "search" should feel like in 2026: many independent sources, all at once, intelligently combined.**
+**This is what "search" should feel like in 2026: many independent sources, all at once, intelligently combined — and delivered incrementally to other agents over the wire.**

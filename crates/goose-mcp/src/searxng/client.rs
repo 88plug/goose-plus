@@ -160,33 +160,40 @@ async fn try_html_fallback(
         if let Some(after) = block.split("</article>").next() {
             // Find first <a ... href="..."> that looks like a result
             if let Some(href_start) = after.find("href=\"") {
-                let rest = &after[href_start + 6..];
-                if let Some(href_end) = rest.find('"') {
-                    let href = &rest[..href_end];
-                    if href.starts_with("http") {
-                        // title is usually in the following <h3>
-                        let title = after
-                            .split("<h3")
-                            .nth(1)
-                            .and_then(|s| s.split("</h3>").next())
-                            .map(|s| s.split('>').last().unwrap_or("").trim().to_string())
-                            .filter(|t| !t.is_empty());
+                let start = href_start + 6;
+                if let Some(rest) = after.get(start..) {
+                    if let Some(href_end) = rest.find('"') {
+                        if let Some(href) = rest.get(..href_end) {
+                            if href.starts_with("http") {
+                                // title is usually in the following <h3>
+                                let title = after
+                                    .split("<h3")
+                                    .nth(1)
+                                    .and_then(|s| s.split("</h3>").next())
+                                    .map(|s| {
+                                        s.split('>').next_back().unwrap_or("").trim().to_string()
+                                    })
+                                    .filter(|t| !t.is_empty());
 
-                        // snippet from .content or first <p>
-                        let snippet = after
-                            .split("class=\"content")
-                            .nth(1)
-                            .and_then(|s| s.split("</p>").next())
-                            .map(|s| s.split('>').last().unwrap_or("").trim().to_string())
-                            .filter(|s| !s.is_empty());
+                                // snippet from .content or first <p>
+                                let snippet = after
+                                    .split("class=\"content")
+                                    .nth(1)
+                                    .and_then(|s| s.split("</p>").next())
+                                    .map(|s| {
+                                        s.split('>').next_back().unwrap_or("").trim().to_string()
+                                    })
+                                    .filter(|s| !s.is_empty());
 
-                        results.push(SearchResult {
-                            title,
-                            url: href.to_string(),
-                            snippet,
-                            engines: vec!["html-fallback".to_string()],
-                            score: None,
-                        });
+                                results.push(SearchResult {
+                                    title,
+                                    url: href.to_string(),
+                                    snippet,
+                                    engines: vec!["html-fallback".to_string()],
+                                    score: None,
+                                });
+                            }
+                        }
                     }
                 }
             }

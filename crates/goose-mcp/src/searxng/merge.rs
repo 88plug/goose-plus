@@ -89,8 +89,8 @@ fn normalize_url(u: &str) -> String {
     if let Ok(parsed) = Url::parse(u) {
         let mut s = parsed.scheme().to_string() + "://" + parsed.host_str().unwrap_or("");
         if let Some(port) = parsed.port() {
-            if !(parsed.scheme() == "http" && port == 80)
-                && !(parsed.scheme() == "https" && port == 443)
+            if !(parsed.scheme() == "http" && port == 80
+                || parsed.scheme() == "https" && port == 443)
             {
                 s.push(':');
                 s.push_str(&port.to_string());

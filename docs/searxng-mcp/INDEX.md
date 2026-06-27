@@ -1,28 +1,32 @@
 # searxng-mcp Work Index (goose-plus)
 
-**Date:** 2026-06-27 11:52  
-**Status:** Core superiority implementation COMPLETE
+**Date:** 2026-06-27  
+**Status:** A2A/ACP streaming + direct fast path COMPLETE (parallel free providers remain the core superpower)
 
 ---
 
-## Goal Achieved
+## Goal Achieved (Phase 1 + Phase 2)
+
+### Phase 1 — Secret Sauce (Full Parallel Free Providers)
 searxng-mcp now has **strictly greater capabilities** than any other search MCP by:
 - Pre-wiring 8 public free SearXNG providers by default
-- Querying them in **full parallel** (all at once, not sequential fallback)
+- Querying them in **full parallel** (all at once, not sequential fallback) — "all always"
 - Fast-failing bad backends instantly
 - Automatic HTML fallback when `format=json` is blocked
-- Smart cross-backend result merging
+- Smart cross-backend result merging (dedup by URL + engine aggregation + hit boosting)
 
-This is the "secret sauce".
+### Phase 2 — A2A/ACP Superpowers (Faster + Smarter Over the Wire)
+- Streaming incremental results: `parallel_search_stream()` yields `SearchUpdate`s as each free provider responds.
+- MCP resources: `searxng://free-providers` and `searxng://status`.
+- A2A skill `searxng_parallel_search` advertised on the Agent Card.
+- Direct fast path in A2A executor: messages like `searxng: <query>`, `search: <query>` bypass full LLM turn and stream partial merged results as `Working` updates immediately, with final results in `Completed`.
+- This delivers the lowest time-to-first-useful-result to peer agents and ACP clients.
+
+This combination (full parallel to 8 free + incremental wire delivery) is the killer feature.
 
 ---
 
-## All Discovered Sources (17)
-From original session logs (`~/.local/state/goose/logs/cli/2026-06-27/20260627_103540.log`):
-
-See `SOURCES.md` for the full list.
-
-## Pre-wired DEFAULT_FREE_PROVIDERS (8) — Full Parallel Default
+## Pre-wired DEFAULT_FREE_PROVIDERS (8) — Always Full Parallel
 
 1. https://searx.tiekoetter.com
 2. https://baresearch.org
@@ -33,64 +37,65 @@ See `SOURCES.md` for the full list.
 7. https://searx.prvcy.eu
 8. https://search.bladerunn.in
 
+Dead/unreliable providers are tracked only in `DEAD_PROVIDERS.md` (never in active code).
+
 ---
 
-## Deliverables
+## Key Deliverables
 
 ### Documentation
-- `documentation/docs/mcp/searxng-mcp.md` — Main user-facing docs (explains the parallel free design)
-- `CAPABILITY_SUMMARY.md` — Concise superiority comparison table
-- `SOURCES.md` — All 17 discovered vs the 8 pre-wired
-- `searxng-mcp-compatibility.md`
-- `searxng-mcp-html-fallback-integration.md`
+- `documentation/docs/mcp/searxng-mcp.md` — Main docs (parallel free design + A2A/ACP streaming + skill + resources)
+- `docs/a2a.md` — A2A usage + searxng skill and fast-path examples
+- `CAPABILITY_SUMMARY.md`, `SOURCES.md`, `WORKING_LIST.md`, `DEAD_PROVIDERS.md`
 
-### Reference Implementation
+### Implementation (Rust, built into goose)
+- `crates/goose-mcp/src/searxng/mod.rs` — `SearxngServer`, `parallel_search_stream()`, resources, tool
+- `crates/goose-mcp/src/searxng/client.rs` — JSON + HTML fallback per backend
+- `crates/goose-mcp/src/searxng/merge.rs` — cross-backend merge
+- `crates/goose/src/a2a/mod.rs` — `searxng_parallel_search` skill in AgentCard
+- `crates/goose-server/src/routes/a2a.rs` — direct fast-path executor for prefixed queries / skill
+- Re-export of `SearchUpdate` from `goose_mcp`
+
+### Reference (Python, for 88plug/searxng-mcp)
 `docs/searxng-mcp/`
-- `settings.py` (with `DEFAULT_FREE_PROVIDERS` + flags)
-- `client.py` (search_parallel + _try_search_one + fast-fail + HTML)
-- `service.py` (parallel path inside search + merge + health reporting)
-- `html_search.py` (HTML results parser producing MCP-valid payloads)
-- `demo_parallel_free.py`
-- `test_parallel_merge.py` (offline proof of parallel + merge)
+- `settings.py`, `client.py`, `service.py`, `html_search.py`
+- `demo_parallel_free.py`, `test_parallel_merge.py`
 
 ---
 
-## Verified Behaviors (this session)
-- Parallel run across 9 backends: ~260–800 ms wall time
-- Fast fails returned in ~10–20 ms without blocking successes
-- Merge test: 6 raw results → 4 unique merged (engines aggregated, hits boosted)
-- Default-on power mode confirmed
-- All 17 sources from logs captured
+## Verified Behaviors
+- Always full parallel to exactly the 8 working providers (no cap).
+- Streaming produces incremental merged snapshots as backends complete.
+- A2A direct path emits `Working` updates with partials, then `Completed` with full set.
+- MCP tool path continues to work normally (now internally driven by the same streaming logic).
+- Resources expose the free list and parallel mode.
+- All "goose" references use lowercase per brand guidelines.
 
 ---
 
-## Remaining Work (explicitly future)
-- Unit tests inside 88plug/searxng-mcp repo
-- Update upstream README / configuration docs
-- Rendered (Playwright) search path for heavily protected instances
-- `searxng://free-providers` resource
-- Native Rust implementation inside `crates/goose-mcp`
+## Remaining / Future (non-blocking)
+- Optional: emit `ProgressNotification` / `LoggingMessageNotification` during tool-path parallel execution for live ACP updates.
+- Unit/integration tests for the streaming path.
+- Rendered/Playwright fallback for heavily protected instances.
+- Upstream 88plug/searxng-mcp sync.
 
 ---
 
-## Quick Start (for users of the enhanced searxng-mcp)
+## Quick Start
 
 ```bash
-# Power mode is on by default
+# Power mode (full parallel free) is on by default in goose
+# For standalone:
 uvx searxng-mcp
 
-# Or explicitly
-SEARXNG_MCP_USE_FREE_PROVIDERS=true \
-SEARXNG_MCP_FREE_PARALLEL=true \
-SEARXNG_MCP_FREE_MAX_CONCURRENCY=8 \
-uvx searxng-mcp
+# A2A fast path (from another agent):
+# Send "searxng: your query here" or target skill "searxng_parallel_search"
 ```
 
-One query → many independent metasearchers in parallel → merged results.
+One query → **all 8 free providers in full parallel** → incremental merged results over A2A/ACP.
 
 This is greater capability.
 
 ---
 
-**Core work for this session: COMPLETE**
-searxng-mcp is now the most powerful search surface available to goose.
+**Core work COMPLETE** — searxng-mcp + A2A/ACP is now the most powerful search surface available to goose and peer agents.

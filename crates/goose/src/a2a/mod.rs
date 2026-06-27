@@ -71,26 +71,56 @@ pub fn build_agent_card(origin: &str, version: &str, auth_token: Option<&str>) -
         },
         default_input_modes: vec!["text/plain".to_string()],
         default_output_modes: vec!["text/plain".to_string()],
-        skills: vec![AgentSkill {
-            id: "general".to_string(),
-            name: "General assistant".to_string(),
-            description:
-                "Delegate a coding or workflow task to goose; it can read/write files, run \
-                 commands, and use its configured MCP extensions."
-                    .to_string(),
-            tags: vec![
-                "code".to_string(),
-                "workflow".to_string(),
-                "agent".to_string(),
-            ],
-            examples: Some(vec![
-                "Summarize the README of this project".to_string(),
-                "Fix the failing test in src/lib.rs".to_string(),
-            ]),
-            input_modes: None,
-            output_modes: None,
-            security_requirements: None,
-        }],
+        skills: vec![
+            AgentSkill {
+                id: "general".to_string(),
+                name: "General assistant".to_string(),
+                description:
+                    "Delegate a coding or workflow task to goose; it can read/write files, run \
+                     commands, and use its configured MCP extensions."
+                        .to_string(),
+                tags: vec![
+                    "code".to_string(),
+                    "workflow".to_string(),
+                    "agent".to_string(),
+                ],
+                examples: Some(vec![
+                    "Summarize the README of this project".to_string(),
+                    "Fix the failing test in src/lib.rs".to_string(),
+                ]),
+                input_modes: None,
+                output_modes: None,
+                security_requirements: None,
+            },
+            // Dedicated skill for the parallel free SearXNG superpower.
+            // This advertises that goose can be called directly for fast, smart search.
+            AgentSkill {
+                id: "searxng_parallel_search".to_string(),
+                name: "SearXNG Parallel Search".to_string(),
+                description:
+                    "Privacy-first metasearch: one query is fanned out to all 8 verified free \
+                     public SearXNG providers in full parallel (no concurrency limit). Fast-fail \
+                     on bad backends, automatic HTML fallback, smart merge (dedup by URL + \
+                     engine aggregation + hit boosting). Incremental results are streamed back \
+                     immediately over A2A (Working updates) for lowest time-to-first-result. \
+                     This is the secret sauce making searxng-mcp the most powerful search \
+                     surface for agents."
+                        .to_string(),
+                tags: vec![
+                    "search".to_string(),
+                    "metasearch".to_string(),
+                    "privacy".to_string(),
+                    "parallel".to_string(),
+                ],
+                examples: Some(vec![
+                    "searxng: best open source ai agent frameworks 2026".to_string(),
+                    "latest rust web frameworks".to_string(),
+                ]),
+                input_modes: None,
+                output_modes: None,
+                security_requirements: None,
+            },
+        ],
         provider: Some(AgentProvider {
             organization: "goose-plus".to_string(),
             url: "https://github.com/88plug/goose-plus".to_string(),
