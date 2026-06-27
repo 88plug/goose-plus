@@ -138,11 +138,7 @@ async fn try_html_fallback(
 ) -> Option<SearchResultSet> {
     let resp = client
         .get(url)
-        .query(&[
-            ("q", query),
-            ("language", language),
-            ("safesearch", "0"),
-        ])
+        .query(&[("q", query), ("language", language), ("safesearch", "0")])
         .header("Accept", "text/html,application/xhtml+xml")
         .timeout(Duration::from_secs(6))
         .send()
@@ -173,13 +169,7 @@ async fn try_html_fallback(
                             .split("<h3")
                             .nth(1)
                             .and_then(|s| s.split("</h3>").next())
-                            .map(|s| {
-                                s.split('>')
-                                    .last()
-                                    .unwrap_or("")
-                                    .trim()
-                                    .to_string()
-                            })
+                            .map(|s| s.split('>').last().unwrap_or("").trim().to_string())
                             .filter(|t| !t.is_empty());
 
                         // snippet from .content or first <p>
@@ -187,13 +177,7 @@ async fn try_html_fallback(
                             .split("class=\"content")
                             .nth(1)
                             .and_then(|s| s.split("</p>").next())
-                            .map(|s| {
-                                s.split('>')
-                                    .last()
-                                    .unwrap_or("")
-                                    .trim()
-                                    .to_string()
-                            })
+                            .map(|s| s.split('>').last().unwrap_or("").trim().to_string())
                             .filter(|s| !s.is_empty());
 
                         results.push(SearchResult {

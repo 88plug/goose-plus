@@ -6,11 +6,11 @@
 //! - Boost by number of hits across backends
 //! - Preserve best title/snippet
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use url::Url;
 
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MergedResult {
     pub url: String,
     pub title: Option<String>,
@@ -27,20 +27,26 @@ pub fn merge_results(sets: Vec<super::client::SearchResultSet>) -> Vec<MergedRes
         for raw in set.results {
             let canonical = normalize_url(&raw.url);
 
-            let entry = groups.entry(canonical.clone()).or_insert_with(|| MergedResult {
-                url: raw.url.clone(),
-                title: raw.title.clone(),
-                snippet: raw.snippet.clone(),
-                engines: vec![],
-                hit_count: 0,
-                score: raw.score.unwrap_or(0.0),
-            });
+            let entry = groups
+                .entry(canonical.clone())
+                .or_insert_with(|| MergedResult {
+                    url: raw.url.clone(),
+                    title: raw.title.clone(),
+                    snippet: raw.snippet.clone(),
+                    engines: vec![],
+                    hit_count: 0,
+                    score: raw.score.unwrap_or(0.0),
+                });
 
             // Prefer longer/better title and snippet
-            if entry.title.as_ref().map_or(0, |t| t.len()) < raw.title.as_ref().map_or(0, |t| t.len()) {
+            if entry.title.as_ref().map_or(0, |t| t.len())
+                < raw.title.as_ref().map_or(0, |t| t.len())
+            {
                 entry.title = raw.title.clone();
             }
-            if entry.snippet.as_ref().map_or(0, |t| t.len()) < raw.snippet.as_ref().map_or(0, |t| t.len()) {
+            if entry.snippet.as_ref().map_or(0, |t| t.len())
+                < raw.snippet.as_ref().map_or(0, |t| t.len())
+            {
                 entry.snippet = raw.snippet.clone();
             }
 
@@ -66,8 +72,13 @@ pub fn merge_results(sets: Vec<super::client::SearchResultSet>) -> Vec<MergedRes
 
     // Sort: more hits first, then higher score, then url
     merged.sort_by(|a, b| {
-        b.hit_count.cmp(&a.hit_count)
-            .then(b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal))
+        b.hit_count
+            .cmp(&a.hit_count)
+            .then(
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
             .then(a.url.cmp(&b.url))
     });
 
@@ -78,7 +89,9 @@ fn normalize_url(u: &str) -> String {
     if let Ok(parsed) = Url::parse(u) {
         let mut s = parsed.scheme().to_string() + "://" + parsed.host_str().unwrap_or("");
         if let Some(port) = parsed.port() {
-            if !(parsed.scheme() == "http" && port == 80) && !(parsed.scheme() == "https" && port == 443) {
+            if !(parsed.scheme() == "http" && port == 80)
+                && !(parsed.scheme() == "https" && port == 443)
+            {
                 s.push(':');
                 s.push_str(&port.to_string());
             }
@@ -88,7 +101,9 @@ fn normalize_url(u: &str) -> String {
             // drop tracking params for better dedup
             let cleaned: Vec<_> = query
                 .split('&')
-                .filter(|p| !p.starts_with("utm_") && !p.starts_with("fbclid") && !p.starts_with("gclid"))
+                .filter(|p| {
+                    !p.starts_with("utm_") && !p.starts_with("fbclid") && !p.starts_with("gclid")
+                })
                 .collect();
             if !cleaned.is_empty() {
                 s.push('?');
