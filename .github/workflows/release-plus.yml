@@ -267,6 +267,7 @@ jobs:
             latest-mac.yml
             download_cli.sh
           allowUpdates: true
+          makeLatest: true
           body: |
             goose-plus ${{ github.ref_name }} — community fork (88plug/goose-plus).
 
@@ -307,5 +308,6 @@ jobs:
             latest-mac.yml
             download_cli.sh
           allowUpdates: true
+          makeLatest: false
           omitBody: true
           omitPrereleaseDuringUpdate: true
