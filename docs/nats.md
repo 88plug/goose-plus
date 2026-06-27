@@ -92,6 +92,51 @@ The reply is a `drive.reply` envelope (`payload.text`), or `drive.error` on
 failure. Driving is gated separately from publishing because it is more
 sensitive — treat the NATS subject as a trusted control plane.
 
+## Coordination (claim/lease) — agents that don't fight
+
+When multiple goose-plus instances (or their subagents) share a bus, they can
+**coordinate over NATS instead of clobbering each other**: before mutating a
+file, an instance *claims* it; another instance that tries the same file sees
+the live claim and waits (or proceeds with a warning) rather than racing.
+
+Opt-in and **off by default**:
+
+```bash
+export GOOSE_NATS_URL="nats://localhost:4222"
+export GOOSE_NATS_COORD=true        # enable claim/lease coordination
+# requires a JetStream-enabled broker:
+nats-server -js
+```
+
+Mechanism — a true distributed lock built on **JetStream KV**:
+
+- A claim is `Store::create` on the `goose_coord` bucket (an atomic
+  compare-and-set), so exactly one instance can hold a resource at a time.
+- The bucket's `max_age` is the **lease TTL** (default 60s); the holder
+  heartbeats to renew, so if an instance dies the claim expires and others
+  can take over — no stuck locks.
+- Releasing (or dropping the lease) deletes the key.
+- Every claim/release also publishes a `coord.claim` / `coord.release` event so
+  the fleet has a **live view** (no drift): `nats sub 'goose.coord.>'`.
+
+Safe by design, like the firehose: when `GOOSE_NATS_COORD` is off (the common
+single-user case) every claim is an instant no-op grant — zero behavior change.
+If the broker lacks JetStream, coordination logs once and degrades to no-op
+granted; every broker call is bounded by a short timeout so a slow/dead broker
+never stalls a turn.
+
+Today the developer `write`/`edit` tools claim the target file before writing.
+
+```bash
+# prove the lock: two instances, same file
+nats-server -js &
+nats kv add goose_coord
+nats kv create goose_coord file_x A   # instance A: granted
+nats kv create goose_coord file_x B   # instance B: DENIED while A holds it
+nats kv del  goose_coord file_x       # A releases
+nats kv create goose_coord file_x B   # B: now granted
+```
+
 ## Try it
 
 ```bash

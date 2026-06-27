@@ -69,6 +69,10 @@ impl EditTools {
     ) -> CallToolResult {
         let path = resolve_path(&params.path, working_dir);
 
+        // Claim the file on the NATS coordination bus (no-op unless coordination
+        // is enabled and another instance holds it). Held until this returns.
+        let _coord = crate::coord_hook::claim_file_blocking(&path.to_string_lossy());
+
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() && !parent.exists() {
                 if let Err(error) = fs::create_dir_all(parent) {
@@ -112,6 +116,10 @@ impl EditTools {
         working_dir: Option<&Path>,
     ) -> CallToolResult {
         let path = resolve_path(&params.path, working_dir);
+
+        // Claim the file on the NATS coordination bus (no-op unless coordination
+        // is enabled and another instance holds it). Held until this returns.
+        let _coord = crate::coord_hook::claim_file_blocking(&path.to_string_lossy());
 
         let content = match fs::read_to_string(&path) {
             Ok(c) => c,

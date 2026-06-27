@@ -65,6 +65,10 @@ fn developer_instructions() -> &'static str {
 
 impl DeveloperClient {
     pub fn new(context: PlatformExtensionContext) -> Result<Self> {
+        // Wire NATS file-coordination into the developer tools (idempotent; a
+        // no-op fast-path unless GOOSE_NATS_URL + GOOSE_NATS_COORD are set).
+        crate::nats::coord::install_file_coordinator();
+
         let info = InitializeResult::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(EXTENSION_NAME, "1.0.0").with_title("Developer"))
             .with_instructions(developer_instructions());
@@ -198,14 +202,24 @@ impl McpClientTrait for DeveloperClient {
                 Err(error) => Ok(ShellTool::error_result(&format!("Error: {error}"), None)),
             },
             "write" => match Self::parse_args::<FileWriteParams>(arguments) {
-                Ok(params) => Ok(self.edit_tools.file_write_with_cwd(params, working_dir)),
+                Ok(params) => {
+                    // Claim the file on the NATS bus so a second goose instance
+                    // can't clobber it concurrently (no-op unless coord is on).
+                    let abs = edit::resolve_path(&params.path, working_dir);
+                    let _coord = goose_mcp::coord_hook::claim_file(&abs.to_string_lossy()).await;
+                    Ok(self.edit_tools.file_write_with_cwd(params, working_dir))
+                }
                 Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
                     "Error: {error}"
                 ))
                 .with_priority(0.0)])),
             },
             "edit" => match Self::parse_args::<FileEditParams>(arguments) {
-                Ok(params) => Ok(self.edit_tools.file_edit_with_cwd(params, working_dir)),
+                Ok(params) => {
+                    let abs = edit::resolve_path(&params.path, working_dir);
+                    let _coord = goose_mcp::coord_hook::claim_file(&abs.to_string_lossy()).await;
+                    Ok(self.edit_tools.file_edit_with_cwd(params, working_dir))
+                }
                 Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
                     "Error: {error}"
                 ))

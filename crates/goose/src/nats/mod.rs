@@ -18,7 +18,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::mpsc;
 
-const DEFAULT_SUBJECT_PREFIX: &str = "goose";
+pub mod coord;
+
+pub(crate) const DEFAULT_SUBJECT_PREFIX: &str = "goose";
 const CHANNEL_CAPACITY: usize = 10_000;
 /// Cap published text so a large tool output never produces an oversized message.
 const MAX_TEXT_BYTES: usize = 8 * 1024;
@@ -94,7 +96,7 @@ fn init_from_config() -> Option<NatsPublisher> {
 
 /// Stable identity for this process: `GOOSE_NATS_INSTANCE` when set, else
 /// `{hostname}:{pid}`. Avoids a hostname crate by reading `$HOSTNAME`.
-fn instance_identity(config: &Config) -> String {
+pub(crate) fn instance_identity(config: &Config) -> String {
     if let Ok(Some(name)) = config.get_param::<Option<String>>("GOOSE_NATS_INSTANCE") {
         if !name.trim().is_empty() {
             return name;
@@ -155,7 +157,7 @@ async fn run_publisher(
 
 /// NATS subjects are dot-delimited; strip anything that would create extra
 /// tokens or wildcards so a session id maps to exactly one token.
-fn sanitize_token(s: &str) -> String {
+pub(crate) fn sanitize_token(s: &str) -> String {
     s.chars()
         .map(|c| match c {
             'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => c,
