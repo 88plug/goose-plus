@@ -310,9 +310,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "approx"
@@ -716,9 +716,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.17.0"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ec2f1fc3ec205783a5da9a7e6c1509cc69dedf09a1949e412c1e18469326d00"
+checksum = "4342d8937fc7e5dd9b1c60292261c0670c882a2cd1719cfc11b1af41731e32ad"
 dependencies = [
  "aws-lc-sys",
  "untrusted 0.7.1",
@@ -727,14 +727,15 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.41.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a2f9779ce85b93ab6170dd940ad0169b5766ff848247aff13bb788b832fe3f4"
+checksum = "6d9ceb1da931507a12f4fccea479dccd00da1943e1b4ae72d8e502d707361444"
 dependencies = [
  "cc",
  "cmake",
  "dunce",
  "fs_extra",
+ "pkg-config",
 ]
 
 [[package]]
@@ -2320,9 +2321,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.6.5"
+version = "4.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0a7a9bfdb35811f9e59832f0f05975114d2251b415fb534108e6f34060fd772"
+checksum = "97bf4965940c2382204c0ded6dd3dd48c0c4e872f1e76fb1bf94f45991a2cb6a"
 dependencies = [
  "clap",
 ]
@@ -2372,7 +2373,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4529f45438fc25ca048b242d5c48e2d3ce9a521e2a5a9123d9737d8520b030dd"
 dependencies = [
  "console 0.16.3",
- "indicatif 0.18.4",
+ "indicatif 0.18.5",
  "once_cell",
  "strsim",
  "textwrap",
@@ -2537,9 +2538,9 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.15.24"
+version = "0.15.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b34d0237145f33580b89724f75d16950efd3e2c91b2d823917ecb69ec7f84f0"
+checksum = "b85f248a4de22d204ceabc6299d89d2c70fbd7f09fea53c06c852369652d8139"
 dependencies = [
  "pathdiff",
  "serde_core",
@@ -5146,7 +5147,7 @@ dependencies = [
  "goose",
  "goose-mcp",
  "goose-providers",
- "indicatif 0.18.4",
+ "indicatif 0.18.5",
  "open",
  "rand 0.10.1",
  "regex",
@@ -6131,9 +6132,9 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.18.4"
+version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25470f23803092da7d239834776d653104d551bc4d7eacaf31e6837854b8e9eb"
+checksum = "993f007684f2e9727160da8b960ec161264703bfd1af084fd2e34d040c9a0dd4"
 dependencies = [
  "console 0.16.3",
  "portable-atomic",
@@ -6390,9 +6391,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.46.6"
+version = "0.46.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8374249b1bdce1c1773a09fa294347e19e4bfeb86d845c2d8ebaf8a8dbf11233"
+checksum = "185abd1edcef44ac028ec6588ad1360155fbd0a8baa20243a28f5b2a05537a48"
 dependencies = [
  "ahash",
  "bytecount",
@@ -7208,9 +7209,9 @@ dependencies = [
 
 [[package]]
 name = "nostr"
-version = "0.44.3"
+version = "0.44.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d8f0fe13526800300a36bf3b7c5f752e62e32ab81c74a8e5caa2865708625a"
+checksum = "98cf5d15d70d1f8f4059e5f79923ac15891eb691d2843d01191e0585fb064d70"
 dependencies = [
  "base64 0.22.1",
  "bech32",
@@ -7682,13 +7683,12 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "open"
-version = "5.3.5"
+version = "5.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fbaa89d2ddc8473c78a3adf69eea8cffa28c483b8e02a971ef31527cd0fc92c"
+checksum = "cd8d3b65c44123a56e0133d2cd06ce4361bd3ca99d41198b2f25e3c3db9b8b4a"
 dependencies = [
  "is-wsl",
  "libc",
- "pathdiff",
 ]
 
 [[package]]
@@ -9201,9 +9201,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.46.6"
+version = "0.46.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65a910f9d63351f9c9d7dc3053d02b214ea3a005917140c70087d7b59cbc5bb1"
+checksum = "c335a4796e6081e384712c269f29ed8d2f6613e7afdd54a8467bb7d48f99859f"
 dependencies = [
  "ahash",
  "fluent-uri",
@@ -12005,7 +12005,7 @@ dependencies = [
  "esaxx-rs",
  "getrandom 0.3.4",
  "hf-hub 0.4.3",
- "indicatif 0.18.4",
+ "indicatif 0.18.5",
  "itertools 0.14.0",
  "log",
  "macro_rules_attribute",
@@ -12566,9 +12566,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.26.9"
+version = "0.26.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dab76d0b724ba557954125188cf0633a1ca43199ced82d95c7b9c32cc3de1f3"
+checksum = "3c343ed63e3f5c64d1acdecb5d2c13d4e169cb5fde0052106ebaa6c6f27f9e55"
 dependencies = [
  "cc",
  "regex",
