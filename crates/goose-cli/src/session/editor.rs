@@ -1,7 +1,10 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use goose::config::Config;
+use goose::conversation::message::Message;
+use goose::conversation::Conversation;
 use std::fs;
 use std::io::Read;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use tempfile::Builder;
@@ -35,6 +38,57 @@ fn resolve_editor_from_sources(
         }
     }
     None
+}
+
+/// Resolve the editor command, falling back to vi (or notepad on Windows).
+pub fn resolve_editor_or_default() -> String {
+    let config = Config::global();
+    let config_editor = config.get_goose_prompt_editor().ok().flatten();
+    let visual = std::env::var("VISUAL").ok();
+    let editor_env = std::env::var("EDITOR").ok();
+    resolve_editor_or_default_from_sources(
+        config_editor.as_deref(),
+        visual.as_deref(),
+        editor_env.as_deref(),
+    )
+}
+
+fn resolve_editor_default() -> String {
+    if cfg!(windows) {
+        "notepad".to_string()
+    } else {
+        "vi".to_string()
+    }
+}
+
+fn resolve_editor_or_default_from_sources(
+    config_editor: Option<&str>,
+    visual: Option<&str>,
+    editor_env: Option<&str>,
+) -> String {
+    resolve_editor_from_sources(config_editor, visual, editor_env)
+        .unwrap_or_else(resolve_editor_default)
+}
+
+/// Open a YAML temp file with the user's editor to edit a conversation.
+/// Returns the edited conversation, or an error if the editor failed or YAML was invalid.
+pub fn edit_conversation(conversation: &Conversation) -> Result<Conversation> {
+    let yaml = serde_yaml::to_string(conversation.messages())?;
+
+    let mut tmp = NamedTempFile::with_suffix(".yaml")?;
+    tmp.write_all(yaml.as_bytes())?;
+    tmp.flush()?;
+
+    let editor = resolve_editor_or_default();
+    let path = tmp.path().to_path_buf();
+
+    launch_editor(&editor, &path).with_context(|| format!("failed to launch editor '{editor}'"))?;
+
+    let edited = std::fs::read_to_string(&path)?;
+    let messages: Vec<Message> =
+        serde_yaml::from_str(&edited).context("invalid YAML — session unchanged")?;
+
+    Ok(Conversation::new_unvalidated(messages))
 }
 
 /// Build the markdown template content for the editor prompt.
@@ -89,16 +143,32 @@ impl Drop for SymlinkCleanup {
     }
 }
 
+/// Split an editor command into program and arguments.
+///
+/// Uses shell-word splitting only when the command contains quotes, so values like
+/// `"/Applications/Sublime Text.app/.../subl" -w` work. Unquoted commands are split on
+/// whitespace to avoid shlex stripping backslashes from Windows paths like
+/// `C:\Windows\System32\notepad.exe`.
+fn split_editor_command(editor_cmd: &str) -> Result<Vec<String>> {
+    if editor_cmd.contains(['"', '\'']) {
+        shlex::split(editor_cmd).ok_or_else(|| {
+            anyhow::anyhow!("Invalid editor command: unmatched quotes in '{editor_cmd}'")
+        })
+    } else {
+        Ok(editor_cmd.split_whitespace().map(String::from).collect())
+    }
+}
+
 /// Launch editor and wait for completion
 fn launch_editor(editor_cmd: &str, file_path: &PathBuf) -> Result<()> {
     use std::process::Stdio;
 
-    let parts: Vec<&str> = editor_cmd.split_whitespace().collect();
+    let parts = split_editor_command(editor_cmd)?;
     if parts.is_empty() {
         return Err(anyhow::anyhow!("Empty editor command"));
     }
 
-    let mut cmd = Command::new(parts[0]);
+    let mut cmd = Command::new(&parts[0]);
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -462,6 +532,45 @@ with multiple lines.
     fn test_resolve_editor_skips_empty_config_and_visual() {
         let result = resolve_editor_from_sources(Some(""), Some(""), Some("emacs"));
         assert_eq!(result.as_deref(), Some("emacs"));
+    }
+
+    #[test]
+    fn test_resolve_editor_or_default_falls_back_when_nothing_set() {
+        let default_val = resolve_editor_default();
+        assert_eq!(
+            resolve_editor_or_default_from_sources(None, None, None),
+            default_val
+        );
+        assert_eq!(
+            resolve_editor_or_default_from_sources(Some(""), Some(""), Some("")),
+            default_val
+        );
+    }
+
+    #[test]
+    fn test_split_editor_command() {
+        assert_eq!(
+            split_editor_command("code --wait").unwrap(),
+            vec!["code", "--wait"]
+        );
+
+        assert_eq!(
+            split_editor_command(
+                r#""/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl" -w"#
+            )
+            .unwrap(),
+            vec![
+                "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl",
+                "-w"
+            ]
+        );
+
+        assert_eq!(
+            split_editor_command(r"C:\Windows\System32\notepad.exe").unwrap(),
+            vec![r"C:\Windows\System32\notepad.exe"]
+        );
+
+        assert!(split_editor_command(r#"code --wait "unclosed"#).is_err());
     }
 
     // --- build_template edge case tests ---

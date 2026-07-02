@@ -30,6 +30,8 @@ pub enum InputResult {
     Edit(Option<String>),
     ListSkills,
     LoadSkills(Vec<String>),
+    ShellCommand(String),
+    Copy,
 }
 
 #[derive(Debug)]
@@ -164,6 +166,16 @@ pub fn get_input(
         editor.add_history_entry(input.as_str())?;
     }
 
+    // A leading '!' runs the rest of the line as a shell command and feeds the
+    // output back into the conversation, mirroring the convention in other
+    // agent CLIs. Checked before the slash-command and message paths so it wins.
+    if input.starts_with('!') {
+        return Ok(match parse_bang_command(&input) {
+            Some(command) => InputResult::ShellCommand(command.to_string()),
+            None => InputResult::Retry,
+        });
+    }
+
     // Handle non-slash commands first
     if !input.starts_with('/') {
         let trimmed = input.trim();
@@ -187,6 +199,13 @@ pub fn get_input(
     }
 }
 
+/// The shell command from a leading-`!` line, or `None` when nothing follows
+/// the `!`. Input is expected to start with `!`.
+fn parse_bang_command(input: &str) -> Option<&str> {
+    let command = input.strip_prefix('!')?.trim();
+    (!command.is_empty()).then_some(command)
+}
+
 fn handle_slash_command(input: &str) -> Option<InputResult> {
     let input = input.trim();
 
@@ -208,6 +227,7 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
     const CMD_EDIT: &str = "/edit";
     const CMD_EDIT_WITH_SPACE: &str = "/edit ";
     const CMD_SKILLS: &str = "/skills";
+    const CMD_COPY: &str = "/copy";
 
     match input {
         "/exit" | "/quit" => Some(InputResult::Exit),
@@ -299,6 +319,7 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
             Some(InputResult::Compact)
         }
         "/r" => Some(InputResult::ToggleFullToolOutput),
+        s if s == CMD_COPY => Some(InputResult::Copy),
         s if s == CMD_EDIT => Some(InputResult::Edit(None)),
         s if s.starts_with(CMD_EDIT_WITH_SPACE) => {
             let prefill = s
@@ -401,10 +422,17 @@ fn parse_plan_command(input: String) -> Option<InputResult> {
     Some(InputResult::Plan(options))
 }
 
-fn print_help() {
+fn help_text() -> String {
     let newline_key = get_newline_key().to_ascii_uppercase();
     let modes = GooseMode::VARIANTS.join(", ");
-    println!(
+    let additional_builtin_help = additional_builtin_help();
+    let additional_builtin_help = if additional_builtin_help.is_empty() {
+        String::new()
+    } else {
+        format!("{additional_builtin_help}\n")
+    };
+
+    format!(
         "Available commands:
 /exit or /quit - Exit the session
 /t - Toggle Light/Dark/Ansi theme
@@ -425,18 +453,40 @@ fn print_help() {
 /recipe [filepath] - Generate a recipe from the current conversation and save it to the specified filepath (must end with .yaml).
                        If no filepath is provided, it will be saved to ./recipe.yaml.
 /compact - Compact the current conversation to reduce context length while preserving key information.
-/status - Show session status: model, provider, mode, and token usage.
+{additional_builtin_help}/status - Show session status: model, provider, mode, and token usage.
 /edit [text] - Open your prompt editor to compose a message. Optionally pre-fill with text.
                Uses $GOOSE_PROMPT_EDITOR, $VISUAL, or $EDITOR (in that order).
 /skills - List available skills or enable skills by name (usage: /skills [<name>...])
+/copy - Copy the last assistant response to the clipboard.
 /? or /help - Display this help message
 /clear - Clears the current chat history
+!<command> - Run a shell command and add its output to the conversation context
 
 Navigation:
 Ctrl+C - Clear current line if text is entered, otherwise exit the session
 Ctrl+{newline_key} - Add a newline (configurable via GOOSE_CLI_NEWLINE_KEY)
-Up/Down arrows - Navigate through command history"
-    );
+Up/Down arrows - Navigate through command history
+GOOSE_CLI_BELL=true - Ring the terminal bell when goose finishes a turn or needs approval"
+    )
+}
+
+/// Builtin agent commands (from `execute_commands::list_commands`) not already
+/// documented explicitly above, so /help and completion never drift from the
+/// real command registry.
+fn additional_builtin_help() -> String {
+    const DOCUMENTED_BUILTINS: &[&str] =
+        &["prompts", "prompt", "compact", "clear", "skills", "status"];
+
+    goose::agents::execute_commands::list_commands()
+        .iter()
+        .filter(|command| !DOCUMENTED_BUILTINS.contains(&command.name))
+        .map(|command| format!("/{} - {}", command.name, command.description))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn print_help() {
+    println!("{}", help_text());
 }
 
 /// Extract recent messages for editor context

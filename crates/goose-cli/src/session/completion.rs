@@ -1,3 +1,4 @@
+use goose::agents::execute_commands::list_commands;
 use goose::config::GooseMode;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 use rustyline::highlight::{CmdKind, Highlighter};
@@ -153,22 +154,31 @@ impl GooseCompleter {
     /// Complete slash commands
     fn complete_slash_commands(&self, line: &str) -> Result<(usize, Vec<Pair>)> {
         // Define available slash commands
-        let commands = [
-            "/exit",
-            "/quit",
-            "/help",
-            "/?",
-            "/t",
-            "/extension",
-            "/builtin",
-            "/prompts",
-            "/prompt",
-            "/mode",
-            "/model",
-            "/recipe",
-            "/skills",
-            "/status",
+        let mut commands = vec![
+            "/exit".to_string(),
+            "/quit".to_string(),
+            "/help".to_string(),
+            "/?".to_string(),
+            "/t".to_string(),
+            "/extension".to_string(),
+            "/builtin".to_string(),
+            "/prompts".to_string(),
+            "/prompt".to_string(),
+            "/mode".to_string(),
+            "/model".to_string(),
+            "/recipe".to_string(),
+            "/skills".to_string(),
+            "/copy".to_string(),
         ];
+        // Keep completion in sync with the real builtin command registry
+        // instead of a hand-maintained duplicate list.
+        commands.extend(
+            list_commands()
+                .iter()
+                .map(|command| format!("/{}", command.name)),
+        );
+        commands.sort();
+        commands.dedup();
 
         // Find commands that match the prefix
         let matching_commands: Vec<Pair> = commands

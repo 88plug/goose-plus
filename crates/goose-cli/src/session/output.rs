@@ -574,6 +574,55 @@ pub fn render_error(message: &str) {
     println!("\n  {} {}\n", style("error:").red().bold(), message);
 }
 
+pub fn render_shell_command(command: &str) {
+    println!(
+        "\n{} {}",
+        style("shell").magenta().bold(),
+        style(command).dim()
+    );
+}
+
+pub fn render_shell_output(output: &str, exit_note: Option<&str>) {
+    if !output.is_empty() {
+        println!("{}", style(output).dim());
+    }
+    if let Some(note) = exit_note {
+        println!("{}", style(note).yellow());
+    }
+    println!();
+}
+
+pub fn render_copied(chars: usize, method: &str) {
+    println!(
+        "{}",
+        style(format!(
+            "Copied last response to the clipboard ({chars} chars via {method})"
+        ))
+        .dim()
+    );
+}
+
+/// Ring the terminal bell so an unfocused terminal can badge or chime.
+/// Opt-in via `GOOSE_CLI_BELL=true` (environment or config); terminals
+/// decide how to surface it, typically only when the window lacks focus.
+pub fn emit_attention_bell() {
+    if !bell_enabled() {
+        return;
+    }
+    let mut stdout = std::io::stdout();
+    if !stdout.is_terminal() {
+        return;
+    }
+    let _ = stdout.write_all(b"\x07");
+    let _ = stdout.flush();
+}
+
+fn bell_enabled() -> bool {
+    Config::global()
+        .get_param::<bool>("GOOSE_CLI_BELL")
+        .unwrap_or(false)
+}
+
 pub fn render_prompts(prompts: &HashMap<String, Vec<String>>) {
     println!();
     for (extension, prompts) in prompts {

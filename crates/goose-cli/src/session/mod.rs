@@ -1,6 +1,7 @@
 mod builder;
+mod clipboard;
 mod completion;
-mod editor;
+pub mod editor;
 mod elicitation;
 mod export;
 mod input;
@@ -685,8 +686,98 @@ impl CliSession {
                 history.save(editor);
                 self.handle_list_skills().await?;
             }
+            InputResult::ShellCommand(command) => {
+                history.save(editor);
+                self.handle_shell_command(&command).await?;
+            }
+            InputResult::Copy => {
+                history.save(editor);
+                self.handle_copy();
+            }
         }
         Ok(())
+    }
+
+    /// Run `command` in the user's shell and add its output to the conversation
+    /// so the agent can act on the result. Output shown to the user is not
+    /// truncated; the copy folded into context is capped to protect the window.
+    async fn handle_shell_command(&mut self, command: &str) -> Result<()> {
+        const MAX_CONTEXT_CHARS: usize = 16_000;
+
+        output::render_shell_command(command);
+
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        let result = tokio::process::Command::new(shell)
+            .arg("-c")
+            .arg(command)
+            .output()
+            .await;
+
+        let output = match result {
+            Ok(output) => output,
+            Err(e) => {
+                output::render_error(&format!("Failed to run shell command: {e}"));
+                return Ok(());
+            }
+        };
+
+        let mut combined = String::new();
+        combined.push_str(&String::from_utf8_lossy(&output.stdout));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            if !combined.is_empty() && !combined.ends_with('\n') {
+                combined.push('\n');
+            }
+            combined.push_str(&stderr);
+        }
+        let combined = combined.trim_end();
+
+        let exit_note = (!output.status.success()).then(|| match output.status.code() {
+            Some(code) => format!("[exited with status {code}]"),
+            None => "[terminated by signal]".to_string(),
+        });
+        output::render_shell_output(combined, exit_note.as_deref());
+
+        let truncated = combined.chars().count() > MAX_CONTEXT_CHARS;
+        let context_body: String = if truncated {
+            combined.chars().take(MAX_CONTEXT_CHARS).collect()
+        } else {
+            combined.to_string()
+        };
+        let mut context = format!("I ran the shell command `{command}`.");
+        if let Some(note) = &exit_note {
+            context.push_str(&format!(" It {}.", note.trim_matches(['[', ']'])));
+        }
+        if context_body.is_empty() {
+            context.push_str(" It produced no output.");
+        } else {
+            context.push_str("\n\nOutput:\n```\n");
+            context.push_str(&context_body);
+            if truncated {
+                context.push_str("\n... (output truncated)");
+            }
+            context.push_str("\n```");
+        }
+
+        let message = Message::user().with_text(&context);
+        self.push_message(message.clone());
+        self.agent
+            .config
+            .session_manager
+            .add_message(&self.session_id, &message)
+            .await?;
+        Ok(())
+    }
+
+    fn handle_copy(&self) {
+        let Some(text) = last_assistant_text(self.messages.messages()) else {
+            output::render_error("No assistant response to copy yet.");
+            return;
+        };
+        match clipboard::copy(&text) {
+            Ok(method) => output::render_copied(text.chars().count(), method),
+            Err(e) => output::render_error(&format!("Could not copy the response: {e}")),
+        }
     }
 
     async fn handle_message_input(
@@ -719,6 +810,7 @@ impl CliSession {
                 self.process_agent_response(true, CancellationToken::default())
                     .await?;
                 output::hide_thinking();
+                output::emit_attention_bell();
 
                 let elapsed = start_time.elapsed();
                 let elapsed_str = format_elapsed_time(elapsed);
@@ -1773,6 +1865,26 @@ fn message_has_text(message: &Message) -> bool {
     )
 }
 
+fn last_assistant_text(messages: &[Message]) -> Option<String> {
+    messages
+        .iter()
+        .rev()
+        .filter(|message| message.role == rmcp::model::Role::Assistant)
+        .find_map(|message| {
+            let text = message
+                .content
+                .iter()
+                .filter_map(|content| match content {
+                    MessageContent::Text(text) => Some(text.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let text = text.trim();
+            (!text.is_empty()).then(|| text.to_string())
+        })
+}
+
 fn print_run_stats(
     run_started: Instant,
     first_token_at: Option<Instant>,
@@ -1862,6 +1974,7 @@ fn emit_stream_event(event: &StreamEvent) {
 /// Prompt user for tool call confirmation, returns the Permission selected
 fn prompt_tool_confirmation(security_prompt: &Option<String>) -> Result<Permission> {
     output::hide_thinking();
+    output::emit_attention_bell();
 
     let prompt = if let Some(security_message) = security_prompt {
         println!("\n{}", security_message);
