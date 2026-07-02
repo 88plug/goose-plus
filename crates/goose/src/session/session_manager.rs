@@ -1143,26 +1143,41 @@ impl SessionStorage {
                 .await?;
             }
             7 => {
-                sqlx::query(
+                let column_exists = sqlx::query_scalar::<_, bool>(
                     r#"
-                    ALTER TABLE messages ADD COLUMN message_id TEXT
-                "#,
+                    SELECT EXISTS (
+                        SELECT 1 FROM pragma_table_info('messages') WHERE name = 'message_id'
+                    )
+                    "#,
                 )
-                .execute(&mut **tx)
-                .await?;
+                .fetch_one(&mut **tx)
+                .await
+                .unwrap_or(false);
 
-                sqlx::query(
-                    r#"
-                    UPDATE messages
-                    SET message_id = 'msg_' || session_id || '_' || id
-                "#,
-                )
-                .execute(&mut **tx)
-                .await?;
-
-                sqlx::query("CREATE INDEX idx_messages_message_id ON messages(message_id)")
+                if !column_exists {
+                    sqlx::query(
+                        r#"
+                        ALTER TABLE messages ADD COLUMN message_id TEXT
+                    "#,
+                    )
                     .execute(&mut **tx)
                     .await?;
+
+                    sqlx::query(
+                        r#"
+                        UPDATE messages
+                        SET message_id = 'msg_' || session_id || '_' || id
+                    "#,
+                    )
+                    .execute(&mut **tx)
+                    .await?;
+                }
+
+                sqlx::query(
+                    "CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id)",
+                )
+                .execute(&mut **tx)
+                .await?;
             }
             8 => {
                 sqlx::query(
