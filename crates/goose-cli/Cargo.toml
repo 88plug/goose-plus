@@ -66,6 +66,12 @@ sigstore-verify = { version = "0.9", default-features = false, optional = true }
 axum.workspace = true
 clap_complete_nushell = { version = "4", default-features = false }
 libc = { workspace = true }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.29.0", default-features = false, features = ["event-stream"] }
+goose-sdk = { path = "../goose-sdk", default-features = false }
+agent-client-protocol = { workspace = true, features = ["unstable"] }
+agent-client-protocol-schema = { workspace = true, features = ["unstable"] }
+pulldown-cmark = { version = "0.13", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 anstream = { version = "1", default-features = false, features = ["wincon"] }
