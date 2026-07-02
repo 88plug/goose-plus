@@ -21,10 +21,15 @@ pub const DEFAULT_COMPACTION_THRESHOLD: f64 = 0.8;
 
 const TOOLCALL_SUMMARIZATION_BATCH_SIZE: usize = 10;
 
+/// Context window size at or below which tool-pair summarization may activate.
+/// Above this limit, truncation + full compaction are sufficient and the
+/// summarization side-effects (stale ghost messages) outweigh the benefit.
+const TOOL_PAIR_SUMMARIZATION_CONTEXT_LIMIT: usize = 65_536;
+
 fn tool_pair_summarization_enabled() -> bool {
     Config::global()
         .get_param::<bool>("GOOSE_TOOL_PAIR_SUMMARIZATION")
-        .unwrap_or(true)
+        .unwrap_or(false)
 }
 
 const CONVERSATION_CONTINUATION_TEXT: &str =
@@ -546,6 +551,11 @@ pub fn maybe_summarize_tool_pairs(
     protect_last_n: usize,
 ) -> Option<JoinHandle<Vec<(Message, String)>>> {
     if !tool_pair_summarization_enabled() || provider.manages_own_context() {
+        return None;
+    }
+
+    let context_limit = provider.get_model_config().context_limit();
+    if context_limit > TOOL_PAIR_SUMMARIZATION_CONTEXT_LIMIT {
         return None;
     }
 

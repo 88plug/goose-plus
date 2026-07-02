@@ -589,7 +589,11 @@ mod tests {
             }
 
             fn get_model_config(&self) -> ModelConfig {
-                ModelConfig::new("mock-model").unwrap()
+                // Use a small context limit (32K) so tool-pair summarization
+                // is allowed — it is gated to context windows <= 64K.
+                ModelConfig::new("mock-model")
+                    .unwrap()
+                    .with_context_limit(Some(32_000))
             }
 
             fn get_name(&self) -> &str {
@@ -609,6 +613,11 @@ mod tests {
             // cutoff=2 means we need >2+10=12 visible tool pairs to trigger.
             Config::global()
                 .set_param("GOOSE_TOOL_CALL_CUTOFF", 2)
+                .unwrap();
+            // Summarization defaults to off (see TOOL_PAIR_SUMMARIZATION_CONTEXT_LIMIT);
+            // this test exercises it directly, so enable it explicitly.
+            Config::global()
+                .set_param("GOOSE_TOOL_PAIR_SUMMARIZATION", true)
                 .unwrap();
 
             let agent = Agent::new();
@@ -751,8 +760,11 @@ mod tests {
                 agent_reply_pos,
             );
 
-            // Clean up the config override
+            // Clean up config overrides
             Config::global().delete("GOOSE_TOOL_CALL_CUTOFF").unwrap();
+            Config::global()
+                .delete("GOOSE_TOOL_PAIR_SUMMARIZATION")
+                .unwrap();
 
             Ok(())
         }
