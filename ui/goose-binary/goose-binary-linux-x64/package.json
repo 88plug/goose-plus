@@ -7,15 +7,15 @@
     "type": "git",
     "url": "git+https://github.com/aaif-goose/goose.git"
   },
-  "bin": {
-    "goose": "bin/goose"
-  },
   "keywords": [
     "goose",
     "ai",
     "agent",
     "binary"
   ],
+  "scripts": {
+    "postinstall": "node -e \"require('fs').chmodSync(require('path').join(__dirname,'bin','goose'), 0o755)\""
+  },
   "os": [
     "linux"
   ],
