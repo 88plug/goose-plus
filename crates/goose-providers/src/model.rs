@@ -729,6 +729,20 @@ mod tests {
         }
 
         #[test]
+        fn resolves_claude_sonnet_5_on_bedrock() {
+            // Regression test for upstream #10179: claude-sonnet-5 was missing from
+            // the canonical registry and fell back to the 128k default on Bedrock.
+            let _guard = env_lock::lock_env([
+                ("GOOSE_MAX_TOKENS", None::<&str>),
+                ("GOOSE_CONTEXT_LIMIT", None::<&str>),
+            ]);
+            let config =
+                ModelConfig::new_or_fail("claude-sonnet-5").with_canonical_limits("aws_bedrock");
+
+            assert_eq!(config.context_limit, Some(1_000_000));
+        }
+
+        #[test]
         fn does_not_override_existing_context_limit() {
             let _guard = env_lock::lock_env([
                 ("GOOSE_MAX_TOKENS", None::<&str>),
