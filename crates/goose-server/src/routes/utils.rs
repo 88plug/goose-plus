@@ -299,6 +299,7 @@ mod tests {
                 headers: None,
                 timeout_seconds: None,
                 supports_streaming: None,
+                supports_stream_options: None,
                 requires_auth: true,
                 catalog_provider_id: Some(huggingface_auth::HUGGINGFACE_PROVIDER_NAME.to_string()),
                 base_path: None,
