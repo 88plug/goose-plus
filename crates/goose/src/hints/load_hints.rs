@@ -244,6 +244,14 @@ pub fn load_hint_files(
     }
 
     for global_hints_path in &global_hints_paths {
+        // Reject symlinks to avoid following hints outside boundary
+        if let Ok(meta) = std::fs::symlink_metadata(global_hints_path) {
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+        } else {
+            continue;
+        }
         if global_hints_path.is_file() {
             let mut visited = HashSet::new();
             let hints_dir = global_hints_path.parent().unwrap();
@@ -270,6 +278,12 @@ pub fn load_hint_files(
     for directory in &local_directories {
         for hints_filename in hints_filenames {
             let hints_path = directory.join(hints_filename);
+            // Skip symlinked hints files to avoid following to outside boundary
+            if let Ok(meta) = std::fs::symlink_metadata(&hints_path) {
+                if meta.file_type().is_symlink() {
+                    continue;
+                }
+            }
             if hints_path.is_file() {
                 let mut visited = HashSet::new();
                 let expanded_content = read_referenced_files(
@@ -327,6 +341,32 @@ mod tests {
         let hints = load_hint_files(dir.path(), &[GOOSE_HINTS_FILENAME.to_string()], &gitignore);
 
         assert!(hints.contains("Test hint content"));
+    }
+
+    // Ensure symlinked hints files are ignored (prevents boundary bypass)
+    #[test]
+    fn test_symlinked_hints_are_ignored() {
+        use std::os::unix::fs::symlink as unix_symlink;
+
+        let root = TempDir::new().unwrap();
+        let dir = root.path();
+        // A real file outside the project boundary
+        let secret = root.path().join("secret.txt");
+        fs::write(&secret, "SECRET_CONTENT").unwrap();
+        // A symlink in the project hints location pointing at it
+        let symlink_path = dir.join(GOOSE_HINTS_FILENAME);
+        if unix_symlink(&secret, &symlink_path).is_err() {
+            // Symlink creation unsupported on this platform/filesystem; skip.
+            return;
+        }
+
+        let gitignore = create_dummy_gitignore();
+        let hints = load_hint_files(dir, &[GOOSE_HINTS_FILENAME.to_string()], &gitignore);
+
+        assert!(
+            hints.is_empty(),
+            "symlinked hints should be ignored and produce no local hints"
+        );
     }
 
     #[test]
