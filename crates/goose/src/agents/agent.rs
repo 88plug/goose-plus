@@ -1248,6 +1248,7 @@ impl Agent {
 
                 async move {
                     let name = config_clone.name().to_string();
+                    let key = config_clone.key();
 
                     if agent_ref
                         .extension_manager
@@ -1263,7 +1264,7 @@ impl Agent {
                     }
 
                     match agent_ref
-                        .add_extension_inner(config_clone, &session_id_clone)
+                        .add_extension_inner(config_clone.clone(), &session_id_clone)
                         .await
                     {
                         Ok(_) => ExtensionLoadResult {
@@ -1272,12 +1273,46 @@ impl Agent {
                             error: None,
                         },
                         Err(e) => {
-                            let error_msg = e.to_string();
-                            warn!("Failed to load extension {}: {}", name, error_msg);
+                            let original_error = e.to_string();
+                            warn!(
+                                "Failed to load extension '{}' (key: '{}'): {}",
+                                name, key, original_error
+                            );
+
+                            // Fallback: try the user's global extension config by key
+                            // (e.g. a recipe embeds an extension config that fails to
+                            // load, but the user already has their own working
+                            // configuration for the same extension).
+                            if let Some(global_config) =
+                                crate::config::find_global_extension_by_key(&key)
+                            {
+                                if global_config != config_clone {
+                                    let global_name = global_config.name().to_string();
+                                    match agent_ref
+                                        .add_extension_inner(global_config, &session_id_clone)
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            return ExtensionLoadResult {
+                                                name: global_name,
+                                                success: true,
+                                                error: None,
+                                            };
+                                        }
+                                        Err(fallback_err) => {
+                                            warn!(
+                                                "Fallback also failed for extension '{}' (key: '{}'): {}",
+                                                global_name, key, fallback_err
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+
                             ExtensionLoadResult {
                                 name,
                                 success: false,
-                                error: Some(error_msg),
+                                error: Some(original_error),
                             }
                         }
                     }
