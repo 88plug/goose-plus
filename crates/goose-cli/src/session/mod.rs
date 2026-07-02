@@ -178,6 +178,7 @@ pub struct CliSession {
     retry_config: Option<RetryConfig>,
     output_format: String,
     stats: bool,
+    tool_call_timings: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -279,6 +280,7 @@ impl CliSession {
             retry_config,
             output_format,
             stats,
+            tool_call_timings: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -1414,7 +1416,7 @@ impl CliSession {
                                     }
                                 }
                             } else {
-                                log_tool_metrics(&message, &self.messages);
+                                let tool_timings = log_tool_metrics(&message, &self.messages, &self.tool_call_timings);
                                 self.messages.push(message.clone());
 
                                 if interactive { output::hide_thinking() };
@@ -1423,7 +1425,7 @@ impl CliSession {
                                 if is_stream_json_mode {
                                     emit_stream_event(&StreamEvent::Message { message: message.clone() });
                                 } else if !is_json_mode {
-                                    output::render_message_streaming(&message, &mut markdown_buffer, &mut thinking_header_shown, self.debug);
+                                    output::render_message_streaming(&message, &mut markdown_buffer, &mut thinking_header_shown, self.debug, &tool_timings);
                                     maybe_open_credits_top_up_url(
                                         &message,
                                         interactive,
@@ -2261,8 +2263,15 @@ fn display_log_notification(
     }
 }
 
-/// Log tool request/response metrics
-fn log_tool_metrics(message: &Message, messages: &Conversation) {
+/// Log tool request/response metrics. Also records tool-call start times and returns
+/// the elapsed duration for any tool responses in this message, keyed by request id,
+/// so the caller can display per-tool-call timing alongside the response.
+fn log_tool_metrics(
+    message: &Message,
+    messages: &Conversation,
+    tool_call_timings: &Arc<std::sync::Mutex<HashMap<String, Instant>>>,
+) -> HashMap<String, std::time::Duration> {
+    let mut completed_timings = HashMap::new();
     for content in &message.content {
         if let MessageContent::ToolRequest(tool_request) = content {
             if let Ok(tool_call) = &tool_request.tool_call {
@@ -2272,8 +2281,17 @@ fn log_tool_metrics(message: &Message, messages: &Conversation) {
                     "Tool call started"
                 );
             }
+            if let Ok(mut timings) = tool_call_timings.lock() {
+                timings.insert(tool_request.id.clone(), Instant::now());
+            }
         }
         if let MessageContent::ToolResponse(tool_response) = content {
+            if let Ok(mut timings) = tool_call_timings.lock() {
+                if let Some(start_time) = timings.remove(&tool_response.id) {
+                    completed_timings.insert(tool_response.id.clone(), start_time.elapsed());
+                }
+            }
+
             let tool_name = messages
                 .iter()
                 .rev()
@@ -2305,6 +2323,7 @@ fn log_tool_metrics(message: &Message, messages: &Conversation) {
             );
         }
     }
+    completed_timings
 }
 
 /// Handle and display an agent error

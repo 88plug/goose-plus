@@ -227,7 +227,7 @@ pub fn render_message(message: &Message, debug: bool) {
             },
             MessageContent::Text(text) => print_markdown(&text.text, theme),
             MessageContent::ToolRequest(req) => render_tool_request(req, theme, debug),
-            MessageContent::ToolResponse(resp) => render_tool_response(resp, debug),
+            MessageContent::ToolResponse(resp) => render_tool_response(resp, debug, None),
             MessageContent::Image(image) => {
                 println!("Image: [data: {}, type: {}]", image.data, image.mime_type);
             }
@@ -267,6 +267,7 @@ pub fn render_message_streaming(
     buffer: &mut MarkdownBuffer,
     thinking_header_shown: &mut bool,
     debug: bool,
+    tool_timings: &std::collections::HashMap<String, std::time::Duration>,
 ) {
     let theme = get_theme();
 
@@ -290,7 +291,8 @@ pub fn render_message_streaming(
             }
             MessageContent::ToolResponse(resp) => {
                 flush_markdown_buffer(buffer, theme);
-                render_tool_response(resp, debug);
+                let timing = tool_timings.get(&resp.id).copied();
+                render_tool_response(resp, debug, timing);
             }
             MessageContent::ActionRequired(action) => {
                 flush_markdown_buffer(buffer, theme);
@@ -485,7 +487,7 @@ fn render_tool_request(req: &ToolRequest, theme: Theme, debug: bool) {
     }
 }
 
-fn render_tool_response(resp: &ToolResponse, debug: bool) {
+fn render_tool_response(resp: &ToolResponse, debug: bool, timing: Option<std::time::Duration>) {
     let config = Config::global();
 
     match &resp.tool_result {
@@ -520,6 +522,13 @@ fn render_tool_response(resp: &ToolResponse, debug: bool) {
         Err(e) => {
             println!("    {}", style(e.to_string()).red().dim());
         }
+    }
+
+    if let Some(duration) = timing {
+        println!(
+            "    {}",
+            style(format!("⚡️ {}", super::format_elapsed_time(duration))).dim()
+        );
     }
 }
 
