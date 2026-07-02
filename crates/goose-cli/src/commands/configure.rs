@@ -34,6 +34,20 @@ use std::io::IsTerminal;
 // cursor-selected and cursor-unselected items.
 const MULTISELECT_VISIBILITY_HINT: &str = "<";
 
+/// Send DECRST for DECCKM (DEC Cursor Key Mode) to stderr, forcing the
+/// terminal back to normal cursor key mode. This makes arrow keys emit
+/// standard CSI sequences (ESC [ A/B/C/D) that the `console` crate can
+/// parse, instead of SS3 sequences (ESC O A/B/C/D) that it cannot.
+///
+/// Terminals like WezTerm may have DECCKM enabled (via the shell or config),
+/// which causes arrow keys to stop working in cliclack selection prompts.
+fn reset_application_cursor_key_mode() {
+    use std::io::Write;
+    // DECRST ?1 — Reset DECCKM (application cursor keys off)
+    let _ = std::io::stderr().write_all(b"\x1b[?1l");
+    let _ = std::io::stderr().flush();
+}
+
 pub async fn handle_configure() -> anyhow::Result<()> {
     if !std::io::stdin().is_terminal() {
         anyhow::bail!(
@@ -41,6 +55,13 @@ pub async fn handle_configure() -> anyhow::Result<()> {
              If you installed via 'curl ... | bash', run 'goose configure' separately after installation."
         );
     }
+
+    // Reset application cursor key mode (DECCKM) so that arrow keys send
+    // standard CSI sequences (ESC [ A/B/C/D) instead of SS3 sequences
+    // (ESC O A/B/C/D). Some terminals like WezTerm leave DECCKM enabled,
+    // which the `console` crate does not handle, breaking arrow key
+    // navigation in cliclack prompts. See: upstream #7338
+    reset_application_cursor_key_mode();
 
     let _terminal_guard = crate::terminal::TerminalGuard::new();
 
