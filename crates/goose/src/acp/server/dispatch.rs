@@ -107,13 +107,17 @@ impl HandleDispatchFrom<Client> for GooseAcpHandler {
                                 .ok_or_else(|| agent_client_protocol::Error::invalid_params().data("Expected a value ID"))?
                                 .clone();
                             let session_id = req.session_id.clone();
+                            let model_name = req.meta.as_ref()
+                                .and_then(|meta| meta.get("model"))
+                                .and_then(|value| value.as_str())
+                                .map(ToOwned::to_owned);
                             let sid = sid_short(session_id.0.as_ref());
                             let config_id = req.config_id.0.to_string();
                             let t_handler = std::time::Instant::now();
                             match config_id.as_ref() {
                                 "provider" => {
                                     Config::global().invalidate_secrets_cache();
-                                    match agent.update_provider(&session_id.0, &value_id.0, None, None, None).await {
+                                    match agent.update_provider(&session_id.0, &value_id.0, model_name.as_deref(), None, None).await {
                                         Ok(_) => {}
                                         Err(e) => { responder.respond_with_error(e)?; return Ok(()); }
                                     }
