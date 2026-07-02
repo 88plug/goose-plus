@@ -621,7 +621,7 @@ pub fn create_request_for_provider(
 
     let (model_name, legacy_reasoning_effort) = extract_reasoning_effort(&model_config.model_name);
     let is_openai_reasoning_model = is_openai_responses_model(&model_name);
-    let reasoning_effort = if is_openai_reasoning_model {
+    let reasoning_effort = if is_openai_reasoning_model && !model_config.reasoning_disabled() {
         model_config
             .thinking_effort()
             .map_or(legacy_reasoning_effort, |effort| {

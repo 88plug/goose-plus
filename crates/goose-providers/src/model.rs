@@ -189,7 +189,9 @@ impl ModelConfig {
         fast_model_name: &str,
         provider_name: &str,
     ) -> Result<Self, ConfigError> {
-        let fast_config = ModelConfig::new(fast_model_name)?.with_canonical_limits(provider_name);
+        let mut fast_config =
+            ModelConfig::new(fast_model_name)?.with_canonical_limits(provider_name);
+        fast_config.reasoning = Some(false);
         self.fast_model_config = Some(Box::new(fast_config));
         Ok(self)
     }
@@ -348,6 +350,10 @@ impl ModelConfig {
             .and_then(|s| s.parse::<ThinkingEffort>().ok())
     }
 
+    pub fn reasoning_disabled(&self) -> bool {
+        self.reasoning == Some(false)
+    }
+
     pub fn request_param<T: for<'de> serde::Deserialize<'de>>(
         &self,
         request_key: &str,
@@ -393,6 +399,17 @@ mod tests {
         assert_eq!(fast_config.context_limit, Some(4096));
         assert_eq!(fast_config.max_tokens, Some(1024));
         assert_eq!(config.use_fast_model().model_name, "fast-model");
+    }
+
+    #[test]
+    fn with_fast_disables_thinking_even_when_effort_set() {
+        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("high"))]);
+        let config = ModelConfig::new("claude-sonnet-4-5")
+            .unwrap()
+            .with_fast("claude-haiku-4-5", "anthropic")
+            .unwrap();
+
+        assert!(config.use_fast_model().reasoning_disabled());
     }
 
     mod context_limit_resolution {

@@ -603,7 +603,7 @@ pub fn create_responses_request(
     // by the API for reasoning models regardless of whether an explicit
     // effort suffix was provided.
     let is_reasoning_model = is_openai_responses_model(&model_name);
-    let reasoning_effort = if is_reasoning_model {
+    let reasoning_effort = if is_reasoning_model && !model_config.reasoning_disabled() {
         if let Some(effort) = legacy_reasoning_effort.as_deref() {
             effort
                 .parse()
