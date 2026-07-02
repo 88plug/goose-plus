@@ -185,6 +185,7 @@ async fn handle_manual_provider_setup(config: &Config) {
             );
             set_extension(ExtensionEntry {
                 enabled: true,
+                hidden: false,
                 config: ExtensionConfig::default(),
             });
         }
@@ -1121,6 +1122,7 @@ fn configure_builtin_extension() -> anyhow::Result<()> {
 
     set_extension(ExtensionEntry {
         enabled: true,
+        hidden: false,
         config,
     });
 
@@ -1157,6 +1159,7 @@ fn configure_stdio_extension() -> anyhow::Result<()> {
 
     set_extension(ExtensionEntry {
         enabled: true,
+        hidden: false,
         config: ExtensionConfig::Stdio {
             name: name.clone(),
             cmd,
@@ -1202,6 +1205,7 @@ fn configure_streamable_http_extension() -> anyhow::Result<()> {
 
     set_extension(ExtensionEntry {
         enabled: true,
+        hidden: false,
         config: ExtensionConfig::StreamableHttp {
             name: name.clone(),
             uri,
@@ -1895,6 +1899,7 @@ pub async fn handle_openrouter_auth() -> anyhow::Result<()> {
                     if !has_developer {
                         set_extension(ExtensionEntry {
                             enabled: true,
+                            hidden: false,
                             config: ExtensionConfig::Platform {
                                 name: "developer".to_string(),
                                 description: "Developer extension".to_string(),
@@ -1968,6 +1973,7 @@ pub async fn handle_tetrate_auth() -> anyhow::Result<()> {
                     if !has_developer {
                         set_extension(ExtensionEntry {
                             enabled: true,
+                            hidden: false,
                             config: ExtensionConfig::Platform {
                                 name: "developer".to_string(),
                                 description: "Developer extension".to_string(),

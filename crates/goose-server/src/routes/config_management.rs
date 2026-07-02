@@ -806,7 +806,10 @@ pub async fn read_config(
 pub async fn get_extensions() -> Result<Json<ExtensionResponse>, ErrorResponse> {
     let extensions = goose::config::get_all_extensions()
         .into_iter()
-        .filter(|ext| !goose::agents::extension_manager::is_hidden_extension(&ext.config.name()))
+        .map(|mut ext| {
+            ext.hidden = goose::agents::extension_manager::is_hidden_extension(&ext.config.name());
+            ext
+        })
         .collect();
     let warnings = goose::config::get_warnings();
     Ok(Json(ExtensionResponse {
@@ -836,6 +839,7 @@ pub async fn add_extension(
 
     goose::config::set_extension(ExtensionEntry {
         enabled: extension_query.enabled,
+        hidden: false,
         config: extension_query.config,
     });
 

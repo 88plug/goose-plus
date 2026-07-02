@@ -5266,6 +5266,9 @@
             "properties": {
               "enabled": {
                 "type": "boolean"
+              },
+              "hidden": {
+                "type": "boolean"
               }
             }
           }

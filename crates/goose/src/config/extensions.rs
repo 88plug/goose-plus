@@ -16,6 +16,8 @@ const EXTENSIONS_CONFIG_KEY: &str = "extensions";
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct ExtensionEntry {
     pub enabled: bool,
+    #[serde(default)]
+    pub hidden: bool,
     #[serde(flatten)]
     pub config: ExtensionConfig,
 }
@@ -322,6 +324,7 @@ mod tests {
     fn builtin_entry(name: &str, enabled: bool) -> ExtensionEntry {
         ExtensionEntry {
             enabled,
+            hidden: false,
             config: ExtensionConfig::Builtin {
                 name: name.to_string(),
                 description: format!("{name} description"),
@@ -479,6 +482,7 @@ extensions:
     fn test_get_extension_by_name_resolves_saved_entry_by_key() {
         let saved = ExtensionEntry {
             enabled: true,
+            hidden: false,
             config: ExtensionConfig::Stdio {
                 name: "My Tool".to_string(),
                 description: "saved description".to_string(),
