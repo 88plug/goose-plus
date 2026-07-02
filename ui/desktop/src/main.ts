@@ -2330,6 +2330,32 @@ const registerGlobalShortcuts = () => {
       console.error('Error registering launcher hotkey:', e);
     }
   }
+
+  // Register New Chat shortcuts so they work even when the menu is not focused.
+  if (shortcuts.newChat) {
+    try {
+      globalShortcut.register(shortcuts.newChat, () => {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (focusedWindow) {
+          focusedWindow.webContents.send('set-view', '');
+        } else {
+          void createNewWindow(app);
+        }
+      });
+    } catch (e) {
+      console.error('Error registering new-chat hotkey:', e);
+    }
+  }
+
+  if (shortcuts.newChatWindow) {
+    try {
+      globalShortcut.register(shortcuts.newChatWindow, () => {
+        ipcMain.emit('create-chat-window');
+      });
+    } catch (e) {
+      console.error('Error registering new-chat-window hotkey:', e);
+    }
+  }
 };
 
 async function appMain() {
