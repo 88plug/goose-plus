@@ -5,7 +5,7 @@ use crate::{
         Conversation,
     },
     prompt_template::render_template,
-    recipe::Recipe,
+    recipe::{Recipe, Response},
 };
 use anyhow::{anyhow, Result};
 use futures::StreamExt;
@@ -33,6 +33,14 @@ pub struct SubagentPromptContext {
 
 type AgentMessagesFuture =
     Pin<Box<dyn Future<Output = Result<(Conversation, Option<String>)>> + Send>>;
+
+fn is_valid_response(response: &&Response) -> bool {
+    response
+        .json_schema
+        .as_ref()
+        .and_then(|s| s.as_object())
+        .is_some_and(|obj| !obj.is_empty())
+}
 
 pub struct SubagentRunParams {
     pub config: AgentConfig,
@@ -155,9 +163,9 @@ fn get_agent_messages(params: SubagentRunParams) -> AgentMessagesFuture {
             }
         }
 
-        let has_response_schema = recipe.response.is_some();
+        let valid_response = recipe.response.as_ref().filter(is_valid_response).cloned();
         agent
-            .apply_recipe_components(recipe.response.clone(), true)
+            .apply_recipe_components(valid_response.clone(), true)
             .await;
 
         let subagent_prompt =
@@ -220,7 +228,7 @@ fn get_agent_messages(params: SubagentRunParams) -> AgentMessagesFuture {
             }
         }
 
-        let final_output = get_final_output(&agent, has_response_schema).await;
+        let final_output = get_final_output(&agent, valid_response.is_some()).await;
 
         Ok((conversation, final_output))
     })
