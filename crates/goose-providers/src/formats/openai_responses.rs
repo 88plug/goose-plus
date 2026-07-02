@@ -285,6 +285,19 @@ fn parse_responses_stream_event(data_line: &str) -> anyhow::Result<Option<Respon
         .and_then(Value::as_str)
         .map(str::to_string)
     else {
+        // Some proxies (e.g. Gemini via Databricks) emit a bare `{"error": {...}}`
+        // object with no "type" field instead of the typed `error` event above.
+        if let Some(error) = raw_event.get("error") {
+            let message = error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("Unknown server error");
+            return Err(ProviderError::ServerError(format!(
+                "Server error during streaming: {}",
+                message
+            ))
+            .into());
+        }
         return Ok(None);
     };
 
@@ -1209,6 +1222,34 @@ mod tests {
             .expect_err("expected error")
             .to_string()
             .contains("Responses API error"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_responses_stream_handles_bare_error_object_mid_stream() -> anyhow::Result<()> {
+        let lines = vec![
+            r#"data: {"type":"response.created","sequence_number":1,"response":{"id":"resp_1","object":"response","created_at":1737368310,"status":"in_progress","model":"gpt-5.2-pro","output":[]}}"#.to_string(),
+            r#"data: {"type":"response.output_text.delta","sequence_number":2,"item_id":"msg_1","output_index":0,"content_index":0,"delta":"Hello"}"#.to_string(),
+            r#"data: {"error":{"message":"Rate limit exceeded"}}"#.to_string(),
+            "data: [DONE]".to_string(),
+        ];
+
+        let response_stream = tokio_stream::iter(lines.into_iter().map(Ok));
+        let messages = responses_api_to_streaming_message(response_stream);
+        futures::pin_mut!(messages);
+
+        let first = messages.next().await.expect("should have first message");
+        assert!(first.is_ok());
+
+        let second = messages.next().await.expect("should have error message");
+        assert!(second.is_err());
+        let err = second.expect_err("expected error");
+        assert!(
+            err.to_string().contains("Rate limit exceeded"),
+            "Error should contain the server error message, got: {}",
+            err
+        );
 
         Ok(())
     }
