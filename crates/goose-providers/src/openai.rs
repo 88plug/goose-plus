@@ -130,6 +130,7 @@ pub struct OpenAiProvider {
     model: ModelConfig,
     custom_headers: Option<HashMap<String, String>>,
     supports_streaming: bool,
+    supports_stream_options: bool,
     name: String,
     custom_models: Option<Vec<String>>,
     dynamic_models: Option<bool>,
@@ -154,6 +155,7 @@ pub struct OpenAiProviderBuilder {
     model: ModelConfig,
     custom_headers: Option<HashMap<String, String>>,
     supports_streaming: bool,
+    supports_stream_options: bool,
     name: String,
     custom_models: Option<Vec<String>>,
     dynamic_models: Option<bool>,
@@ -175,6 +177,7 @@ impl OpenAiProviderBuilder {
             model,
             custom_headers: None,
             supports_streaming: true,
+            supports_stream_options: true,
             name: OPEN_AI_PROVIDER_NAME.to_string(),
             custom_models: None,
             dynamic_models: None,
@@ -219,6 +222,11 @@ impl OpenAiProviderBuilder {
         self
     }
 
+    pub fn supports_stream_options(mut self, supports_stream_options: bool) -> Self {
+        self.supports_stream_options = supports_stream_options;
+        self
+    }
+
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
         self
@@ -258,6 +266,7 @@ impl OpenAiProviderBuilder {
             model: self.model,
             custom_headers: self.custom_headers,
             supports_streaming: self.supports_streaming,
+            supports_stream_options: self.supports_stream_options,
             name: self.name,
             custom_models: self.custom_models,
             dynamic_models: self.dynamic_models,
@@ -279,6 +288,7 @@ impl OpenAiProvider {
             model,
             custom_headers: None,
             supports_streaming: true,
+            supports_stream_options: true,
             name: OPEN_AI_PROVIDER_NAME.to_string(),
             custom_models: None,
             dynamic_models: None,
@@ -350,6 +360,10 @@ impl OpenAiProvider {
 
     fn sanitize_request_for_compat(&self, mut payload: serde_json::Value) -> serde_json::Value {
         if let Some(obj) = payload.as_object_mut() {
+            if !self.supports_stream_options {
+                obj.remove("stream_options");
+            }
+
             if Self::PROVIDERS_NEEDING_MAX_TOKENS_REMAP.contains(&self.name.as_str()) {
                 if let Some(value) = obj.remove("max_completion_tokens") {
                     obj.entry("max_tokens").or_insert(value);
@@ -956,6 +970,7 @@ mod tests {
             model: ModelConfig::new_or_fail("test-model"),
             custom_headers: None,
             supports_streaming: true,
+            supports_stream_options: true,
             name: name.to_string(),
             custom_models: None,
             dynamic_models: None,
@@ -1012,6 +1027,39 @@ mod tests {
 
         assert!(obj.contains_key("max_completion_tokens"));
         assert!(!obj.contains_key("max_tokens"));
+    }
+
+    #[test]
+    fn sanitize_strips_stream_options_when_unsupported() {
+        let mut provider = make_provider("mistral");
+        provider.supports_stream_options = false;
+        let payload = json!({
+            "model": "mistral-medium-latest",
+            "messages": [],
+            "stream": true,
+            "stream_options": {"include_usage": true}
+        });
+
+        let result = provider.sanitize_request_for_compat(payload);
+        let obj = result.as_object().unwrap();
+
+        assert!(!obj.contains_key("stream_options"));
+        assert_eq!(obj.get("stream").unwrap(), &json!(true));
+    }
+
+    #[test]
+    fn sanitize_preserves_stream_options_when_supported() {
+        let provider = make_provider("openai");
+        let payload = json!({
+            "model": "gpt-4o",
+            "messages": [],
+            "stream_options": {"include_usage": true}
+        });
+
+        let result = provider.sanitize_request_for_compat(payload);
+        let obj = result.as_object().unwrap();
+
+        assert!(obj.contains_key("stream_options"));
     }
 
     #[test]

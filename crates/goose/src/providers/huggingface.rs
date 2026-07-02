@@ -550,6 +550,7 @@ mod tests {
             headers: None,
             timeout_seconds: None,
             supports_streaming: Some(true),
+            supports_stream_options: None,
             requires_auth: true,
             catalog_provider_id: None,
             base_path: None,

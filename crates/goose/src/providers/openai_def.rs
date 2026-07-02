@@ -317,6 +317,7 @@ pub fn from_custom_config(
         .base_path(base_path)
         .custom_headers(config.headers)
         .supports_streaming(config.supports_streaming.unwrap_or(true))
+        .supports_stream_options(config.supports_stream_options.unwrap_or(true))
         .name(config.name.clone())
         .custom_models(custom_models)
         .dynamic_models(config.dynamic_models)

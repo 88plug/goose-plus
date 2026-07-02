@@ -237,6 +237,7 @@ export type DeclarativeProviderConfig = {
     requires_auth?: boolean;
     setup_steps?: Array<string>;
     skip_canonical_filtering?: boolean;
+    supports_stream_options?: boolean | null;
     supports_streaming?: boolean | null;
     timeout_seconds?: number | null;
 };
