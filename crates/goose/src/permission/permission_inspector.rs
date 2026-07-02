@@ -304,4 +304,78 @@ mod tests {
             .unwrap();
         assert_eq!(results[0].action, expected);
     }
+
+    #[test]
+    fn test_process_inspection_results_with_overrides() {
+        let pm = Arc::new(PermissionManager::new(tempfile::tempdir().unwrap().keep()));
+        let inspector = PermissionInspector::new(pm, Arc::new(Mutex::new(None)));
+
+        let remaining_requests = vec![
+            ToolRequest {
+                id: "r1".to_string(),
+                tool_call: Ok(
+                    CallToolRequestParams::new("tool_a").with_arguments(object!({"cmd": "value"}))
+                ),
+                metadata: None,
+                tool_meta: None,
+            },
+            ToolRequest {
+                id: "r2".to_string(),
+                tool_call: Ok(
+                    CallToolRequestParams::new("tool_b").with_arguments(object!({"value": 1}))
+                ),
+                metadata: None,
+                tool_meta: None,
+            },
+        ];
+
+        let mut inspection_results = vec![
+            InspectionResult {
+                tool_request_id: "r1".to_string(),
+                action: InspectionAction::Allow,
+                reason: "pre-approved".to_string(),
+                confidence: 1.0,
+                inspector_name: "permission".to_string(),
+                finding_id: None,
+            },
+            InspectionResult {
+                tool_request_id: "r2".to_string(),
+                action: InspectionAction::RequireApproval(None),
+                reason: "needs approval".to_string(),
+                confidence: 1.0,
+                inspector_name: "permission".to_string(),
+                finding_id: None,
+            },
+        ];
+
+        // A non-permission inspector flags r1 (overrides the baseline Allow to Deny)
+        inspection_results.push(InspectionResult {
+            tool_request_id: "r1".to_string(),
+            action: InspectionAction::Deny,
+            reason: "flagged by inspector".to_string(),
+            confidence: 0.9,
+            inspector_name: "security".to_string(),
+            finding_id: Some("FINDING-001".to_string()),
+        });
+
+        // A non-permission inspector's "Allow" for r2 should NOT override the RequireApproval baseline
+        inspection_results.push(InspectionResult {
+            tool_request_id: "r2".to_string(),
+            action: InspectionAction::Allow,
+            reason: "benign".to_string(),
+            confidence: 0.8,
+            inspector_name: "security".to_string(),
+            finding_id: None,
+        });
+
+        let result = inspector.process_inspection_results(&remaining_requests, &inspection_results);
+
+        assert!(result.denied.iter().any(|r| r.id == "r1"));
+        assert!(!result.approved.iter().any(|r| r.id == "r1"));
+        assert!(!result.needs_approval.iter().any(|r| r.id == "r1"));
+
+        assert!(result.needs_approval.iter().any(|r| r.id == "r2"));
+        assert!(!result.approved.iter().any(|r| r.id == "r2"));
+        assert!(!result.denied.iter().any(|r| r.id == "r2"));
+    }
 }

@@ -18,8 +18,7 @@ const i18n = defineMessages({
   },
   tetrateDescription: {
     id: 'freeOptionCards.tetrateDescription',
-    defaultMessage:
-      'Access multiple AI models with automatic setup. Sign up to receive $10 credit.',
+    defaultMessage: 'Access multiple AI models with automatic setup.',
   },
   nanogptTitle: {
     id: 'freeOptionCards.nanogptTitle',

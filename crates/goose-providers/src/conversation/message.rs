@@ -1812,6 +1812,50 @@ mod tests {
     }
 
     #[test]
+    fn to_readable_string_formats_ok_and_err() {
+        let req_ok = super::ToolRequest {
+            id: "abc".to_string(),
+            tool_call: Ok(
+                CallToolRequestParams::new("my_tool").with_arguments(object!({
+                    "a": 1,
+                    "b": "x"
+                })),
+            ),
+            metadata: None,
+            tool_meta: None,
+        };
+
+        let s_ok = req_ok.to_readable_string();
+        assert!(
+            s_ok.starts_with("Tool: my_tool, Args:"),
+            "unexpected prefix: {s_ok}"
+        );
+        assert!(s_ok.contains("\"a\": 1"), "missing 'a' key in: {s_ok}");
+        assert!(s_ok.contains("\"b\": \"x\""), "missing 'b' key in: {s_ok}");
+
+        let req_err = super::ToolRequest {
+            id: "err".to_string(),
+            tool_call: Err(ErrorData {
+                code: ErrorCode::INTERNAL_ERROR,
+                message: std::borrow::Cow::from("Something went wrong".to_string()),
+                data: None,
+            }),
+            metadata: None,
+            tool_meta: None,
+        };
+
+        let s_err = req_err.to_readable_string();
+        assert!(
+            s_err.starts_with("Invalid tool call:"),
+            "unexpected: {s_err}"
+        );
+        assert!(
+            s_err.contains("Something went wrong"),
+            "missing error message in: {s_err}"
+        );
+    }
+
+    #[test]
     fn persisted_title_returns_none_when_meta_missing() {
         let req = make_tool_request(None);
         assert_eq!(req.persisted_title(), None);
