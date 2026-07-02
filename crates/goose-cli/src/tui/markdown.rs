@@ -575,7 +575,7 @@ fn push_wrapped_word(
             .expect("line exists")
             .push(Span::styled(chunk, style));
         lines.push(Vec::new());
-        remainder = &remainder[chunk_len..];
+        remainder = remainder.split_at(chunk_len).1;
         *current_width = 0;
     }
     if !remainder.is_empty() {

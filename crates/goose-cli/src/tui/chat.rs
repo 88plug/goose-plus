@@ -112,7 +112,7 @@ fn render_messages(frame: &mut Frame, area: Rect, app: &App) {
             .timeline
             .get(index + 1)
             .is_some_and(|item| matches!(item, TimelineItem::ToolCall(_)));
-        if !lines.is_empty() && !(previous_is_tool && matches!(item, TimelineItem::ToolCall(_))) {
+        if !(lines.is_empty() || previous_is_tool && matches!(item, TimelineItem::ToolCall(_))) {
             lines.push(Line::from(""));
         }
         match item {

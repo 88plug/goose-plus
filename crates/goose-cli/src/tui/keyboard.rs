@@ -130,23 +130,20 @@ impl App {
             }
             KeyCode::Esc => self.view = View::Chat,
             KeyCode::Left => self.providers_selected = self.providers_selected.saturating_sub(1),
-            KeyCode::Right => {
-                if count > 0 {
-                    self.providers_selected = (self.providers_selected + 1).min(count - 1);
-                }
+            KeyCode::Right if count > 0 => {
+                self.providers_selected = (self.providers_selected + 1).min(count - 1);
             }
+            KeyCode::Right => {}
             KeyCode::Up => {
                 self.providers_selected = self
                     .providers_selected
                     .saturating_sub(provider_columns(terminal_width()))
             }
-            KeyCode::Down => {
-                if count > 0 {
-                    self.providers_selected = (self.providers_selected
-                        + provider_columns(terminal_width()))
-                    .min(count - 1);
-                }
+            KeyCode::Down if count > 0 => {
+                self.providers_selected =
+                    (self.providers_selected + provider_columns(terminal_width())).min(count - 1);
             }
+            KeyCode::Down => {}
             KeyCode::Enter => {
                 let selected = self
                     .filtered_providers()
@@ -190,11 +187,10 @@ impl App {
                 self.view = View::Chat;
             }
             KeyCode::Up => self.models_selected = self.models_selected.saturating_sub(1),
-            KeyCode::Down => {
-                if count > 0 {
-                    self.models_selected = (self.models_selected + 1).min(count - 1);
-                }
+            KeyCode::Down if count > 0 => {
+                self.models_selected = (self.models_selected + 1).min(count - 1);
             }
+            KeyCode::Down => {}
             KeyCode::Enter => {
                 let model = self
                     .filtered_models()
@@ -236,12 +232,10 @@ impl App {
             KeyCode::Esc => self.view = View::Chat,
             KeyCode::Char('n') | KeyCode::Enter => self.start_new_session(),
             KeyCode::Up => self.sessions_selected = self.sessions_selected.saturating_sub(1),
-            KeyCode::Down => {
-                if !self.sessions.is_empty() {
-                    self.sessions_selected =
-                        (self.sessions_selected + 1).min(self.sessions.len() - 1);
-                }
+            KeyCode::Down if !self.sessions.is_empty() => {
+                self.sessions_selected = (self.sessions_selected + 1).min(self.sessions.len() - 1);
             }
+            KeyCode::Down => {}
             _ => {}
         }
     }
@@ -250,12 +244,11 @@ impl App {
         match code {
             KeyCode::Esc => self.view = View::Chat,
             KeyCode::Up => self.extensions_selected = self.extensions_selected.saturating_sub(1),
-            KeyCode::Down => {
-                if !self.extensions.is_empty() {
-                    self.extensions_selected =
-                        (self.extensions_selected + 1).min(self.extensions.len() - 1);
-                }
+            KeyCode::Down if !self.extensions.is_empty() => {
+                self.extensions_selected =
+                    (self.extensions_selected + 1).min(self.extensions.len() - 1);
             }
+            KeyCode::Down => {}
             KeyCode::Char(' ') | KeyCode::Enter => {
                 if let Some(ext) = self.extensions.get_mut(self.extensions_selected) {
                     ext.enabled = !ext.enabled;

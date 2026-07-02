@@ -120,6 +120,7 @@ fn render_search(frame: &mut Frame, area: Rect, search: &str, placeholder: &str)
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_picker(
     frame: &mut Frame,
     area: Rect,
