@@ -207,7 +207,11 @@ impl McpClientTrait for DeveloperClient {
                     // can't clobber it concurrently (no-op unless coord is on).
                     let abs = edit::resolve_path(&params.path, working_dir);
                     let _coord = goose_mcp::coord_hook::claim_file(&abs.to_string_lossy()).await;
-                    Ok(self.edit_tools.file_write_with_cwd(params, working_dir))
+                    Ok(self.edit_tools.file_write_with_cwd(
+                        params,
+                        working_dir,
+                        ctx.allowed_paths.as_ref(),
+                    ))
                 }
                 Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
                     "Error: {error}"
@@ -218,7 +222,11 @@ impl McpClientTrait for DeveloperClient {
                 Ok(params) => {
                     let abs = edit::resolve_path(&params.path, working_dir);
                     let _coord = goose_mcp::coord_hook::claim_file(&abs.to_string_lossy()).await;
-                    Ok(self.edit_tools.file_edit_with_cwd(params, working_dir))
+                    Ok(self.edit_tools.file_edit_with_cwd(
+                        params,
+                        working_dir,
+                        ctx.allowed_paths.as_ref(),
+                    ))
                 }
                 Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
                     "Error: {error}"

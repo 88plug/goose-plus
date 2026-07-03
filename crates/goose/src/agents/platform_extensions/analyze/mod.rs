@@ -91,17 +91,6 @@ impl AnalyzeClient {
         serde_json::from_value(value).map_err(|e| format!("Failed to parse arguments: {e}"))
     }
 
-    fn resolve_path(path: &str, working_dir: Option<&Path>) -> PathBuf {
-        let p = PathBuf::from(path);
-        if p.is_absolute() {
-            p
-        } else if let Some(cwd) = working_dir {
-            cwd.join(p)
-        } else {
-            p
-        }
-    }
-
     fn analyze(&self, params: AnalyzeParams, path: PathBuf) -> CallToolResult {
         if !path.exists() {
             return CallToolResult::error(vec![Content::text(format!(
@@ -249,7 +238,18 @@ impl McpClientTrait for AnalyzeClient {
         match name {
             "analyze" => match Self::parse_args::<AnalyzeParams>(arguments) {
                 Ok(params) => {
-                    let path = Self::resolve_path(&params.path, working_dir);
+                    let path = match goose_mcp::developer::edit::validate_and_resolve_path(
+                        &params.path,
+                        working_dir,
+                        ctx.allowed_paths.as_ref(),
+                    ) {
+                        Ok(p) => p,
+                        Err(msg) => {
+                            return Ok(CallToolResult::error(vec![
+                                Content::text(msg).with_priority(0.0)
+                            ]))
+                        }
+                    };
                     Ok(self.analyze(params, path))
                 }
                 Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
