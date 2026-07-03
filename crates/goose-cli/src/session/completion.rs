@@ -16,6 +16,7 @@ use super::{CompletionCache, HintStatus};
 #[derive(Debug, Clone)]
 struct FileCandidate {
     relative_path: String,
+    #[allow(dead_code)] // only read by tests distinguishing file vs. directory candidates
     is_directory: bool,
 }
 
@@ -68,12 +69,7 @@ impl GooseCompleter {
                 }
 
                 // Bonus for matching start of filename after last / (+15)
-                if i > 0
-                    && text_lower[..i]
-                        .rfind('/')
-                        .map(|p| p == i - 1)
-                        .unwrap_or(false)
-                {
+                if i > 0 && text_chars.get(i - 1) == Some(&'/') {
                     score += 15;
                 }
             } else {
@@ -225,6 +221,7 @@ impl GooseCompleter {
 
     /// Complete a file path after an `@` symbol using fuzzy matching, ranked
     /// the same way the desktop `@`-mention picker ranks results.
+    #[allow(clippy::string_slice)] // `@` is ASCII, so rfind's byte offset + 1 is always a valid char boundary.
     fn complete_file_mention(&self, line: &str, _ctx: &Context) -> Result<(usize, Vec<Pair>)> {
         let at_pos = match line.rfind('@') {
             Some(pos) => pos,
@@ -591,6 +588,7 @@ impl GooseCompleter {
 impl Completer for GooseCompleter {
     type Candidate = Pair;
 
+    #[allow(clippy::string_slice)] // `pos`/`@`'s rfind offset are byte-safe: `pos` is checked == line.len() first, and `@` is ASCII.
     fn complete(
         &self,
         line: &str,
@@ -762,9 +760,16 @@ impl Highlighter for GooseCompleter {
 impl Validator for GooseCompleter {
     fn validate(
         &self,
-        _ctx: &mut rustyline::validate::ValidationContext,
+        ctx: &mut rustyline::validate::ValidationContext,
     ) -> Result<rustyline::validate::ValidationResult> {
-        Ok(rustyline::validate::ValidationResult::Valid(None))
+        // A trailing `\` is the conventional shell line-continuation marker:
+        // pressing Enter after it inserts a newline and keeps editing instead
+        // of submitting, mirroring the same convention in bash/zsh/etc.
+        if ctx.input().ends_with('\\') {
+            Ok(rustyline::validate::ValidationResult::Incomplete)
+        } else {
+            Ok(rustyline::validate::ValidationResult::Valid(None))
+        }
     }
 }
 

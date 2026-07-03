@@ -94,6 +94,24 @@ pub fn get_newline_key() -> char {
         .unwrap_or('j')
 }
 
+/// Remove the trailing `\` on each continued line that `GooseCompleter::validate`
+/// used to tell rustyline "keep editing, don't submit yet" — leaving just the
+/// newline it introduced, matching the shell convention where the backslash
+/// itself isn't part of the resulting text.
+fn strip_line_continuation_markers(input: &str) -> String {
+    if !input.contains('\\') {
+        return input.to_string();
+    }
+    let mut lines: Vec<&str> = input.split('\n').collect();
+    let last = lines.len() - 1;
+    for line in lines.iter_mut().take(last) {
+        if let Some(stripped) = line.strip_suffix('\\') {
+            *line = stripped;
+        }
+    }
+    lines.join("\n")
+}
+
 /// Determine whether the editor should be used for every prompt.
 ///
 /// When `goose_prompt_editor` is configured, defaults to `true` (backward compat).
@@ -165,6 +183,11 @@ pub fn get_input(
     if !input.trim().is_empty() {
         editor.add_history_entry(input.as_str())?;
     }
+
+    // Strip the `\` line-continuation markers the Validator lets through
+    // (see GooseCompleter::validate) — the message itself should just see
+    // the newlines they introduced, not the marker character.
+    let input = strip_line_continuation_markers(&input);
 
     // A leading '!' runs the rest of the line as a shell command and feeds the
     // output back into the conversation, mirroring the convention in other
@@ -519,6 +542,32 @@ fn print_editor_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strip_line_continuation_markers_joins_continued_lines() {
+        assert_eq!(
+            strip_line_continuation_markers("hello \\\nworld"),
+            "hello \nworld"
+        );
+        assert_eq!(strip_line_continuation_markers("a\\\nb\\\nc"), "a\nb\nc");
+    }
+
+    #[test]
+    fn strip_line_continuation_markers_leaves_plain_input_untouched() {
+        assert_eq!(
+            strip_line_continuation_markers("hello world"),
+            "hello world"
+        );
+        assert_eq!(strip_line_continuation_markers(""), "");
+    }
+
+    #[test]
+    fn strip_line_continuation_markers_ignores_trailing_backslash_on_last_line() {
+        // A trailing backslash on the FINAL line is real content (the
+        // Validator only treats it as a continuation marker while the user
+        // is still typing) — nothing to strip once submitted as the last line.
+        assert_eq!(strip_line_continuation_markers("a\\\nb\\"), "a\nb\\");
+    }
 
     #[test]
     fn test_handle_slash_command() {
