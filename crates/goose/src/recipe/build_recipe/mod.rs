@@ -2,8 +2,8 @@ use crate::recipe::read_recipe_file_content::read_parameter_file_content;
 use crate::recipe::template_recipe::render_recipe_content_with_params;
 use crate::recipe::validate_recipe::validate_recipe_template_from_content;
 use crate::recipe::{
-    Recipe, RecipeParameter, RecipeParameterInputType, RecipeParameterRequirement,
-    BUILT_IN_RECIPE_DIR_PARAM,
+    BUILT_IN_RECIPE_DIR_PARAM, Recipe, RecipeParameter, RecipeParameterInputType,
+    RecipeParameterRequirement,
 };
 use anyhow::Result;
 use std::collections::HashMap;
@@ -15,6 +15,11 @@ pub enum RecipeError {
     MissingParams { parameters: Vec<String> },
     #[error("Invalid recipe: {source}")]
     Invalid { source: anyhow::Error },
+    #[error("Recipe parsing failed: {source}\n\nRaw recipe content:\n{content}")]
+    RecipeParsing {
+        source: anyhow::Error,
+        content: String,
+    },
 }
 
 fn render_recipe_template<F>(
@@ -63,8 +68,11 @@ where
         });
     }
 
-    let mut recipe = Recipe::from_content(&rendered_content)
-        .map_err(|source| RecipeError::Invalid { source })?;
+    let mut recipe =
+        Recipe::from_content(&rendered_content).map_err(|source| RecipeError::RecipeParsing {
+            source,
+            content: rendered_content.clone(),
+        })?;
 
     if let Some(ref mut sub_recipes) = recipe.sub_recipes {
         for sub_recipe in sub_recipes {
