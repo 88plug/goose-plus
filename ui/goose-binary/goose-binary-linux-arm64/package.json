@@ -14,7 +14,7 @@
     "binary"
   ],
   "scripts": {
-    "postinstall": "node -e \"require('fs').chmodSync(require('path').join(__dirname,'bin','goose'), 0o755)\""
+    "postinstall": "node -e \"const p=require('path').join(__dirname,'bin','goose'); if (require('fs').existsSync(p)) require('fs').chmodSync(p, 0o755)\""
   },
   "os": [
     "linux"
