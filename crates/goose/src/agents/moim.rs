@@ -110,6 +110,10 @@ pub async fn inject_moim(
             && !issue.contains("Trimmed trailing whitespace from assistant message")
             && !issue.contains("Removed trailing assistant message")
             && !issue.contains("Merged text content")
+            && !issue.contains("Removed orphaned tool response")
+            && !issue.contains("Removed orphaned tool request")
+            && !issue.contains("Removed empty message")
+            && !issue.contains("Removed leading assistant message")
     });
 
     if has_unexpected_issues {
@@ -348,5 +352,115 @@ mod tests {
             MessageContent::ToolResponse(_)
         ));
         assert_eq!(msgs[2].content.len(), 1);
+    }
+
+    // Orphaned tool_use/tool_result blocks (e.g. from a cancelled turn) cause
+    // persistent provider 400 errors. fix_conversation removes them, but MOIM
+    // used to discard that fix because orphan removal wasn't in its allowlist,
+    // returning the still-broken conversation to the provider every turn.
+    #[tokio::test]
+    async fn test_moim_fixes_orphaned_tool_request() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let em = ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
+        let session = em
+            .get_context()
+            .session_manager
+            .create_session(
+                PathBuf::from("/test/dir"),
+                "test".to_string(),
+                crate::session::SessionType::User,
+                crate::config::GooseMode::Auto,
+            )
+            .await
+            .unwrap();
+
+        let conv = Conversation::new_unvalidated(vec![
+            Message::user().with_text("Do something"),
+            Message::assistant()
+                .with_text("I'll call a tool")
+                .with_tool_request("orphan_tool_1", Ok(CallToolRequestParams::new("some_tool"))),
+        ]);
+
+        let (_, issues) = fix_conversation(Conversation::new_unvalidated(conv.messages().clone()));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("Removed orphaned tool request")),
+            "fix_conversation alone should detect the orphan, but issues were: {:?}",
+            issues
+        );
+
+        let result = inject_moim(&session.id, conv, &em, 0, 100).await;
+        let msgs = result.messages();
+
+        let has_orphan = msgs.iter().any(|m| {
+            m.content
+                .iter()
+                .any(|c| matches!(c, MessageContent::ToolRequest(tr) if tr.id == "orphan_tool_1"))
+        });
+        assert!(
+            !has_orphan,
+            "Orphaned tool request should have been removed by MOIM's fix_conversation"
+        );
+        assert!(
+            msgs.iter().any(|m| m.content.iter().any(is_moim)),
+            "MOIM should have been injected after fixing the orphan"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_moim_fixes_cancellation_orphan() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let em = ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
+        let session = em
+            .get_context()
+            .session_manager
+            .create_session(
+                PathBuf::from("/test/dir"),
+                "test".to_string(),
+                crate::session::SessionType::User,
+                crate::config::GooseMode::Auto,
+            )
+            .await
+            .unwrap();
+
+        // Simulates what the agent produces after cancellation: a tool call was
+        // issued, but the pre-allocated response message never got populated.
+        let conv = Conversation::new_unvalidated(vec![
+            Message::user().with_text("Search for something"),
+            Message::assistant().with_text("I searched and found results"),
+            Message::user().with_text("Now do something else"),
+            Message::assistant()
+                .with_text("I'll call a tool")
+                .with_tool_request(
+                    "cancelled_tool",
+                    Ok(CallToolRequestParams::new("some_tool")),
+                ),
+            Message::user(),
+        ]);
+
+        let result = inject_moim(&session.id, conv, &em, 0, 100).await;
+        let msgs = result.messages();
+
+        let has_orphan = msgs.iter().any(|m| {
+            m.content
+                .iter()
+                .any(|c| matches!(c, MessageContent::ToolRequest(tr) if tr.id == "cancelled_tool"))
+        });
+        assert!(
+            !has_orphan,
+            "Orphaned tool request should have been removed by MOIM's fix_conversation"
+        );
+
+        let has_empty = msgs.iter().any(|m| m.content.is_empty());
+        assert!(
+            !has_empty,
+            "Empty user message should have been removed by MOIM's fix_conversation"
+        );
+
+        assert!(
+            msgs.iter().any(|m| m.content.iter().any(is_moim)),
+            "MOIM should have been injected after fixing the cancellation orphan"
+        );
     }
 }
