@@ -4,25 +4,25 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tokio_cron_scheduler::{job::JobId, Job, JobScheduler as TokioJobScheduler};
+use tokio_cron_scheduler::{Job, JobScheduler as TokioJobScheduler, job::JobId};
 use tokio_util::sync::CancellationToken;
 
 use crate::agents::AgentEvent;
 use crate::agents::{Agent, SessionConfig};
 use crate::config::paths::Paths;
-use crate::config::{resolve_extensions_for_new_session, Config};
-use crate::conversation::message::Message;
+use crate::config::{Config, resolve_extensions_for_new_session};
 use crate::conversation::Conversation;
+use crate::conversation::message::Message;
 #[cfg(feature = "telemetry")]
 use crate::posthog;
 use crate::providers::create;
-use crate::recipe::build_recipe::build_recipe_from_template;
 use crate::recipe::Recipe;
+use crate::recipe::build_recipe::build_recipe_from_template;
 use crate::scheduler_trait::SchedulerTrait;
 use crate::session::session_manager::SessionType;
 use crate::session::{Session, SessionManager};
@@ -199,7 +199,7 @@ impl Scheduler {
                     "Invalid cron expression '{}': expected 5 or 6 fields, got {}",
                     job.cron,
                     cron_parts.len()
-                )))
+                )));
             }
         };
 
@@ -834,22 +834,12 @@ async fn execute_job(
         recipe_path.parent().unwrap_or(Path::new("."))
     };
 
-    let recipe: Recipe = build_recipe_from_template(
-        recipe_content,
-        recipe_dir,
-        job.parameters.clone(),
-        None::<fn(&str, &str) -> anyhow::Result<String>>,
-    )
-    .map_err(|e| anyhow!(e.to_string()))?;
-
     let agent = Agent::new();
 
-    let config = Config::global();
-    let provider_name = config.get_goose_provider()?;
-    let model_name = config.get_goose_model()?;
-    let model_config =
-        crate::model_config::model_config_from_user_config(&provider_name, &model_name)?;
-
+    // Create the session before attempting to build the recipe, so a recipe
+    // that fails to load (invalid YAML, missing required fields) still gets
+    // a visible failure explained in a session instead of an invisible,
+    // log-only error the user has no way to discover short of tailing logs.
     let session = agent
         .config
         .session_manager
@@ -860,6 +850,47 @@ async fn execute_job(
             agent.config.goose_mode,
         )
         .await?;
+
+    let recipe: Recipe = match build_recipe_from_template(
+        recipe_content,
+        recipe_dir,
+        job.parameters.clone(),
+        None::<fn(&str, &str) -> anyhow::Result<String>>,
+    ) {
+        Ok(recipe) => recipe,
+        Err(e) => {
+            let error_message = Message::assistant().with_text(format!(
+                "Schedule Execution Failed\n\n\
+                 This recipe failed to load: {e}\n\n\
+                 Fix the recipe file — the next scheduled run will retry it."
+            ));
+            agent
+                .config
+                .session_manager
+                .add_message(&session.id, &error_message)
+                .await?;
+            agent
+                .config
+                .session_manager
+                .update(&session.id)
+                .schedule_id(Some(job.id.clone()))
+                .apply()
+                .await?;
+            tracing::error!(
+                "Job '{}' recipe failed to load: {}. Created session {} with an error message.",
+                job.id,
+                e,
+                session.id
+            );
+            return Ok(session.id);
+        }
+    };
+
+    let config = Config::global();
+    let provider_name = config.get_goose_provider()?;
+    let model_name = config.get_goose_model()?;
+    let model_config =
+        crate::model_config::model_config_from_user_config(&provider_name, &model_name)?;
 
     let mut extensions = resolve_extensions_for_new_session(recipe.extensions.as_deref(), None);
     if recipe.extensions.is_none() {
@@ -927,9 +958,36 @@ async fn execute_job(
                 .as_deref()
                 .filter(|s| !s.trim().is_empty())
         })
-        .ok_or_else(|| {
-            anyhow!("Recipe must specify at least one of `instructions` or `prompt`.")
-        })?;
+        .map(str::to_string);
+
+    let Some(prompt_text) = prompt_text else {
+        let error_message = Message::assistant().with_text(
+            "Schedule Execution Failed\n\n\
+             This recipe does not have a valid `prompt` or `instructions` field, which is \
+             required for scheduled execution.\n\n\
+             To fix this issue, add a `prompt` or `instructions` field to your recipe with the \
+             content you want to execute.",
+        );
+        agent
+            .config
+            .session_manager
+            .add_message(&session.id, &error_message)
+            .await?;
+        agent
+            .config
+            .session_manager
+            .update(&session.id)
+            .schedule_id(Some(job.id.clone()))
+            .recipe(Some(recipe))
+            .apply()
+            .await?;
+        tracing::error!(
+            "Job '{}' has no valid prompt/instructions to execute. Created session {} with an error message.",
+            job.id,
+            session.id
+        );
+        return Ok(session.id);
+    };
 
     let user_message = Message::user().with_text(prompt_text);
     let mut conversation = Conversation::new_unvalidated(vec![user_message.clone()]);
@@ -1124,7 +1182,7 @@ impl SchedulerTrait for Scheduler {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     fn create_test_recipe(dir: &Path, name: &str) -> PathBuf {
         let recipe_path = dir.join(format!("{}.yaml", name));
