@@ -25,8 +25,9 @@ So goose-plus is two things at once:
 | **Nebius Token Factory** | — | Full provider, catalog + params from `?verbose=true` (tools/vision/reasoning/cost per model) |
 | **Agent interop (A2A)** | — | Serves an Agent Card + JSON-RPC/REST/WebSocket; bearer auth; incremental streaming; cancel. Calls remote A2A agents as tools |
 | **Event/Control bus (NATS)** | — | Opt-in publish firehose, bidirectional drive loop (fleet envelope: seq + instance + drop counter), **and** a JetStream KV claim/lease bus so concurrent goose-plus instances/subagents don't clobber the same file |
-| **Standalone MCP servers** | builtin tools are in-agent only | `goose-plus mcp <name>` serves 6 tool servers (developer, computer control, memory, tutorial, autovisualiser, searxng) over stdio for any MCP client |
+| **Standalone MCP servers** | builtin tools are in-agent only | `goose-plus mcp <name>` serves 5 tool servers (developer, computer control, memory, tutorial, autovisualiser) over stdio for any MCP client |
 | **Web search** | Whatever single engine the model picks | searxng-mcp: 8 verified free providers **always run in full parallel**, HTML fallback + merge, live MCP progress/logging per provider, optional FlareSolverr last-resort fallback |
+| **Codebase packing (repomix-mcp)** | Manual `npx repomix` outside the agent | Native in-agent extension (`pack_codebase`/`pack_remote_repository`/`grep_repomix_output`/etc.), auto-installing `repomix` via npm if missing |
 | **Terminal UI** | Node/Ink shim (`node`/`npx` subprocess) | Native Rust TUI (ratatui + crossterm) talking to the agent directly over ACP |
 | **Headless/self-hosted deployment** | Electron desktop or CLI only | Dockerized headless `goosed` API server, a browser/web build of the desktop UI, and a `docker-compose` one-liner for both |
 | **First-prompt latency** | Cold system-prompt + tool-schema build every session | Startup pre-warming cuts first-token latency ~60% (measured 1003ms→842ms); platform extensions polled concurrently instead of serially |
@@ -47,8 +48,9 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 - **Nebius Token Factory provider** — OpenAI-compatible, dynamic discovery with rich per-model metadata.
 - **A2A (Agent2Agent)** — goose speaks A2A both ways (Agent Card + JSON-RPC/REST/WS server with bearer auth, streaming, cancel; and an A2A client). See [`docs/a2a.md`](docs/a2a.md), [`AUTH.md`](AUTH.md).
 - **Native NATS bus** — opt-in publish + bidirectional drive, **plus a JetStream KV claim/lease coordination bus** so concurrent goose-plus instances/subagents claim a file before writing instead of racing each other. See [`docs/nats.md`](docs/nats.md).
-- **Standalone MCP** — `goose-plus mcp <name>` exposes 6 builtin tool servers to any MCP host.
+- **Standalone MCP** — `goose-plus mcp <name>` exposes 5 builtin tool servers to any MCP host.
 - **searxng-mcp parallel web search** — a dedicated MCP server that always runs 8 verified free search providers in full parallel (no cap), with HTML fallback + merge, live per-provider MCP progress/logging notifications, and a direct A2A fast-path (`searxng: <query>`) that skips a full LLM turn.
+- **repomix-mcp codebase packing** — repomix's `pack_codebase`/`pack_remote_repository`/`grep_repomix_output`/etc. embedded as a native in-agent extension (not just documented as an external MCP server), auto-installing `repomix` via npm the same way `computercontroller` auto-installs peekaboo via Homebrew. See [`docs/repomix-mcp/README.md`](docs/repomix-mcp/README.md).
 - **Native Rust TUI** — `goose tui` is now a real terminal UI (ratatui + crossterm over ACP), replacing the old Node/Ink subprocess shim.
 - **Opt-in path confinement** — `GOOSE_CONFINEMENT=true` confines the developer extension's write/edit/analyze tools to the session's working directory, rejecting `..`-traversal and symlink escapes.
 - **Headless & browser deployment** — a Dockerized `goosed` API server (no Electron needed) and a browser build of the desktop UI (full `window.electron`/`window.appConfig` web shim), both one-command via `docker-compose up`.
@@ -75,7 +77,7 @@ the marketplace manifests:
   gemini extensions install https://github.com/88plug/goose-plus
   ```
 
-Both just need the **`goose-plus` binary on PATH** (from the [releases](https://github.com/88plug/goose-plus/releases)) — the same model Claude Code's official LSP plugins use. The six servers exposed (verified standalone — `initialize` + `tools/list`):
+Both just need the **`goose-plus` binary on PATH** (from the [releases](https://github.com/88plug/goose-plus/releases)) — the same model Claude Code's official LSP plugins use. The five servers exposed (verified standalone — `initialize` + `tools/list`):
 
 | Server | `goose-plus mcp …` | tools |
 |---|---|--:|
@@ -84,9 +86,8 @@ Both just need the **`goose-plus` binary on PATH** (from the [releases](https://
 | memory | `memory` | 4 |
 | tutorial | `tutorial` | 1 |
 | autovisualiser | `autovisualiser` | 8 |
-| searxng (parallel free-provider web search) | `searxng` | 1 |
 
-No server refactor was needed — the standalone `goose-plus mcp <name>` exposure (above) already speaks MCP; the marketplaces are thin manifests over it.
+No server refactor was needed — the standalone `goose-plus mcp <name>` exposure (above) already speaks MCP; the marketplaces are thin manifests over it. (`searxng` and `repomix` are in-agent-only builtins — see below — not exposed as standalone `goose-plus mcp` servers.)
 
 ## Feature matrix (capabilities)
 
@@ -124,6 +125,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Toast notice when a mode change needs other sessions restarted | – | ✓ |
 | OpenCode free/paid models provider | – | ✓ |
 | searxng-mcp: 8 free providers always run in full parallel | – | ✓ |
+| repomix-mcp: native in-agent codebase-packing extension | – | ✓ |
 | NATS JetStream KV claim/lease coordination bus | – | ✓ |
 | Dockerized headless `goosed` API server (no Electron) | – | ✓ |
 | Browser/web build of the desktop UI | – | ✓ |
@@ -246,6 +248,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Agent | [`zane/recipe-extensions-fallback`](https://github.com/aaif-goose/goose/tree/zane/recipe-extensions-fallback) | Recipe-embedded extension config falls back to the user's working global config on load failure |
 | Providers | `dfcf54102` (own work) | OpenCode free/paid-models provider |
 | MCP | own work — new server, not upstream-mined | searxng-mcp's always-full-parallel free-provider web search |
+| MCP | own work — new server, not upstream-mined | repomix-mcp: native in-agent codebase-packing extension (embeds the community `repomix-plus` fork's capabilities) |
 | NATS | `45532431e` (own work) | JetStream KV claim/lease bus for concurrent-instance file coordination |
 | Deployment | `361ebdc7d` + `4ecb2d29a` (own work) | Dockerized headless `goosed` API server and a browser build of the desktop UI |
 | Performance | `2c392bace` + `280245ac3` (own work) | Startup pre-warming cutting measured first-token latency ~60% |
