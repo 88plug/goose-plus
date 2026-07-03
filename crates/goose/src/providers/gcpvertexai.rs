@@ -1,5 +1,4 @@
 use std::io;
-use std::time::Duration;
 
 use anyhow::Result;
 use async_stream::try_stream;
@@ -16,8 +15,7 @@ use url::Url;
 
 use crate::conversation::message::Message;
 use crate::providers::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
 };
 use goose_providers::model::ModelConfig;
 
@@ -175,7 +173,7 @@ impl GcpVertexAIProvider {
         let host = Self::build_host_url(&location);
 
         let client = Client::builder()
-            .timeout(Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS))
+            .timeout(resolve_provider_timeout(None))
             .build()?;
 
         let auth = GcpAuth::new().await?;

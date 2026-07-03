@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 use super::api_client::{ApiClient, AuthMethod};
 use super::base::{
-    ConfigKey, MessageStream, ModelInfo, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, ModelInfo, Provider, ProviderDef,
+    ProviderMetadata,
 };
 use super::openai_compatible::handle_response_openai_compat;
 use super::retry::ProviderRetry;
@@ -56,9 +56,7 @@ impl LiteLLMProvider {
             .get("LITELLM_CUSTOM_HEADERS")
             .cloned()
             .map(parse_custom_headers);
-        let timeout_secs: u64 = config
-            .get_param("LITELLM_TIMEOUT")
-            .unwrap_or(DEFAULT_PROVIDER_TIMEOUT_SECS);
+        let timeout = resolve_provider_timeout(Some("LITELLM_TIMEOUT"));
 
         let auth = if api_key.is_empty() {
             AuthMethod::NoAuth
@@ -66,12 +64,7 @@ impl LiteLLMProvider {
             AuthMethod::BearerToken(api_key)
         };
 
-        let mut api_client = ApiClient::with_timeout_and_tls(
-            host,
-            auth,
-            std::time::Duration::from_secs(timeout_secs),
-            tls_config,
-        )?;
+        let mut api_client = ApiClient::with_timeout_and_tls(host, auth, timeout, tls_config)?;
 
         if let Some(headers) = custom_headers {
             let mut header_map = reqwest::header::HeaderMap::new();

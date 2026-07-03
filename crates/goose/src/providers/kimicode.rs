@@ -11,14 +11,12 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io;
-use std::time::Duration as StdDuration;
 use tokio::pin;
 use tokio_util::io::StreamReader;
 use uuid::Uuid;
 
 use super::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
 };
 use super::formats::anthropic::{create_request, response_to_streaming_message};
 use super::oauth_device_flow::{
@@ -172,7 +170,7 @@ impl KimiCodeProvider {
             KIMI_CODE_DEFAULT_FAST_MODEL,
         )?;
         let client = Client::builder()
-            .timeout(StdDuration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS))
+            .timeout(resolve_provider_timeout(None))
             .build()?;
         let device_id = Self::get_or_create_device_id().await?;
         Ok(Self {

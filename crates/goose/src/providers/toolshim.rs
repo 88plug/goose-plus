@@ -37,7 +37,7 @@ use super::ollama::OLLAMA_HOST;
 use crate::conversation::message::{Message, MessageContent};
 use crate::conversation::Conversation;
 use crate::model_config::model_config_from_user_config;
-use crate::providers::base::DEFAULT_PROVIDER_TIMEOUT_SECS;
+use crate::providers::base::resolve_provider_timeout;
 use anyhow::Result;
 use futures::StreamExt;
 use goose_providers::errors::ProviderError;
@@ -47,7 +47,6 @@ use reqwest::Client;
 use rmcp::model::{object, CallToolRequestParams, RawContent, Tool};
 use serde_json::{json, Value};
 use std::ops::Deref;
-use std::time::Duration;
 use uuid::Uuid;
 
 /// Default model to use for tool interpretation
@@ -609,7 +608,7 @@ impl LocalInterpreter {
 impl OllamaInterpreter {
     pub fn new() -> Result<Self, ProviderError> {
         let client = Client::builder()
-            .timeout(Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS))
+            .timeout(resolve_provider_timeout(Some("OLLAMA_TIMEOUT")))
             .build()
             .expect("Failed to create HTTP client");
 

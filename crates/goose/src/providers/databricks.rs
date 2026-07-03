@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 
 use super::api_client::{ApiClient, AuthMethod};
 use super::base::{
-    ConfigKey, MessageStream, ModelInfo, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, ModelInfo, Provider, ProviderDef,
+    ProviderMetadata,
 };
 use super::databricks_auth::{DatabricksAuth, DatabricksAuthProvider};
 use super::formats::databricks::{create_request_for_provider, DATABRICKS_PROVIDER_NAME};
@@ -137,7 +137,7 @@ impl DatabricksProvider {
         let api_client = ApiClient::with_timeout_and_tls(
             host.clone(),
             auth_method,
-            Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS),
+            resolve_provider_timeout(None),
             tls_config.clone(),
         )?;
 

@@ -17,7 +17,6 @@ use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
 
 // Task-local so complete() and stream() can't race on the same provider instance.
 tokio::task_local! {
@@ -25,7 +24,7 @@ tokio::task_local! {
 }
 
 use super::base::{
-    collect_stream, Provider, ProviderDef, ProviderMetadata, DEFAULT_PROVIDER_TIMEOUT_SECS,
+    collect_stream, resolve_provider_timeout, Provider, ProviderDef, ProviderMetadata,
 };
 use super::openai_compatible::handle_response_openai_compat;
 use super::retry::ProviderRetry;
@@ -247,7 +246,7 @@ impl GithubCopilotProvider {
         let copilot_token_url: Option<String> = config.get_param("GITHUB_COPILOT_TOKEN_URL").ok();
         let urls = GithubCopilotUrls::new(&host, copilot_token_url.as_deref());
         let client = Client::builder()
-            .timeout(Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS))
+            .timeout(resolve_provider_timeout(None))
             .build()?;
         let cache = DiskCache::new(&host);
         let mu = tokio::sync::Mutex::new(RefCell::new(None));

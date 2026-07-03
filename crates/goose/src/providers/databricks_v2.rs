@@ -9,14 +9,12 @@ use serde::Serialize;
 use serde_json::Value;
 use std::io;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tokio::pin;
 use tokio_util::io::StreamReader;
 
 use super::api_client::{ApiClient, AuthMethod};
 use super::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
 };
 use super::databricks_auth::{DatabricksAuth, DatabricksAuthProvider};
 use super::formats::anthropic;
@@ -118,7 +116,7 @@ impl DatabricksV2Provider {
         let api_client = ApiClient::with_timeout_and_tls(
             host,
             auth_method,
-            Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS),
+            resolve_provider_timeout(None),
             tls_config,
         )?;
 

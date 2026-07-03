@@ -1,6 +1,6 @@
 use super::api_client::{ApiClient, AuthMethod};
 use super::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
+    resolve_provider_timeout, ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
     DEFAULT_PROVIDER_TIMEOUT_SECS,
 };
 use super::openai_compatible::handle_status;
@@ -166,8 +166,7 @@ impl OllamaProvider {
             .get_param("OLLAMA_HOST")
             .unwrap_or_else(|_| OLLAMA_HOST.to_string());
 
-        let timeout: Duration =
-            Duration::from_secs(config.get_param("OLLAMA_TIMEOUT").unwrap_or(OLLAMA_TIMEOUT));
+        let timeout: Duration = resolve_provider_timeout(Some("OLLAMA_TIMEOUT"));
 
         let base = if host.starts_with("http://") || host.starts_with("https://") {
             host.clone()
@@ -209,7 +208,11 @@ impl OllamaProvider {
         config: DeclarativeProviderConfig,
         tls_config: Option<crate::providers::api_client::TlsConfig>,
     ) -> Result<Self> {
-        let timeout = Duration::from_secs(config.timeout_seconds.unwrap_or(OLLAMA_TIMEOUT));
+        let timeout = config
+            .timeout_seconds
+            .filter(|seconds| *seconds > 0)
+            .map(Duration::from_secs)
+            .unwrap_or_else(|| resolve_provider_timeout(None));
 
         let base =
             if config.base_url.starts_with("http://") || config.base_url.starts_with("https://") {

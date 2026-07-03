@@ -4,7 +4,7 @@ use goose_providers::base::ProviderDescriptor;
 use std::collections::HashMap;
 
 use crate::config::declarative_providers::DeclarativeProviderConfig;
-use crate::providers::base::{ProviderDef, DEFAULT_PROVIDER_TIMEOUT_SECS};
+use crate::providers::base::{resolve_provider_timeout, ProviderDef};
 use goose_providers::api_client::{ApiClient, AuthMethod};
 use goose_providers::model::ModelConfig;
 use goose_providers::openai::{
@@ -137,20 +137,13 @@ pub async fn from_env(
 
     let organization: Option<String> = config.get_param("OPENAI_ORGANIZATION").ok();
     let project: Option<String> = config.get_param("OPENAI_PROJECT").ok();
-    let timeout_secs: u64 = config
-        .get_param("OPENAI_TIMEOUT")
-        .unwrap_or(DEFAULT_PROVIDER_TIMEOUT_SECS);
+    let timeout = resolve_provider_timeout(Some("OPENAI_TIMEOUT"));
 
     let auth = match api_key {
         Some(key) if !key.is_empty() => AuthMethod::BearerToken(key),
         _ => AuthMethod::NoAuth,
     };
-    let mut api_client = ApiClient::with_timeout_and_tls(
-        parsed.host,
-        auth,
-        std::time::Duration::from_secs(timeout_secs),
-        tls_config,
-    )?;
+    let mut api_client = ApiClient::with_timeout_and_tls(parsed.host, auth, timeout, tls_config)?;
 
     if !parsed.query_params.is_empty() {
         api_client = api_client.with_query(parsed.query_params);
@@ -282,20 +275,17 @@ pub fn from_custom_config(
         derive_base_path(url.path())
     };
 
-    let timeout_secs = config
+    let timeout = config
         .timeout_seconds
-        .unwrap_or(DEFAULT_PROVIDER_TIMEOUT_SECS);
+        .filter(|seconds| *seconds > 0)
+        .map(std::time::Duration::from_secs)
+        .unwrap_or_else(|| resolve_provider_timeout(None));
 
     let auth = match api_key {
         Some(key) if !key.is_empty() => AuthMethod::BearerToken(key),
         _ => AuthMethod::NoAuth,
     };
-    let mut api_client = ApiClient::with_timeout_and_tls(
-        host,
-        auth,
-        std::time::Duration::from_secs(timeout_secs),
-        tls_config,
-    )?;
+    let mut api_client = ApiClient::with_timeout_and_tls(host, auth, timeout, tls_config)?;
 
     if let Some(headers) = &config.headers {
         let mut header_map = reqwest::header::HeaderMap::new();

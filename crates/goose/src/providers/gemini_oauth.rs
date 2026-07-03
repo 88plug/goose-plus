@@ -1,8 +1,7 @@
 use crate::config::paths::Paths;
 use crate::conversation::message::Message;
 use crate::providers::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
 };
 use crate::providers::formats::google::{create_request, response_to_streaming_message};
 use crate::providers::google::GOOGLE_DOC_URL;
@@ -40,7 +39,7 @@ use tokio_util::io::StreamReader;
 
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS))
+        .timeout(resolve_provider_timeout(None))
         .build()
         .expect("failed to build HTTP client")
 });

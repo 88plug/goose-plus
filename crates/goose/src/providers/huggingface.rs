@@ -1,7 +1,6 @@
 use super::api_client::{ApiClient, AuthMethod, AuthProvider};
 use super::base::{
-    ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
-    DEFAULT_PROVIDER_TIMEOUT_SECS,
+    resolve_provider_timeout, ConfigKey, MessageStream, Provider, ProviderDef, ProviderMetadata,
 };
 use super::huggingface_auth;
 use super::openai_compatible::OpenAiCompatibleProvider;
@@ -89,16 +88,14 @@ impl HuggingFaceProvider {
         let (host, completions_prefix, query_params) =
             openai_compatible_endpoint_parts(&config.base_url, config.base_path.as_deref())?;
 
-        let timeout_secs = config
+        let timeout = config
             .timeout_seconds
-            .unwrap_or(DEFAULT_PROVIDER_TIMEOUT_SECS);
-        let mut api_client = ApiClient::with_timeout_and_tls(
-            host,
-            auth_method,
-            std::time::Duration::from_secs(timeout_secs),
-            tls_config,
-        )?
-        .with_query(query_params);
+            .filter(|seconds| *seconds > 0)
+            .map(std::time::Duration::from_secs)
+            .unwrap_or_else(|| resolve_provider_timeout(None));
+        let mut api_client =
+            ApiClient::with_timeout_and_tls(host, auth_method, timeout, tls_config)?
+                .with_query(query_params);
 
         if let Some(headers) = &config.headers {
             let mut header_map = reqwest::header::HeaderMap::new();
