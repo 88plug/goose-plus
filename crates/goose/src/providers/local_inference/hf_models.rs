@@ -375,6 +375,51 @@ fn build_download_url(repo_id: &str, filename: &str) -> String {
     format!("{}/{}/resolve/main/{}", HF_DOWNLOAD_BASE, repo_id, filename)
 }
 
+/// Whether a filename-sorted shard group forms a complete `-of-N` set: every
+/// member declares the same total and indices are contiguous `1..=N`.
+fn shards_are_complete(shards: &[&HfApiSibling]) -> bool {
+    let Some(expected_total) = shards.first().and_then(|s| parse_shard_total(&s.rfilename)) else {
+        return false;
+    };
+    if shards.len() != expected_total as usize {
+        return false;
+    }
+    shards.iter().enumerate().all(|(i, shard)| {
+        parse_shard_total(&shard.rfilename) == Some(expected_total)
+            && parse_shard_index(&shard.rfilename) == Some((i + 1) as u32)
+    })
+}
+
+fn is_safe_relative_path(filename: &str) -> bool {
+    if filename.is_empty() {
+        return false;
+    }
+
+    let normalized = filename.replace('\\', "/");
+    if normalized.starts_with('/') {
+        return false;
+    }
+
+    normalized
+        .split('/')
+        .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
+}
+
+fn sanitize_siblings(siblings: Vec<HfApiSibling>) -> Vec<HfApiSibling> {
+    siblings
+        .into_iter()
+        .filter(|s| is_safe_relative_path(&s.rfilename))
+        .collect()
+}
+
+fn sanitize_repo_siblings(siblings: &[RepoSibling]) -> Vec<RepoSibling> {
+    siblings
+        .iter()
+        .filter(|s| is_safe_relative_path(&s.rfilename))
+        .cloned()
+        .collect()
+}
+
 pub fn hf_authorization_header(token: Option<&str>) -> Option<String> {
     token
         .filter(|token| !token.is_empty())
@@ -528,6 +573,9 @@ fn group_into_variants(repo_id: &str, files: Vec<HfApiSibling>) -> Vec<HfQuantVa
             continue;
         }
         shards.sort_by(|a, b| a.rfilename.cmp(&b.rfilename));
+        if !shards_are_complete(&shards) {
+            continue;
+        }
         let total_size: u64 = shards.iter().map(|s| s.size.unwrap_or(0)).sum();
         let info = quant_info(&quant);
         let first_filename = &shards[0].rfilename;
@@ -624,7 +672,7 @@ pub async fn search_gguf_models(query: &str, limit: usize) -> Result<Vec<HfModel
         .into_iter()
         .filter_map(|m| {
             let repo_id = m.id?;
-            let siblings = m.siblings.unwrap_or_default();
+            let siblings = sanitize_siblings(m.siblings.unwrap_or_default());
 
             // The search endpoint may not include `siblings`; parse whatever
             // is available. Files are fetched on-demand via `get_repo_gguf_variants`.
@@ -686,7 +734,7 @@ pub async fn get_repo_gguf_variants(repo_id: &str) -> Result<Vec<HfQuantVariant>
     }
 
     let model: HfApiModel = response.json().await?;
-    let siblings = model.siblings.unwrap_or_default();
+    let siblings = sanitize_siblings(model.siblings.unwrap_or_default());
 
     Ok(group_into_variants(repo_id, siblings))
 }
@@ -711,7 +759,7 @@ pub async fn get_repo_gguf_files(repo_id: &str) -> Result<Vec<HfGgufFile>> {
     }
 
     let model: HfApiModel = response.json().await?;
-    let siblings = model.siblings.unwrap_or_default();
+    let siblings = sanitize_siblings(model.siblings.unwrap_or_default());
 
     let stem = model_stem_from_repo(repo_id);
 
@@ -786,7 +834,7 @@ pub async fn resolve_model_spec_full(spec: &str) -> Result<(String, ResolvedMode
     }
 
     let model: HfApiModel = response.json().await?;
-    let siblings = model.siblings.unwrap_or_default();
+    let siblings = sanitize_siblings(model.siblings.unwrap_or_default());
     let stem = model_stem_from_repo(&repo_id);
 
     // Collect all GGUF files matching the quantization
@@ -943,6 +991,39 @@ pub fn recommend_variant(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_safe_relative_path() {
+        assert!(is_safe_relative_path("model-Q4_K_M.gguf"));
+        assert!(is_safe_relative_path("subdir/model-Q4_K_M.gguf"));
+
+        assert!(!is_safe_relative_path(""));
+        assert!(!is_safe_relative_path("./model.gguf"));
+        assert!(!is_safe_relative_path("weights/./model.safetensors"));
+        assert!(!is_safe_relative_path("../model.gguf"));
+        assert!(!is_safe_relative_path("../../etc/cron.d/x.gguf"));
+        assert!(!is_safe_relative_path("subdir/../../escape.gguf"));
+        assert!(!is_safe_relative_path("/etc/cron.d/x.gguf"));
+        assert!(!is_safe_relative_path(
+            "..\\..\\windows\\system32\\evil.gguf"
+        ));
+    }
+
+    #[test]
+    fn mlx_repo_with_only_unsafe_weights_is_not_compatible() {
+        let config = Some(serde_json::json!({ "model_type": "llama" }));
+        let siblings = vec![
+            sibling("config.json"),
+            sibling("tokenizer.json"),
+            sibling("../../escape.safetensors"),
+        ];
+
+        assert!(is_mlx_compatible_repo(&config, &siblings));
+        assert!(!is_mlx_compatible_repo(
+            &config,
+            &sanitize_repo_siblings(&siblings)
+        ));
+    }
 
     #[test]
     fn test_parse_quantization() {
@@ -1302,6 +1383,23 @@ mod tests {
     }
 
     #[test]
+    fn test_group_into_variants_drops_incomplete_shard_group() {
+        let files = vec![
+            HfApiSibling {
+                rfilename: "BF16/gemma-3-27b-it-BF16-00001-of-00002.gguf".into(),
+                size: Some(40_000_000_000),
+            },
+            HfApiSibling {
+                rfilename: "gemma-3-27b-it-Q4_K_M.gguf".into(),
+                size: Some(4_000_000_000),
+            },
+        ];
+        let variants = group_into_variants("unsloth/gemma-3-27b-it-GGUF", files);
+        assert_eq!(variants.len(), 1);
+        assert_eq!(variants[0].quantization, "Q4_K_M");
+    }
+
+    #[test]
     fn test_group_into_variants_sorted_descending() {
         let files = vec![
             HfApiSibling {
@@ -1581,7 +1679,8 @@ pub async fn get_repo_mlx_variants(repo_id: &str) -> Result<Vec<HfModelVariant>>
 }
 
 fn mlx_variants_from_model_info(repo_id: &str, info: &ModelInfo) -> Vec<HfModelVariant> {
-    let siblings = info.siblings.as_deref().unwrap_or(&[]);
+    let siblings = sanitize_repo_siblings(info.siblings.as_deref().unwrap_or(&[]));
+    let siblings = siblings.as_slice();
 
     if !is_mlx_compatible_repo(&info.config, siblings) {
         return Vec::new();
@@ -1964,7 +2063,8 @@ async fn resolve_mlx_model(repo_id: &str, variant_id: &str) -> Result<ResolvedLo
         .expand(vec!["siblings".to_string()])
         .send()
         .await?;
-    let siblings = info.siblings.as_deref().unwrap_or(&[]);
+    let siblings = sanitize_repo_siblings(info.siblings.as_deref().unwrap_or(&[]));
+    let siblings = siblings.as_slice();
     let filenames = mlx_download_filenames(siblings);
     let total_size = filenames
         .iter()
