@@ -1,20 +1,46 @@
 use std::sync::Arc;
 
 use axum::{
+    body::Body,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    http::{HeaderValue, StatusCode},
+    http::{HeaderValue, Request, StatusCode},
     response::{IntoResponse, Response},
 };
 use futures::{SinkExt, StreamExt};
 use tracing::{debug, error, info, trace, warn};
 
-use super::connection::ConnectionRegistry;
 use super::HEADER_CONNECTION_ID;
+use super::connection::ConnectionRegistry;
+
+pub(crate) fn origin_is_local(origin: &str) -> bool {
+    matches!(
+        origin,
+        "http://localhost:3284"
+            | "http://127.0.0.1:3284"
+            | "http://localhost"
+            | "http://127.0.0.1"
+            | "http://[::1]"
+            | "https://localhost:3284"
+            | "https://127.0.0.1:3284"
+            | "https://localhost"
+            | "https://127.0.0.1"
+            | "https://[::1]"
+    )
+}
 
 pub(crate) async fn handle_ws_upgrade(
     registry: Arc<ConnectionRegistry>,
     ws: WebSocketUpgrade,
+    request: Request<Body>,
 ) -> Response {
+    let origin = request
+        .headers()
+        .get(axum::http::header::ORIGIN)
+        .and_then(|value| value.to_str().ok());
+    if origin.is_some_and(|origin| !origin_is_local(origin)) {
+        return (StatusCode::FORBIDDEN, "Forbidden: invalid Origin").into_response();
+    }
+
     let (connection_id, connection) = match registry.create_connection().await {
         Ok(pair) => pair,
         Err(e) => {
@@ -121,5 +147,19 @@ async fn run_ws(
     debug!(connection_id = %connection_id, "Cleaning up WebSocket connection");
     if let Some(conn) = registry.remove(&connection_id).await {
         conn.shutdown().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::origin_is_local;
+
+    #[test]
+    fn origin_allowlist_matches_expected_local_hosts() {
+        assert!(origin_is_local("http://localhost:3284"));
+        assert!(origin_is_local("http://127.0.0.1"));
+        assert!(origin_is_local("http://[::1]"));
+        assert!(!origin_is_local("https://evil.example"));
+        assert!(!origin_is_local("http://localhost.evil.example"));
     }
 }

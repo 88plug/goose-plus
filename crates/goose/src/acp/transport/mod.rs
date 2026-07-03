@@ -6,18 +6,18 @@ pub mod websocket;
 use std::sync::Arc;
 
 use axum::{
+    Router,
     body::Body,
     extract::{
-        ws::{rejection::WebSocketUpgradeRejection, WebSocketUpgrade},
         State,
+        ws::{WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
     },
-    http::{header, HeaderName, Method, Request},
+    http::{HeaderName, HeaderValue, Method, Request, header},
     response::Response,
     routing::{delete, get, post},
-    Router,
 };
 use serde_json::Value;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::acp::server_factory::AcpServer;
 
@@ -86,7 +86,7 @@ async fn handle_get(
     request: Request<Body>,
 ) -> Response {
     match ws_upgrade {
-        Ok(ws) => websocket::handle_ws_upgrade(state, ws).await,
+        Ok(ws) => websocket::handle_ws_upgrade(state, ws, request).await,
         Err(_) => http::handle_get(state, request).await,
     }
 }
@@ -97,7 +97,18 @@ async fn health() -> &'static str {
 
 fn acp_cors_layer() -> CorsLayer {
     CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin([
+            HeaderValue::from_static("http://localhost:3284"),
+            HeaderValue::from_static("http://127.0.0.1:3284"),
+            HeaderValue::from_static("http://localhost"),
+            HeaderValue::from_static("http://127.0.0.1"),
+            HeaderValue::from_static("http://[::1]"),
+            HeaderValue::from_static("https://localhost:3284"),
+            HeaderValue::from_static("https://127.0.0.1:3284"),
+            HeaderValue::from_static("https://localhost"),
+            HeaderValue::from_static("https://127.0.0.1"),
+            HeaderValue::from_static("https://[::1]"),
+        ])
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_headers([
             header::CONTENT_TYPE,
