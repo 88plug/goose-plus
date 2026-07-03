@@ -34,7 +34,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~90 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~95 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -54,6 +54,7 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 - **Headless & browser deployment** — a Dockerized `goosed` API server (no Electron needed) and a browser build of the desktop UI (full `window.electron`/`window.appConfig` web shim), both one-command via `docker-compose up`.
 - **Faster first prompt** — session/ACP startup now pre-warms the system-prompt + tool-schema cache and polls platform extensions concurrently instead of serially, cutting measured first-token latency ~60% (1003ms→842ms). Opt out with `GOOSE_DISABLE_PREWARM=1`; live-measure any session with `GOOSE_PERF_LOG=1`.
 - **Internal security-audit sweeps** — 4 independent code-first passes across every crate found and fixed ~70 bugs, including three separate path-traversal guards (memory-tool categories, local-inference quantization filenames, scheduler job IDs) and several constant-time secret-comparison fixes (A2A/MCP-app-proxy routes, tunnel pairing) that were comparing secrets with `!=` or a non-cryptographic hash.
+- **Redacted diagnostics export** — `goose session diagnostics` scans every log, `session.json`, `config.yaml`, and scheduled-recipe file it bundles for high-entropy tokens (API keys, JWTs) and replaces them with `[REDACTED]` before zipping, so pasting a support bundle into a GitHub issue can't leak credentials.
 
 ---
 
@@ -127,6 +128,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | `goose update` tracks goose-plus's own releases | ◑ | ✓ |
 | Startup pre-warm (system prompt + tool schemas) for faster first token | – | ✓ |
 | `GOOSE_PERF_LOG` per-turn timing diagnostic | – | ✓ |
+| High-entropy secret redaction in diagnostics export | – | ✓ |
 
 ---
 
@@ -165,6 +167,10 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Providers | [#9993](https://github.com/aaif-goose/goose/issues/9993) | Responses-API stream parser crashed on a malformed known event mid-stream instead of skipping it |
 | Desktop | [#9881](https://github.com/aaif-goose/goose/issues/9881) | Extension toggle in Settings snapped back to On while disabling |
 | Providers | [#10032](https://github.com/aaif-goose/goose/issues/10032) | `GOOSE_CONTEXT_LIMIT` clobbered a known per-model context window instead of acting as a fallback |
+| Agent | [#8496](https://github.com/aaif-goose/goose/issues/8496) | Delegated agents treated `inherit` as a literal provider/model instead of falling back to the parent session's config |
+| Recipes | [#5280](https://github.com/aaif-goose/goose/issues/5280) | Recipe parse failures now show the raw recipe content, not just the parser error |
+| CLI | [#6224](https://github.com/aaif-goose/goose/issues/6224) | PowerShell `term init` output had leftover double braces — invalid PowerShell syntax |
+| Desktop | [#5915](https://github.com/aaif-goose/goose/issues/5915) | `goosed`'s spawned environment could be missing the PATH entries a locally-installed `claude`/`codex` CLI needs to resolve |
 
 *(Plus fixes proven in this fork without an upstream ticket: `GOOSE_A2A_ENABLE=1` / `GOOSE_NATS_DRIVE=1` truthy env flags, a guard against silent declarative-provider drop, the SuperGrok 426/403 endpoint + credential fixes, Mistral's OpenAI-compatible endpoint rejecting `stream_options`, bare `{"error": {...}}` SSE events (e.g. Gemini via Databricks) silently swallowed instead of surfaced, fast-model utility calls (compaction/session-naming) 400ing from inherited thinking-effort budget overflow, a panic on LLM-authored recipes with an empty `{}` response schema, session schema migration 7 erroring under concurrent-process races, a `.goosehints` symlink bypassing the import-boundary read restriction, HuggingFace `rfilename` path-traversal writing cached model files outside the intended cache dir, the packaged npm `goose` binary shipping non-executable when resolved by path instead of through `node_modules/.bin`, a `sqlx` panic on session creation right after the v14 schema migration, unprefixed tool names (e.g. `read_resource`) failing to resolve to their extension-qualified form, and A2A's `message:send` being fully unusable end-to-end until a live battle-testing pass fixed a missing session row, a missing provider bootstrap, and mangled streamed-reply text.)*
 
