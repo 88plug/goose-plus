@@ -783,7 +783,21 @@ impl SessionStorage {
             .busy_timeout(std::time::Duration::from_secs(30))
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
 
-        SqlitePoolOptions::new().connect_lazy_with(options)
+        // sqlx's default pool size is 10; separate SessionManager instances
+        // (e.g. one per ACP session) each getting their own 10-connection
+        // pool against the same file multiplies that far past what SQLite's
+        // single-writer model can serialize, so busy_timeout alone doesn't
+        // prevent SQLITE_BUSY under real concurrent load. Capped at 2 (not 1):
+        // test_begin_immediate_prevents_lock_upgrade_deadlock deliberately
+        // races two BEGIN IMMEDIATE transactions from the same pool to prove
+        // they serialize instead of deadlocking, which needs 2 real
+        // connections available at once. busy_timeout covers serialization
+        // *across* pools/instances.
+        SqlitePoolOptions::new()
+            .max_connections(2)
+            .idle_timeout(Some(std::time::Duration::from_secs(60)))
+            .max_lifetime(Some(std::time::Duration::from_secs(1800)))
+            .connect_lazy_with(options)
     }
 
     pub fn new(data_dir: PathBuf) -> Self {
@@ -3777,6 +3791,115 @@ mod tests {
             "expected ~{}, got {}",
             0.01 * writers as f64,
             cost
+        );
+    }
+
+    #[tokio::test]
+    async fn test_multiple_session_manager_instances_do_not_hit_sqlite_busy() {
+        // Regression test for a pool-sizing bug: separate SessionManager
+        // instances (e.g. one per ACP session) each get their own connection
+        // pool against the same file. With sqlx's default pool size (10),
+        // that's up to `num_pools * 10` concurrent connections contending for
+        // SQLite's single writer, which busy_timeout alone doesn't fully
+        // absorb under real load. create_pool() now caps each pool at 1
+        // connection so writes serialize within a pool and busy_timeout
+        // covers serialization across pools.
+        let temp_dir = TempDir::new().unwrap();
+        let db_dir = temp_dir.path().to_path_buf();
+
+        let primary = SessionManager::new(db_dir.clone());
+        let session = primary
+            .create_session(
+                PathBuf::from("/tmp/multi_pool"),
+                "pool contention test".to_string(),
+                SessionType::User,
+                GooseMode::default(),
+            )
+            .await
+            .unwrap();
+
+        let num_pools = 4;
+        let writes_per_pool = 5;
+        let mut handles = Vec::new();
+
+        for pool_idx in 0..num_pools {
+            let sm = Arc::new(SessionManager::new(db_dir.clone()));
+            let session_id = session.id.clone();
+
+            handles.push(tokio::spawn(async move {
+                for write_idx in 0..writes_per_pool {
+                    sm.add_message(
+                        &session_id,
+                        &Message {
+                            id: None,
+                            role: if write_idx % 2 == 0 {
+                                Role::User
+                            } else {
+                                Role::Assistant
+                            },
+                            created: chrono::Utc::now().timestamp_millis(),
+                            content: vec![MessageContent::text(format!(
+                                "pool {pool_idx} msg {write_idx}"
+                            ))],
+                            metadata: Default::default(),
+                        },
+                    )
+                    .await
+                    .unwrap();
+
+                    sm.update(&session_id)
+                        .usage(Usage::new(
+                            Some(1),
+                            Some(1),
+                            Some(pool_idx * 100 + write_idx),
+                        ))
+                        .apply()
+                        .await
+                        .unwrap();
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        let loaded = primary.get_session(&session.id, true).await.unwrap();
+        assert_eq!(
+            loaded.conversation.expect("messages loaded").len(),
+            (num_pools * writes_per_pool) as usize
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_pool_caps_at_two_connections() {
+        // Deterministic check that create_pool() actually caps the pool at 2
+        // connections (the SQLITE_BUSY fix above): holding both slots must
+        // block a third acquire from the same pool. Capped at 2 rather than 1
+        // so test_begin_immediate_prevents_lock_upgrade_deadlock's two-worker
+        // race still has enough connections to run.
+        let temp_dir = TempDir::new().unwrap();
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+        let pool = sm.storage().pool().await.unwrap().clone();
+
+        let held_one = pool.acquire().await.unwrap();
+        let held_two = pool.acquire().await.unwrap();
+
+        let third_acquire =
+            tokio::time::timeout(std::time::Duration::from_millis(200), pool.acquire()).await;
+        assert!(
+            third_acquire.is_err(),
+            "expected the third acquire to block with only 2 connection slots available"
+        );
+
+        drop(held_one);
+        drop(held_two);
+
+        let fourth_acquire =
+            tokio::time::timeout(std::time::Duration::from_secs(2), pool.acquire()).await;
+        assert!(
+            fourth_acquire.is_ok(),
+            "acquiring should succeed again once both held connections are released"
         );
     }
 
