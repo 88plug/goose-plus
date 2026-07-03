@@ -182,7 +182,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             );
         }
 
-        if system_prompt_extras.is_empty() {
+        let mut prompt = if system_prompt_extras.is_empty() {
             base_prompt
         } else {
             let sanitized_system_prompt_extras: Vec<String> = system_prompt_extras
@@ -195,7 +195,21 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
                 base_prompt,
                 sanitized_system_prompt_extras.join("\n\n")
             )
+        };
+
+        if let Ok(advisory) = std::env::var("CRITICAL_ADVISORY") {
+            let advisory = advisory.trim();
+            let is_placeholder = advisory.is_empty()
+                || advisory.eq_ignore_ascii_case("none")
+                || advisory.eq_ignore_ascii_case("null")
+                || advisory.eq_ignore_ascii_case("undefined");
+            if !is_placeholder {
+                let one_line = advisory.replace('\n', " ");
+                prompt = format!("{}\n\nCritical Advisory: {}", prompt, one_line);
+            }
         }
+
+        prompt
     }
 }
 
@@ -494,5 +508,77 @@ mod tests {
             .build();
 
         assert_snapshot!(system_prompt);
+    }
+
+    struct TempEnvVar {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl TempEnvVar {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for TempEnvVar {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(val) => std::env::set_var(self.key, val),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_critical_advisory_appended_to_prompt() {
+        let _env = TempEnvVar::set("CRITICAL_ADVISORY", "Do not access production databases");
+        let manager = PromptManager::new();
+        let result = manager.builder().build();
+        assert!(result.ends_with("Critical Advisory: Do not access production databases"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_critical_advisory_multiline_collapsed() {
+        let _env = TempEnvVar::set("CRITICAL_ADVISORY", "line one\nline two\nline three");
+        let manager = PromptManager::new();
+        let result = manager.builder().build();
+        assert!(result.ends_with("Critical Advisory: line one line two line three"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_critical_advisory_empty_ignored() {
+        let _env = TempEnvVar::set("CRITICAL_ADVISORY", "  ");
+        let manager = PromptManager::new();
+        let result = manager.builder().build();
+        assert!(!result.contains("Critical Advisory"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_critical_advisory_unset_ignored() {
+        std::env::remove_var("CRITICAL_ADVISORY");
+        let manager = PromptManager::new();
+        let result = manager.builder().build();
+        assert!(!result.contains("Critical Advisory"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_critical_advisory_none_null_undefined_ignored() {
+        for placeholder in ["None", "null", "undefined", "NULL", "UNDEFINED"] {
+            let _env = TempEnvVar::set("CRITICAL_ADVISORY", placeholder);
+            let manager = PromptManager::new();
+            let result = manager.builder().build();
+            assert!(
+                !result.contains("Critical Advisory"),
+                "placeholder value {placeholder:?} should be ignored"
+            );
+        }
     }
 }
