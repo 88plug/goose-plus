@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~127 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~128 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -143,6 +143,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Bounded per-instance SQLite pool (prevents SQLITE_BUSY under concurrent sessions) | – | ✓ |
 | Disabling a builtin extension (Developer) actually prevents it loading at session start | – | ✓ |
 | Configurable macOS seatbelt sandbox + egress proxy for `goosed` (opt-in) | – | ✓ |
+| Developer `search` tool (Sourcegraph code / GitHub issues / Reddit, parallel) | – | ✓ |
 
 ---
 
@@ -288,6 +289,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Desktop | [`micn/env-provider-detector`](https://github.com/aaif-goose/goose/tree/micn/env-provider-detector) (redesigned; `b3becffdb` own work) | Onboarding "Quick Setup" card when a provider's credentials are already found in the environment — upstream added a new backend endpoint hardcoded to 3 providers; goose-plus instead surfaces the existing `is_configured` field (already env-aware via `Config::get_secret`) generalized across every provider, no backend change needed |
 | Security | [`feat/classifier-input-chunking-and-normalisation`](https://github.com/aaif-goose/goose/tree/feat/classifier-input-chunking-and-normalisation) (`ddfc25b27` own work) | Verbose, repetitive tool output could dilute or overflow the prompt-injection classifier's fixed token window — normalizes/dedupes/chunks input before classifying, taking the max confidence across chunks. Fixed a byte-index chunk-boundary panic risk on multi-byte UTF-8 present in the reference implementation |
 | Desktop/Security | [`shellz-n-stuff/sandbox-impl-python-ssh-proxy`](https://github.com/aaif-goose/goose/tree/shellz-n-stuff/sandbox-impl-python-ssh-proxy) (draft PR [#7206](https://github.com/aaif-goose/goose/pull/7206), closed for inactivity, never reviewed/merged; `736557d33` own work) | Opt-in (`GOOSE_SANDBOX=true`, macOS-only) `sandbox-exec` seatbelt profile denying `goosed` direct outbound network except localhost, forcing egress through a local HTTP CONNECT proxy with a live-reloaded domain blocklist, IP/loopback/SSH-host restrictions, and an optional LaunchDarkly egress-allowlist flag. Dropped the draft's vestigial static `sandbox.sb` template, made dead by its own later commit switching to programmatic profile generation |
+| Developer tools | [`developer_search`](https://github.com/aaif-goose/goose/tree/developer_search) (draft PR [#6683](https://github.com/aaif-goose/goose/pull/6683), closed silently with zero reviews/comments; `8b175708d` own work) | New `search` tool on the developer extension — queries Sourcegraph code search, the GitHub Search API (issues), and Reddit in parallel with per-source timeouts, for "how have others solved this" research without a full web-search round trip. The draft shipped with zero non-network unit tests; added real coverage for the pure formatting/filtering logic instead |
 
 > The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back. For no-ticket rows, `Source` links the upstream branch (verified live; if a link 404s after the branch is deleted, `git log --all --grep=<branch>` on this repo still finds the porting commit) or gives the goose-plus commit hash for original fork work.
 
