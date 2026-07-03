@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 #[cfg(windows)]
 use std::path::Path;
 use std::path::PathBuf;
@@ -152,6 +153,76 @@ pub const OUTPUT_LIMIT_BYTES: usize = 50_000;
 const OUTPUT_PREVIEW_LINES: usize = 50;
 
 const OUTPUT_SLOTS: usize = 8;
+
+/// When set, the shell tool bypasses the shell entirely and directly executes
+/// only commands in the allowlist. The command string is parsed with
+/// `shell_words::split` and the first token is checked against the set — no
+/// shell expansion, pipes, redirections, or subshells are possible. Intended
+/// for recipes that process untrusted input (e.g. reviewing a PR diff), where
+/// a prompt-injection payload should not be able to reach an unrestricted shell.
+#[derive(Clone, Debug)]
+enum ShellMode {
+    /// Normal mode: commands run through the resolved shell (`build_shell_command`).
+    Unrestricted,
+    /// Direct-exec mode: no shell, only allowlisted programs.
+    AllowList(HashSet<String>),
+}
+
+fn parse_shell_mode() -> ShellMode {
+    let allowed: HashSet<String> = std::env::var("GOOSE_SHELL_ALLOWED_COMMANDS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if allowed.is_empty() {
+        ShellMode::Unrestricted
+    } else {
+        ShellMode::AllowList(allowed)
+    }
+}
+
+/// Build a `Command` that directly executes `command_line` with no shell.
+/// Returns an error string if the program is not in the allowlist.
+fn build_direct_command(
+    command_line: &str,
+    allowed: &HashSet<String>,
+    working_dir: Option<&std::path::Path>,
+) -> Result<tokio::process::Command, String> {
+    let tokens =
+        shell_words::split(command_line).map_err(|e| format!("Failed to parse command: {e}"))?;
+
+    let program = tokens
+        .first()
+        .ok_or_else(|| "Command cannot be empty.".to_string())?;
+
+    // Block absolute/relative paths — only bare command names are checked against
+    // the allowlist, so a path can't be used to dodge it.
+    if program.contains('/') || program.contains('\\') {
+        return Err(format!(
+            "Command '{program}' rejected: paths are not allowed in restricted mode. Use the bare command name."
+        ));
+    }
+
+    if !allowed.contains(program.as_str()) {
+        let mut allowed_list: Vec<&str> = allowed.iter().map(String::as_str).collect();
+        allowed_list.sort_unstable();
+        return Err(format!(
+            "Command '{program}' is not in the allowed list. Allowed: {}",
+            allowed_list.join(", ")
+        ));
+    }
+
+    let mut command = tokio::process::Command::new(program);
+    if tokens.len() > 1 {
+        command.args(&tokens[1..]);
+    }
+    if let Some(dir) = working_dir {
+        command.current_dir(dir);
+    }
+    configure_subprocess(&mut command);
+    Ok(command)
+}
 
 /// Result of truncating command output.
 struct TruncateResult {
@@ -316,6 +387,7 @@ pub struct ShellTool {
     call_index: AtomicUsize,
     #[cfg(not(windows))]
     login_path: LoginPath,
+    shell_mode: ShellMode,
 }
 
 impl ShellTool {
@@ -332,6 +404,18 @@ impl ShellTool {
             } else {
                 LoginPath::resolved(None)
             },
+            shell_mode: parse_shell_mode(),
+        })
+    }
+
+    #[cfg(test)]
+    fn with_allow_list(allowed: Vec<String>) -> std::io::Result<Self> {
+        Ok(Self {
+            output_dir: tempfile::tempdir()?,
+            call_index: AtomicUsize::new(0),
+            #[cfg(not(windows))]
+            login_path: LoginPath::resolved(None),
+            shell_mode: ShellMode::AllowList(allowed.into_iter().collect()),
         })
     }
 
@@ -342,6 +426,7 @@ impl ShellTool {
             call_index: AtomicUsize::new(0),
             #[cfg(not(windows))]
             login_path: LoginPath::resolved(None),
+            shell_mode: ShellMode::Unrestricted,
         })
     }
 
@@ -370,6 +455,7 @@ impl ShellTool {
             params.timeout_secs,
             working_dir,
             login_path_ref,
+            &self.shell_mode,
         )
         .await
         {
@@ -511,8 +597,12 @@ async fn run_command(
     timeout_secs: Option<u64>,
     working_dir: Option<&std::path::Path>,
     login_path: Option<&str>,
+    shell_mode: &ShellMode,
 ) -> Result<ExecutionOutput, String> {
-    let mut command = build_shell_command(command_line, working_dir, login_path);
+    let mut command = match shell_mode {
+        ShellMode::Unrestricted => build_shell_command(command_line, working_dir, login_path),
+        ShellMode::AllowList(allowed) => build_direct_command(command_line, allowed, working_dir)?,
+    };
 
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
@@ -829,6 +919,95 @@ mod tests {
 
         assert_eq!(result.is_error, Some(false));
         assert!(extract_text(&result).contains("hello"));
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn allow_list_executes_allowed_command() {
+        let tool = ShellTool::with_allow_list(vec!["echo".to_string()]).unwrap();
+        let result = tool
+            .shell(ShellParams {
+                command: "echo hello".to_string(),
+                timeout_secs: None,
+            })
+            .await;
+
+        assert_eq!(result.is_error, Some(false));
+        assert!(extract_text(&result).contains("hello"));
+    }
+
+    #[tokio::test]
+    async fn allow_list_rejects_command_not_in_list() {
+        let tool = ShellTool::with_allow_list(vec!["echo".to_string()]).unwrap();
+        let result = tool
+            .shell(ShellParams {
+                command: "cat /etc/hosts".to_string(),
+                timeout_secs: None,
+            })
+            .await;
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(extract_text(&result).contains("not in the allowed list"));
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn allow_list_rejects_shell_expansion_and_pipes() {
+        let tool = ShellTool::with_allow_list(vec!["echo".to_string()]).unwrap();
+        // No shell means no `$(...)`, `|`, or `;` interpretation — this is
+        // passed to `echo` as literal argument text, not executed.
+        let result = tool
+            .shell(ShellParams {
+                command: "echo $(whoami) | cat".to_string(),
+                timeout_secs: None,
+            })
+            .await;
+
+        assert_eq!(result.is_error, Some(false));
+        assert_eq!(extract_text(&result).trim(), "$(whoami) | cat");
+    }
+
+    #[tokio::test]
+    async fn allow_list_rejects_path_bypass() {
+        let tool = ShellTool::with_allow_list(vec!["echo".to_string()]).unwrap();
+        let result = tool
+            .shell(ShellParams {
+                command: "/bin/echo hello".to_string(),
+                timeout_secs: None,
+            })
+            .await;
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(extract_text(&result).contains("paths are not allowed"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn parse_shell_mode_reads_env_var() {
+        // SAFETY: #[serial] ensures no other test reads/writes this env var concurrently.
+        unsafe {
+            std::env::remove_var("GOOSE_SHELL_ALLOWED_COMMANDS");
+        }
+        assert!(matches!(parse_shell_mode(), ShellMode::Unrestricted));
+
+        unsafe {
+            std::env::set_var("GOOSE_SHELL_ALLOWED_COMMANDS", " echo , cat ,ls");
+        }
+        match parse_shell_mode() {
+            ShellMode::AllowList(allowed) => {
+                assert_eq!(
+                    allowed,
+                    ["echo", "cat", "ls"]
+                        .into_iter()
+                        .map(String::from)
+                        .collect()
+                );
+            }
+            ShellMode::Unrestricted => panic!("expected AllowList"),
+        }
+        unsafe {
+            std::env::remove_var("GOOSE_SHELL_ALLOWED_COMMANDS");
+        }
     }
 
     #[cfg(not(windows))]
