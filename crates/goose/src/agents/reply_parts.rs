@@ -596,13 +596,10 @@ impl Agent {
         let manager = self.config.session_manager.clone();
         let session = manager.get_session(session_id, false).await?;
 
-        let accumulated_usage = session.accumulated_usage + usage.usage;
-
-        let accumulated_cost = session
+        let cost_delta = session
             .provider_name
             .as_deref()
-            .and_then(|pn| self.accumulate_cost(session.accumulated_cost, usage, pn))
-            .or(session.accumulated_cost);
+            .and_then(|pn| self.estimate_chunk_cost(usage, pn));
 
         let current_usage = if is_compaction_usage {
             // After compaction: summary output becomes new input context
@@ -612,30 +609,27 @@ impl Agent {
             usage.usage
         };
 
+        // Set the context window outright (single writer) while incrementing the
+        // accumulated totals, so a subagent rolling up concurrently is not
+        // clobbered - both in one statement.
         manager
-            .update(session_id)
-            .schedule_id(schedule_id)
-            .usage(current_usage)
-            .accumulated_usage(accumulated_usage)
-            .accumulated_cost(accumulated_cost)
-            .apply()
+            .update_usage_metrics(
+                session_id,
+                schedule_id,
+                current_usage,
+                usage.usage,
+                cost_delta,
+            )
             .await?;
 
         Ok(())
     }
 
-    fn accumulate_cost(
-        &self,
-        existing: Option<f64>,
-        usage: &ProviderUsage,
-        provider_name: &str,
-    ) -> Option<f64> {
+    fn estimate_chunk_cost(&self, usage: &ProviderUsage, provider_name: &str) -> Option<f64> {
         let canonical =
             crate::providers::canonical::maybe_get_canonical_model(provider_name, &usage.model)?;
 
-        let chunk_cost = canonical.cost.estimate_cost(&usage.usage)?;
-
-        Some(existing.unwrap_or(0.0) + chunk_cost)
+        canonical.cost.estimate_cost(&usage.usage)
     }
 }
 

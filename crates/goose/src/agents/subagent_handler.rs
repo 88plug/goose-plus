@@ -55,7 +55,15 @@ pub struct SubagentRunParams {
 
 pub async fn run_subagent_task(params: SubagentRunParams) -> Result<String, anyhow::Error> {
     let return_last_only = params.return_last_only;
-    let (messages, final_output) = get_agent_messages(params).await.map_err(|e| {
+    let session_manager = params.config.session_manager.clone();
+    let parent_session_id = params.task_config.parent_session_id.clone();
+    let subagent_session_id = params.session_id.clone();
+
+    let result = get_agent_messages(params).await;
+
+    roll_up_usage_to_parent(&session_manager, &parent_session_id, &subagent_session_id).await;
+
+    let (messages, final_output) = result.map_err(|e| {
         ErrorData::new(
             ErrorCode::INTERNAL_ERROR,
             format!("Failed to execute task: {}", e),
@@ -68,6 +76,39 @@ pub async fn run_subagent_task(params: SubagentRunParams) -> Result<String, anyh
     }
 
     Ok(extract_response_text(&messages, return_last_only))
+}
+
+/// Descendants already rolled up through this same path, so the subagent's
+/// accumulated totals cover the whole subtree.
+async fn roll_up_usage_to_parent(
+    session_manager: &crate::session::SessionManager,
+    parent_session_id: &str,
+    subagent_session_id: &str,
+) {
+    if parent_session_id.is_empty() || parent_session_id == subagent_session_id {
+        return;
+    }
+    let Ok(subagent) = session_manager
+        .get_session(subagent_session_id, false)
+        .await
+    else {
+        return;
+    };
+    if let Err(e) = session_manager
+        .add_accumulated_usage(
+            parent_session_id,
+            subagent.accumulated_usage,
+            subagent.accumulated_cost,
+        )
+        .await
+    {
+        tracing::warn!(
+            "Failed to roll up subagent {} usage into parent {}: {}",
+            subagent_session_id,
+            parent_session_id,
+            e
+        );
+    }
 }
 
 fn extract_response_text(messages: &Conversation, return_last_only: bool) -> String {
