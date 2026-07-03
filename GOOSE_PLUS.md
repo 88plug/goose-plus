@@ -119,6 +119,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | `/copy` last-response-to-clipboard (OSC 52 fallback for SSH) | – | ✓ |
 | `GOOSE_CLI_BELL` opt-in terminal bell on turn completion | – | ✓ |
 | Hidden/internal extensions flagged instead of silently dropped (REST API) | – | ✓ |
+| New Chat as a true global shortcut (not just a menu accelerator) | – | ✓ |
 | OpenCode free/paid models provider | – | ✓ |
 | searxng-mcp: 8 free providers always run in full parallel | – | ✓ |
 | NATS JetStream KV claim/lease coordination bus | – | ✓ |
@@ -171,10 +172,30 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Recipes | [#5280](https://github.com/aaif-goose/goose/issues/5280) | Recipe parse failures now show the raw recipe content, not just the parser error |
 | CLI | [#6224](https://github.com/aaif-goose/goose/issues/6224) | PowerShell `term init` output had leftover double braces — invalid PowerShell syntax |
 | Desktop | [#5915](https://github.com/aaif-goose/goose/issues/5915) | `goosed`'s spawned environment could be missing the PATH entries a locally-installed `claude`/`codex` CLI needs to resolve |
+| Context | [`micn/tool-sum-fixes`](https://github.com/aaif-goose/goose/tree/micn/tool-sum-fixes) | Tool-pair summarization created stale "ghost" messages once compaction could handle the context anyway — now off by default, gated to ≤65,536-token windows |
 
-*(Plus fixes proven in this fork without an upstream ticket: `GOOSE_A2A_ENABLE=1` / `GOOSE_NATS_DRIVE=1` truthy env flags, a guard against silent declarative-provider drop, the SuperGrok 426/403 endpoint + credential fixes, Mistral's OpenAI-compatible endpoint rejecting `stream_options`, bare `{"error": {...}}` SSE events (e.g. Gemini via Databricks) silently swallowed instead of surfaced, fast-model utility calls (compaction/session-naming) 400ing from inherited thinking-effort budget overflow, a panic on LLM-authored recipes with an empty `{}` response schema, session schema migration 7 erroring under concurrent-process races, a `.goosehints` symlink bypassing the import-boundary read restriction, HuggingFace `rfilename` path-traversal writing cached model files outside the intended cache dir, the packaged npm `goose` binary shipping non-executable when resolved by path instead of through `node_modules/.bin`, a `sqlx` panic on session creation right after the v14 schema migration, unprefixed tool names (e.g. `read_resource`) failing to resolve to their extension-qualified form, and A2A's `message:send` being fully unusable end-to-end until a live battle-testing pass fixed a missing session row, a missing provider bootstrap, and mangled streamed-reply text.)*
+### Fixed without an upstream ticket
 
-*(Security fixes from four independent code-first audit sweeps: path-traversal guards in the memory tool's category argument, local-inference's quantization filenames, and the scheduler's job IDs — the same class of bug `GOOSE_CONFINEMENT` above fixes for file write/edit; non-constant-time secret comparisons (`!=` or a non-cryptographic hash instead of the existing `token_matches` helper) in the A2A/MCP-app-proxy routes and the tunnel pairing-code check; unescaped shell-literal interpolation in the computer-controller's Linux command execution; and an integer-underflow panic from NFC-normalization-expanded text in conversation trimming.)*
+No open/closed upstream issue exists for these — the **Source** column links the upstream branch this was ported from (verified live as of this writing — feature branches can be deleted, so if a link 404s, `git log --all --grep=<branch-name>` on this repo still finds the porting commit), or gives the goose-plus commit hash for fixes this fork found on its own (`git show <hash>` in this repo).
+
+| Area | Source | What goose-plus fixes |
+|---|---|---|
+| Providers/xAI | `5b2eaec19` (own fix) | SuperGrok OAuth was unusable end-to-end: missing Grok CLI proxy headers (426) and a token-cache mismatch with grok-cli's own login (403 wrong-account) |
+| Providers | [`alexhancock/fix-mistral`](https://github.com/aaif-goose/goose/tree/alexhancock/fix-mistral) | Mistral's OpenAI-compatible endpoint rejected `stream_options` |
+| Providers | [`alexhancock/handle-gemini-databricks-errors`](https://github.com/aaif-goose/goose/tree/alexhancock/handle-gemini-databricks-errors) | Bare `{"error": {...}}` SSE events (e.g. Gemini via Databricks) silently swallowed instead of surfaced |
+| Providers | [`worktree-fast-400-compaction-fix`](https://github.com/aaif-goose/goose/tree/worktree-fast-400-compaction-fix) | Fast-model utility calls (compaction/session-naming) 400ing from inherited thinking-effort budget overflow |
+| Providers | `29261a351` (own fix) | A guard against a malformed bundled declarative provider silently vanishing from every surface with no test failure |
+| Providers | `642c308c0` (own fix) | Unprefixed tool names (e.g. `read_resource`) failing to resolve to their extension-qualified form |
+| Agent | [`llm_convenience`](https://github.com/aaif-goose/goose/tree/llm_convenience) | Panic on LLM-authored recipes with an empty `{}` response schema |
+| Session | [`zane/check-exists`](https://github.com/aaif-goose/goose/tree/zane/check-exists) | Schema migration 7 erroring under concurrent-process races |
+| Session | `d3a600a64` (own fix) | `sqlx` panic on session creation right after the v14 schema migration |
+| Security | [`micn/symlink-fix`](https://github.com/aaif-goose/goose/tree/micn/symlink-fix) | A `.goosehints` symlink bypassing the import-boundary read restriction |
+| Security | [`fix/hf-rfilename-path-validation`](https://github.com/aaif-goose/goose/tree/fix/hf-rfilename-path-validation) | HuggingFace `rfilename` path-traversal writing cached model files outside the intended cache dir |
+| Desktop/npm | [`alexhancock/goose-tui-binary-resolution`](https://github.com/aaif-goose/goose/tree/alexhancock/goose-tui-binary-resolution) | Packaged npm `goose` binary shipping non-executable when resolved by path instead of through `node_modules/.bin` |
+| A2A/CLI | `691a14749` (own fix, live battle-testing) | A2A's `message:send` fully unusable end-to-end (missing session row, missing provider bootstrap, mangled streamed-reply text) |
+| Config | `43dfb2762` (own fix) | `GOOSE_A2A_ENABLE=1` / `GOOSE_NATS_DRIVE=1` silently no-op'd — only `"true"`/`"false"` parsed, not the conventional truthy `"1"` |
+
+*(Security fixes from four independent code-first audit sweeps — `1af9f0fe2`, `a42722b1c`, `5f0d1536d`, all goose-plus's own code, not upstream-mined: path-traversal guards in the memory tool's category argument, local-inference's quantization filenames, and the scheduler's job IDs — the same class of bug `GOOSE_CONFINEMENT` above fixes for file write/edit; non-constant-time secret comparisons (`!=` or a non-cryptographic hash instead of the existing `token_matches` helper) in the A2A/MCP-app-proxy routes and the tunnel pairing-code check; unescaped shell-literal interpolation in the computer-controller's Linux command execution; and an integer-underflow panic from NFC-normalization-expanded text in conversation trimming.)*
 
 ## Community-feature matrix (requests delivered)
 
@@ -202,10 +223,24 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Providers | [#8391](https://github.com/aaif-goose/goose/issues/8391) | Cursor as an ACP provider (`cursor-acp`) |
 | Recipes | [#9610](https://github.com/aaif-goose/goose/issues/9610) | Per-recipe model request params (`reasoning_effort`, `top_p`, etc.) via `Settings.request_params` |
 | Hooks | [#9969](https://github.com/aaif-goose/goose/issues/9969) | `AfterAgentResponse` lifecycle hook |
+| Desktop | [`micn/new-chat-shortcut`](https://github.com/aaif-goose/goose/tree/micn/new-chat-shortcut) | New Chat registered as a true global shortcut (not just a menu accelerator) |
 
-*(Plus features ported without an upstream ticket: the native Rust TUI replacing the Node/Ink shim, `goose model` / `goose model list` CLI commands, per-tool-call timing in interactive sessions, hidden/internal extensions flagged instead of dropped from the REST API, recipe-embedded extension config falling back to the user's working global config on load failure, an OpenCode free/paid-models provider, searxng-mcp's always-full-parallel free-provider web search, a NATS JetStream KV claim/lease bus for concurrent-instance file coordination, a Dockerized headless `goosed` API server and a browser build of the desktop UI, and startup pre-warming that cuts measured first-token latency ~60%.)*
+### Shipped without an upstream ticket
 
-> The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back.
+| Area | Source | Feature |
+|---|---|---|
+| CLI | [`alexhancock/rust-tui`](https://github.com/aaif-goose/goose/tree/alexhancock/rust-tui) | Native Rust TUI replacing the Node/Ink shim |
+| CLI | [`micn/mattjoyce-model-list-command`](https://github.com/aaif-goose/goose/tree/micn/mattjoyce-model-list-command) | `goose model` / `goose model list` commands |
+| CLI | [`dhanji/timing-cli`](https://github.com/aaif-goose/goose/tree/dhanji/timing-cli) | Per-tool-call timing in interactive sessions |
+| Server | [`alexhancock/hidden-extensions`](https://github.com/aaif-goose/goose/tree/alexhancock/hidden-extensions) | Hidden/internal extensions flagged instead of dropped from the REST API |
+| Agent | [`zane/recipe-extensions-fallback`](https://github.com/aaif-goose/goose/tree/zane/recipe-extensions-fallback) | Recipe-embedded extension config falls back to the user's working global config on load failure |
+| Providers | `dfcf54102` (own work) | OpenCode free/paid-models provider |
+| MCP | own work — new server, not upstream-mined | searxng-mcp's always-full-parallel free-provider web search |
+| NATS | `45532431e` (own work) | JetStream KV claim/lease bus for concurrent-instance file coordination |
+| Deployment | `361ebdc7d` + `4ecb2d29a` (own work) | Dockerized headless `goosed` API server and a browser build of the desktop UI |
+| Performance | `2c392bace` + `280245ac3` (own work) | Startup pre-warming cutting measured first-token latency ~60% |
+
+> The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back. For no-ticket rows, `Source` links the upstream branch (verified live; if a link 404s after the branch is deleted, `git log --all --grep=<branch>` on this repo still finds the porting commit) or gives the goose-plus commit hash for original fork work.
 
 ---
 
