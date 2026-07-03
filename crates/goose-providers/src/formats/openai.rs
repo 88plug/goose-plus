@@ -196,6 +196,11 @@ pub fn format_messages_with_options(
         let mut content_array = Vec::new();
         let mut has_non_text_content = false;
         let mut reasoning_text = String::new();
+        // Deferred so all tool-role messages for this turn stay consecutive —
+        // Claude (via any Claude-backed provider routed through this format)
+        // requires tool_result blocks to be contiguous; interleaving an image
+        // message between two tool responses breaks that ordering.
+        let mut pending_image_messages: Vec<Value> = Vec::new();
 
         for content in &message.content {
             match content {
@@ -305,14 +310,15 @@ pub fn format_messages_with_options(
                                 .collect::<Vec<String>>()
                                 .join(" "));
 
-                            // First add the tool response with all content
+                            // Add the tool response with all content
                             output.push(json!({
                                 "role": "tool",
                                 "content": tool_response_content,
                                 "tool_call_id": response.id
                             }));
-                            // Then add any image messages that need to follow
-                            output.extend(image_messages);
+                            // Defer any image messages until after all tool
+                            // messages for this turn (see pending_image_messages).
+                            pending_image_messages.extend(image_messages);
                         }
                         Err(e) => {
                             // A tool result error is shown as output so the model can interpret the error message
@@ -420,6 +426,7 @@ pub fn format_messages_with_options(
             output.insert(0, converted);
         }
 
+        output.extend(pending_image_messages);
         messages_spec.extend(output);
     }
 
@@ -1717,6 +1724,47 @@ mod tests {
         assert_eq!(spec[3]["role"], "tool");
         assert_eq!(spec[3]["content"], "Result");
         assert_eq!(spec[3]["tool_call_id"], spec[2]["tool_calls"][0]["id"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_messages_multi_tool_response_image_stays_contiguous() -> anyhow::Result<()> {
+        // Two parallel tool calls in one assistant turn; the FIRST tool
+        // response includes an image. All "tool"-role messages for this turn
+        // must stay contiguous — the deferred image message must land after
+        // BOTH tool responses, not interleaved between them (Claude, via any
+        // Claude-backed provider routed through this format, rejects
+        // non-contiguous tool_result blocks).
+        let mut messages = vec![Message::assistant()
+            .with_tool_request("tool1", Ok(CallToolRequestParams::new("screenshot")))
+            .with_tool_request("tool2", Ok(CallToolRequestParams::new("read_file")))];
+
+        messages.push(Message::user().with_tool_response(
+            "tool1",
+            Ok(CallToolResult::success(vec![Content::image(
+                "base64data",
+                "image/png",
+            )])),
+        ));
+        messages[1] = messages[1].clone().with_tool_response(
+            "tool2",
+            Ok(CallToolResult::success(vec![Content::text(
+                "file contents",
+            )])),
+        );
+
+        let spec = format_messages(&messages, &ImageFormat::OpenAi);
+
+        assert_eq!(spec.len(), 4);
+        assert_eq!(spec[0]["role"], "assistant");
+        assert_eq!(spec[1]["role"], "tool");
+        assert_eq!(spec[1]["tool_call_id"], "tool1");
+        assert_eq!(spec[2]["role"], "tool");
+        assert_eq!(spec[2]["tool_call_id"], "tool2");
+        assert_eq!(spec[2]["content"], "file contents");
+        assert_eq!(spec[3]["role"], "user");
+        assert!(spec[3]["content"][0]["image_url"].is_object());
 
         Ok(())
     }
