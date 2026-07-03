@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~120 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~121 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -136,6 +136,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | High-entropy secret redaction in diagnostics export | – | ✓ |
 | ACP `_goose/unstable/health` startup readiness check | – | ✓ |
 | Onboarding quick-setup card for env-detected provider credentials | – | ✓ |
+| `GOOSE_PROVIDER_TIMEOUT` global fallback honored by every provider | ◑ | ✓ |
 
 ---
 
@@ -220,6 +221,7 @@ No open/closed upstream issue exists for these — the **Source** column links t
 | MCP/Developer/Security | `a8c430090` (redesigned; upstream's `fix/prevent-config-overwrite` had no PR and was explicitly WIP with a self-contradicting write heuristic) | `text_editor`'s `write`/`str_replace` had no guard against overwriting goose's own `config.yaml`/`secrets.yaml` — a confused or prompt-injected session could disable safety settings or corrupt credentials via its own file tools. Now refuses any write/edit resolving into goose's config directory, independent of workspace path confinement |
 | Agent | [`aaif-goose/goose#10103`](https://github.com/aaif-goose/goose/pull/10103) (closed — superseded by a larger unmerged usage-ledger redesign, `#10172`, still open) | Subagents spawned via `delegate` run in their own session, so their token usage/cost never reached the parent — under-reporting cost-per-outcome and per-session budgets whenever delegation occurred. Now rolled into the parent's `accumulated_*` totals via an atomic UPDATE at the subagent-completion chokepoint |
 | Desktop (macOS/Apple Silicon) | [`fix/electron-v8-crash-after-wake`](https://github.com/aaif-goose/goose/tree/fix/electron-v8-crash-after-wake) (no PR ever opened) | App crashed with `EXC_BREAKPOINT` ~4s after macOS system wake on long-running (2+ day) sessions — V8's tiered compilation queues deferred optimization work on the CFRunLoop, which fires against stale state after a long sleep. Mitigated by disabling V8 Maglev on Apple Silicon, a post-resume GC request, and a renderer reload after 8+ hours asleep. Platform-gated to `darwin`/`arm64`; ported mechanically and typecheck/lint-verified only — the underlying rare crash itself is unverified on this Linux dev environment |
+| Providers | [`lucas/feat/goose-provider-timeout`](https://github.com/aaif-goose/goose/tree/lucas/feat/goose-provider-timeout) (broadened; `f9ffa48ed` own work) | `GOOSE_PROVIDER_TIMEOUT` (and, for OpenAI, its own advertised `OPENAI_TIMEOUT` config key) was silently ignored by every provider's request-timeout resolution, which fell straight through to a hardcoded 600s default — upstream's patch touched 4 providers; this fork's `resolve_provider_timeout()` closes the same gap across all 11 construction sites that had it |
 
 *(Security fixes from four independent code-first audit sweeps — `1af9f0fe2`, `a42722b1c`, `5f0d1536d`, all goose-plus's own code, not upstream-mined: path-traversal guards in the memory tool's category argument, local-inference's quantization filenames, and the scheduler's job IDs — the same class of bug `GOOSE_CONFINEMENT` above fixes for file write/edit; non-constant-time secret comparisons (`!=` or a non-cryptographic hash instead of the existing `token_matches` helper) in the A2A/MCP-app-proxy routes and the tunnel pairing-code check; unescaped shell-literal interpolation in the computer-controller's Linux command execution; and an integer-underflow panic from NFC-normalization-expanded text in conversation trimming.)*
 
