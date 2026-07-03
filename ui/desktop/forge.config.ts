@@ -8,7 +8,7 @@ let cfg = {
   asar: true,
   name: 'goose-plus',
   appBundleId: 'com.88plug.goose-plus',
-  extraResource: ['src/bin', 'src/images'],
+  extraResource: ['src/bin', 'src/images', 'src/sandbox'],
   icon: 'src/images/icon',
   // Windows specific configuration
   win32: {

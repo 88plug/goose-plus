@@ -11,6 +11,13 @@ import {
   createStartupDiagnostics,
   type StartupDiagnostics,
 } from './startupDiagnostics';
+import {
+  buildSandboxSpawn,
+  ensureProxy,
+  stopProxy,
+  isSandboxEnabled,
+  isSandboxAvailable,
+} from './sandbox';
 
 export interface Logger {
   info: (...args: unknown[]) => void;
@@ -333,8 +340,22 @@ export const startGoosed = async (options: StartGoosedOptions): Promise<GoosedRe
     }
   }
 
-  const spawnCommand = goosedPath;
-  const spawnArgs = ['agent'];
+  let spawnCommand = goosedPath;
+  let spawnArgs = ['agent'];
+
+  const useSandbox = isSandboxEnabled() && isSandboxAvailable();
+  if (isSandboxEnabled() && !isSandboxAvailable()) {
+    logger.error('[sandbox] GOOSE_SANDBOX=true but sandbox-exec not available (macOS only)');
+  }
+
+  if (useSandbox) {
+    const proxy = await ensureProxy();
+    const sandboxSpawn = buildSandboxSpawn(goosedPath, spawnArgs, proxy.port);
+    spawnCommand = sandboxSpawn.command;
+    spawnArgs = sandboxSpawn.args;
+    Object.assign(spawnEnv, sandboxSpawn.env);
+    logger.info(`[sandbox] Spawning via: ${spawnCommand} ${spawnArgs.join(' ')}`);
+  }
 
   const isWindows = process.platform === 'win32';
   const spawnOptions = {
@@ -446,7 +467,7 @@ export const startGoosed = async (options: StartGoosedOptions): Promise<GoosedRe
   });
 
   const cleanup = async (): Promise<void> => {
-    return new Promise<void>((resolve) => {
+    await new Promise<void>((resolve) => {
       if (!goosedProcess || goosedProcess.killed) {
         resolve();
         return;
@@ -474,6 +495,10 @@ export const startGoosed = async (options: StartGoosedOptions): Promise<GoosedRe
         resolve();
       }, 5000);
     });
+
+    if (useSandbox) {
+      await stopProxy().catch((error) => logger.error('Error stopping sandbox proxy:', error));
+    }
   };
 
   logger.info(`Goosed server successfully started on port ${port}`);
