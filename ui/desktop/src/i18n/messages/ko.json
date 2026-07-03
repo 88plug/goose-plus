@@ -2165,6 +2165,9 @@
   "microphoneSelector.test": {
     "defaultMessage": "테스트"
   },
+  "modeSection.restartNeeded": {
+    "defaultMessage": "Mode changed. Other active sessions should be restarted for the change to take effect."
+  },
   "modeSelectionItem.autonomousDescription": {
     "defaultMessage": "파일을 자유롭게 편집, 생성, 삭제할 수 있습니다."
   },

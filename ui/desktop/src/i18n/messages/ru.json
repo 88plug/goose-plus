@@ -2165,6 +2165,9 @@
   "microphoneSelector.test": {
     "defaultMessage": "Проверить"
   },
+  "modeSection.restartNeeded": {
+    "defaultMessage": "Mode changed. Other active sessions should be restarted for the change to take effect."
+  },
   "modeSelectionItem.autonomousDescription": {
     "defaultMessage": "Полные возможности изменения файлов: свободное редактирование, создание и удаление файлов."
   },
