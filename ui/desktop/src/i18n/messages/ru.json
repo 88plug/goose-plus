@@ -2390,6 +2390,12 @@
   "modelsBottomBar.selectModel": {
     "defaultMessage": "Выбрать модель"
   },
+  "modelsSection.lockDescription": {
+    "defaultMessage": "Prevent switching models from the chat bottom bar"
+  },
+  "modelsSection.lockTitle": {
+    "defaultMessage": "Lock Model"
+  },
   "modelsSection.resetDescription": {
     "defaultMessage": "Очистить выбранную модель и настройки провайдера, чтобы начать заново"
   },

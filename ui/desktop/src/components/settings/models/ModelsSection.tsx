@@ -7,7 +7,12 @@ import { toastError } from '../../../toasts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import ResetProviderSection from '../reset_provider/ResetProviderSection';
+import { Switch } from '../../ui/switch';
+import { trackSettingToggled } from '../../../utils/analytics';
 import { defineMessages, useIntl } from '../../../i18n';
+
+export const MODEL_LOCK_USER_PREF_KEY = 'GOOSE_MODEL_LOCK_USER_PREF';
+export const MODEL_LOCK_CHANGED_EVENT = 'model-lock-changed';
 
 const i18n = defineMessages({
   resetTitle: {
@@ -17,6 +22,14 @@ const i18n = defineMessages({
   resetDescription: {
     id: 'modelsSection.resetDescription',
     defaultMessage: 'Clear your selected model and provider settings to start fresh',
+  },
+  lockTitle: {
+    id: 'modelsSection.lockTitle',
+    defaultMessage: 'Lock Model',
+  },
+  lockDescription: {
+    id: 'modelsSection.lockDescription',
+    defaultMessage: 'Prevent switching models from the chat bottom bar',
   },
 });
 
@@ -29,7 +42,8 @@ export default function ModelsSection({ setView }: ModelsSectionProps) {
   const [provider, setProvider] = useState<string | null>(null);
   const [displayModelName, setDisplayModelName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const { read, getProviders } = useConfig();
+  const [isModelLocked, setIsModelLocked] = useState<boolean>(false);
+  const { read, upsert, getProviders } = useConfig();
   const {
     getCurrentModelDisplayName,
     getCurrentProviderDisplayName,
@@ -77,6 +91,32 @@ export default function ModelsSection({ setView }: ModelsSectionProps) {
     loadModelData();
   }, [loadModelData]);
 
+  useEffect(() => {
+    const loadLockState = async () => {
+      try {
+        const savedState = await read(MODEL_LOCK_USER_PREF_KEY, false);
+        if (savedState === null || savedState === undefined) {
+          // No user preference — fall back to the env-var default.
+          const envDefault = window.appConfig.get('GOOSE_MODEL_LOCK');
+          setIsModelLocked(envDefault === true);
+        } else {
+          setIsModelLocked(savedState === true || savedState === 'true');
+        }
+      } catch (error) {
+        console.error('Error loading model lock state:', error);
+        setIsModelLocked(false);
+      }
+    };
+    loadLockState();
+  }, [read]);
+
+  const handleLockToggle = async (checked: boolean) => {
+    setIsModelLocked(checked);
+    await upsert(MODEL_LOCK_USER_PREF_KEY, checked, false);
+    trackSettingToggled('model_locked', checked);
+    window.dispatchEvent(new CustomEvent(MODEL_LOCK_CHANGED_EVENT));
+  };
+
   // Update display when model or provider changes - but only if they actually changed
   const prevModelRef = useRef<string | null>(null);
   const prevProviderRef = useRef<string | null>(null);
@@ -109,6 +149,21 @@ export default function ModelsSection({ setView }: ModelsSectionProps) {
             </div>
           )}
           <ModelSettingsButtons setView={setView} />
+        </CardContent>
+      </Card>
+      <Card className="pb-2 rounded-lg">
+        <CardContent className="px-2 pt-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-text-primary text-xs">{intl.formatMessage(i18n.lockTitle)}</h3>
+              <p className="text-xs text-text-secondary max-w-md mt-[2px]">
+                {intl.formatMessage(i18n.lockDescription)}
+              </p>
+            </div>
+            <div className="flex items-center">
+              <Switch checked={isModelLocked} onCheckedChange={handleLockToggle} variant="mono" />
+            </div>
+          </div>
         </CardContent>
       </Card>
       <Card className="pb-2 rounded-lg">

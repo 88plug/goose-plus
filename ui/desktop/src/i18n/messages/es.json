@@ -2390,6 +2390,12 @@
   "modelsBottomBar.selectModel": {
     "defaultMessage": "Seleccionar modelo"
   },
+  "modelsSection.lockDescription": {
+    "defaultMessage": "Prevent switching models from the chat bottom bar"
+  },
+  "modelsSection.lockTitle": {
+    "defaultMessage": "Lock Model"
+  },
   "modelsSection.resetDescription": {
     "defaultMessage": "Borra el modelo y los ajustes de proveedor seleccionados para empezar de cero"
   },

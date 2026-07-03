@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, type RenderOptions, screen } from '@testing-library/react';
+import { act, render, type RenderOptions, screen } from '@testing-library/react';
 import ModelsBottomBar from './ModelsBottomBar';
 import { IntlTestWrapper } from '../../../../i18n/test-utils';
 
@@ -7,11 +7,12 @@ const renderWithIntl = (ui: React.ReactElement, options?: RenderOptions) =>
   render(ui, { wrapper: IntlTestWrapper, ...options });
 
 const createDropdownRef = (): React.RefObject<HTMLDivElement> =>
-  ({ current: document.createElement('div') }) as React.RefObject<HTMLDivElement>;
+  ({ current: document.createElement('div') } as React.RefObject<HTMLDivElement>);
 
 let mockCurrentModel: string | null = 'config-model';
 let mockCurrentProvider: string | null = 'config-provider';
 const mockGetProviders = vi.fn();
+const mockRead = vi.fn();
 const mockOnModelChanged = vi.fn();
 
 vi.mock('../../../ModelAndProviderContext', () => ({
@@ -24,7 +25,13 @@ vi.mock('../../../ModelAndProviderContext', () => ({
 vi.mock('../../../ConfigContext', () => ({
   useConfig: () => ({
     getProviders: mockGetProviders,
+    read: mockRead,
   }),
+}));
+
+vi.mock('../ModelsSection', () => ({
+  MODEL_LOCK_USER_PREF_KEY: 'GOOSE_MODEL_LOCK_USER_PREF',
+  MODEL_LOCK_CHANGED_EVENT: 'model-lock-changed',
 }));
 
 vi.mock('../modelInterface', () => ({
@@ -60,6 +67,12 @@ describe('ModelsBottomBar', () => {
     mockCurrentModel = 'config-model';
     mockCurrentProvider = 'config-provider';
     mockGetProviders.mockResolvedValue([]);
+    mockRead.mockResolvedValue(false);
+    Object.defineProperty(window, 'appConfig', {
+      writable: true,
+      configurable: true,
+      value: { get: vi.fn().mockReturnValue(false), getAll: vi.fn() },
+    });
   });
 
   it('shows a loading placeholder while the active session model is still loading', async () => {
@@ -105,5 +118,64 @@ describe('ModelsBottomBar', () => {
 
     expect(screen.getByText('config-model')).toBeInTheDocument();
     expect(screen.queryByTestId('model-loading-state')).not.toBeInTheDocument();
+  });
+
+  it('renders a non-interactive display and no dropdown when the user preference locks the model', async () => {
+    mockRead.mockResolvedValue(true);
+
+    await act(async () => {
+      renderWithIntl(
+        <ModelsBottomBar
+          sessionId={null}
+          dropdownRef={createDropdownRef()}
+          setView={vi.fn()}
+          onModelChanged={mockOnModelChanged}
+        />
+      );
+    });
+
+    expect(screen.getByText('config-model')).toBeInTheDocument();
+    // The DropdownMenu tree (mocked to always render its children) is entirely
+    // absent in locked mode — its "Change Model" item never mounts.
+    expect(screen.queryByText('Change Model')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the GOOSE_MODEL_LOCK env default when there is no saved user preference', async () => {
+    mockRead.mockResolvedValue(null);
+    (window.appConfig.get as ReturnType<typeof vi.fn>).mockImplementation(
+      (key: string) => key === 'GOOSE_MODEL_LOCK'
+    );
+
+    await act(async () => {
+      renderWithIntl(
+        <ModelsBottomBar
+          sessionId={null}
+          dropdownRef={createDropdownRef()}
+          setView={vi.fn()}
+          onModelChanged={mockOnModelChanged}
+        />
+      );
+    });
+
+    expect(screen.getByText('config-model')).toBeInTheDocument();
+    expect(screen.queryByText('Change Model')).not.toBeInTheDocument();
+  });
+
+  it('shows the interactive dropdown when the model is not locked', async () => {
+    mockRead.mockResolvedValue(false);
+
+    await act(async () => {
+      renderWithIntl(
+        <ModelsBottomBar
+          sessionId={null}
+          dropdownRef={createDropdownRef()}
+          setView={vi.fn()}
+          onModelChanged={mockOnModelChanged}
+        />
+      );
+    });
+
+    expect(screen.getByText('config-model')).toBeInTheDocument();
+    expect(screen.getByText('Change Model')).toBeInTheDocument();
   });
 });

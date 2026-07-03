@@ -2390,6 +2390,12 @@
   "modelsBottomBar.selectModel": {
     "defaultMessage": "मॉडल का चयन करें"
   },
+  "modelsSection.lockDescription": {
+    "defaultMessage": "Prevent switching models from the chat bottom bar"
+  },
+  "modelsSection.lockTitle": {
+    "defaultMessage": "Lock Model"
+  },
   "modelsSection.resetDescription": {
     "defaultMessage": "नए सिरे से शुरुआत करने के लिए अपने चयनित मॉडल और प्रदाता सेटिंग्स को साफ़ करें"
   },

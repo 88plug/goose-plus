@@ -2390,6 +2390,12 @@
   "modelsBottomBar.selectModel": {
     "defaultMessage": "选择模型"
   },
+  "modelsSection.lockDescription": {
+    "defaultMessage": "Prevent switching models from the chat bottom bar"
+  },
+  "modelsSection.lockTitle": {
+    "defaultMessage": "Lock Model"
+  },
   "modelsSection.resetDescription": {
     "defaultMessage": "清空已选的模型和提供商设置，重新开始"
   },

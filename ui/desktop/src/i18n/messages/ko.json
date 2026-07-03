@@ -2390,6 +2390,12 @@
   "modelsBottomBar.selectModel": {
     "defaultMessage": "모델 선택"
   },
+  "modelsSection.lockDescription": {
+    "defaultMessage": "Prevent switching models from the chat bottom bar"
+  },
+  "modelsSection.lockTitle": {
+    "defaultMessage": "Lock Model"
+  },
   "modelsSection.resetDescription": {
     "defaultMessage": "선택한 모델 및 제공업체 설정을 지우고 새로 시작합니다."
   },

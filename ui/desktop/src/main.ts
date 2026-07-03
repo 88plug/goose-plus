@@ -846,6 +846,8 @@ let appConfig = {
   GOOSE_LOCALE: process.env.GOOSE_LOCALE || undefined,
   // If GOOSE_ALLOWLIST_WARNING env var is not set, defaults to false (strict blocking mode)
   GOOSE_ALLOWLIST_WARNING: process.env.GOOSE_ALLOWLIST_WARNING === 'true',
+  // If GOOSE_MODEL_LOCK env var is set to 'true', model lock is enabled by default
+  GOOSE_MODEL_LOCK: process.env.GOOSE_MODEL_LOCK === 'true',
 };
 
 const windowMap = new Map<number, BrowserWindow>();
@@ -1084,7 +1086,9 @@ const createChat = async (app: App, options: CreateChatOptions = {}) => {
     const stderrTail = diagnostics?.stderrTail ?? [];
     const failureDetailParts = [
       diagnostics?.childExitCode !== null || diagnostics?.childExitSignal
-        ? `Child exit: code=${diagnostics?.childExitCode ?? 'null'} signal=${diagnostics?.childExitSignal ?? 'null'}`
+        ? `Child exit: code=${diagnostics?.childExitCode ?? 'null'} signal=${
+            diagnostics?.childExitSignal ?? 'null'
+          }`
         : 'Child exit: unavailable',
       diagnostics?.certFingerprintSeen
         ? 'TLS fingerprint observed: yes'

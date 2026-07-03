@@ -12,6 +12,7 @@ import {
 import { useConfig } from '../../../ConfigContext';
 import { getProviderMetadata } from '../modelInterface';
 import { getModelDisplayName } from '../predefinedModelsUtils';
+import { MODEL_LOCK_USER_PREF_KEY, MODEL_LOCK_CHANGED_EVENT } from '../ModelsSection';
 
 import { ModelSettingsPanel } from '../../localInference/ModelSettingsPanel';
 import { ScrollArea } from '../../../ui/scroll-area';
@@ -77,7 +78,7 @@ export default function ModelsBottomBar({
   const currentProvider = sessionProvider ?? configProvider;
 
   const intl = useIntl();
-  const { getProviders } = useConfig();
+  const { read, getProviders } = useConfig();
   const [displayProvider, setDisplayProvider] = useState<string | null>(null);
   const [displayModelName, setDisplayModelName] = useState<string>(
     intl.formatMessage(i18n.selectModel)
@@ -85,6 +86,29 @@ export default function ModelsBottomBar({
   const [isAddModelModalOpen, setIsAddModelModalOpen] = useState(false);
   const [isLocalModelSettingsOpen, setIsLocalModelSettingsOpen] = useState(false);
   const [providerDefaultModel, setProviderDefaultModel] = useState<string | null>(null);
+  const [isModelLocked, setIsModelLocked] = useState(false);
+
+  useEffect(() => {
+    const loadLockState = async () => {
+      try {
+        const savedState = await read(MODEL_LOCK_USER_PREF_KEY, false);
+        if (savedState === null || savedState === undefined) {
+          // No user preference — fall back to the env-var default.
+          const envDefault = window.appConfig.get('GOOSE_MODEL_LOCK');
+          setIsModelLocked(envDefault === true);
+        } else {
+          setIsModelLocked(savedState === true || savedState === 'true');
+        }
+      } catch (error) {
+        console.error('Error loading model lock state:', error);
+        setIsModelLocked(false);
+      }
+    };
+    loadLockState();
+
+    window.addEventListener(MODEL_LOCK_CHANGED_EVENT, loadLockState);
+    return () => window.removeEventListener(MODEL_LOCK_CHANGED_EVENT, loadLockState);
+  }, [read]);
 
   // Show a visible loading placeholder while session metadata is still being fetched,
   // rather than flashing the config default or leaving the footer blank.
@@ -93,10 +117,10 @@ export default function ModelsBottomBar({
   const resolvedModel = latestInference?.resolvedModel ?? null;
   const shouldShowResolvedModel = Boolean(
     !isModelLoading &&
-    resolvedModel &&
-    latestInference?.provider === currentProvider &&
-    latestInference?.requestedModel === currentModel &&
-    resolvedModel !== currentModel
+      resolvedModel &&
+      latestInference?.provider === currentProvider &&
+      latestInference?.requestedModel === currentModel &&
+      resolvedModel !== currentModel
   );
   const loadingModelLabel = intl.formatMessage(i18n.loadingModel);
   const triggerLabel = isModelLoading ? loadingModelLabel : displayModel;
@@ -144,24 +168,38 @@ export default function ModelsBottomBar({
     onModelChanged({ model, provider });
   };
 
+  const modelDisplay = (
+    <div className="flex items-center truncate max-w-[130px] md:max-w-[200px] lg:max-w-[360px] min-w-0">
+      <Bot className="mr-1 h-4 w-4 flex-shrink-0" />
+      {isModelLoading ? (
+        <span
+          data-testid="model-loading-state"
+          className="inline-flex items-center gap-1 truncate text-xs"
+        >
+          <LoaderCircle className="h-3 w-3 animate-spin flex-shrink-0" />
+          <span className="truncate">{triggerLabel}</span>
+        </span>
+      ) : (
+        <span className="truncate text-xs">{triggerLabel}</span>
+      )}
+    </div>
+  );
+
+  if (isModelLocked) {
+    return (
+      <div className="relative flex items-center" ref={dropdownRef}>
+        <div className="flex items-center max-w-[180px] md:max-w-[200px] lg:max-w-[380px] min-w-0 text-text-primary/70">
+          {modelDisplay}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex items-center" ref={dropdownRef}>
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center hover:cursor-pointer max-w-[180px] md:max-w-[200px] lg:max-w-[380px] min-w-0 text-text-primary/70 hover:text-text-primary transition-colors">
-          <div className="flex items-center truncate max-w-[130px] md:max-w-[200px] lg:max-w-[360px] min-w-0">
-            <Bot className="mr-1 h-4 w-4 flex-shrink-0" />
-            {isModelLoading ? (
-              <span
-                data-testid="model-loading-state"
-                className="inline-flex items-center gap-1 truncate text-xs"
-              >
-                <LoaderCircle className="h-3 w-3 animate-spin flex-shrink-0" />
-                <span className="truncate">{triggerLabel}</span>
-              </span>
-            ) : (
-              <span className="truncate text-xs">{triggerLabel}</span>
-            )}
-          </div>
+          {modelDisplay}
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="center" className="w-64 text-sm">
           <h6 className="text-xs text-text-primary mt-2 ml-2">
