@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~118 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~119 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -134,6 +134,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Startup pre-warm (system prompt + tool schemas) for faster first token | – | ✓ |
 | `GOOSE_PERF_LOG` per-turn timing diagnostic | – | ✓ |
 | High-entropy secret redaction in diagnostics export | – | ✓ |
+| ACP `_goose/unstable/health` startup readiness check | – | ✓ |
 
 ---
 
@@ -270,6 +271,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Desktop | [`micn/module-default-lock`](https://github.com/aaif-goose/goose/tree/micn/module-default-lock) | Optional model lock (`GOOSE_MODEL_LOCK` env default + a Settings toggle) — once locked, the chat bottom bar shows a static, non-interactive model display instead of the switcher, for shared/managed installs that want to pin the model |
 | Deployment | `361ebdc7d` + `4ecb2d29a` (own work) | Dockerized headless `goosed` API server and a browser build of the desktop UI |
 | Performance | `2c392bace` + `280245ac3` (own work) | Startup pre-warming cutting measured first-token latency ~60% |
+| ACP | [`wpfleger/acp-client`](https://github.com/aaif-goose/goose/tree/wpfleger/acp-client) (partial; `3933f9b70` own work) | `_goose/unstable/health` startup readiness check for programmatic ACP clients — the other two asks in this branch (settable system prompt, provider+model switching via `set_model`) were already met more generally by this fork's existing `SetSessionSystemPromptRequest` (mode `set`/`append` + key) and `SetSessionConfigOptionRequest` (`config_id: "provider"` + `meta.model`) |
 
 > The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back. For no-ticket rows, `Source` links the upstream branch (verified live; if a link 404s after the branch is deleted, `git log --all --grep=<branch>` on this repo still finds the porting commit) or gives the goose-plus commit hash for original fork work.
 
