@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execFileSync } from 'child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -120,6 +120,48 @@ export const isFatalError = (line: string): boolean => {
   return fatalPatterns.some((pattern) => pattern.test(line));
 };
 
+// GUI apps launched from Finder/Dock/desktop-file don't inherit the user's
+// login-shell PATH (e.g. nvm/homebrew-installed CLIs like `claude`), so
+// goosed's spawned environment can be missing directories the user's shell
+// would have. Best-effort: run the user's own shell to capture its real PATH.
+const getUserShellPath = (): string | undefined => {
+  if (process.platform === 'win32') {
+    return undefined;
+  }
+
+  const shell = process.env.SHELL || '/bin/zsh';
+
+  try {
+    const output = execFileSync(shell, ['-lc', 'echo -n "$PATH"'], {
+      encoding: 'utf8',
+      timeout: 3000,
+    });
+    return output.trim();
+  } catch (error) {
+    defaultLogger.error('Failed to read user shell PATH', error);
+    return undefined;
+  }
+};
+
+const mergePathEntries = (...values: (string | undefined)[]): string => {
+  const parts: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    if (!value) continue;
+    for (const entry of value.split(path.delimiter)) {
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+      if (!seen.has(trimmed)) {
+        seen.add(trimmed);
+        parts.push(trimmed);
+      }
+    }
+  }
+
+  return parts.join(path.delimiter);
+};
+
 export const buildGoosedEnv = (
   port: number,
   secretKey: string,
@@ -142,13 +184,17 @@ export const buildGoosedEnv = (
     env.LOCALAPPDATA = process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
   }
 
-  // Add binary directory to PATH for any dependencies
+  // Add binary directory to PATH for any dependencies, merging in the
+  // user's real shell PATH (best-effort) so CLIs installed via nvm/homebrew
+  // are resolvable even when Electron was launched without inheriting it.
   const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
-  const currentPath = process.env[pathKey] || '';
-  if (binaryPath) {
-    env[pathKey] = `${path.dirname(binaryPath)}${path.delimiter}${currentPath}`;
-  } else if (currentPath) {
-    env[pathKey] = currentPath;
+  const mergedPath = mergePathEntries(
+    binaryPath ? path.dirname(binaryPath) : undefined,
+    process.env[pathKey],
+    getUserShellPath()
+  );
+  if (mergedPath) {
+    env[pathKey] = mergedPath;
   }
 
   return env;
