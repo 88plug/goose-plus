@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~124 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~125 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -140,6 +140,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Shell tool background process support (start/list/output/stop) | – | ✓ |
 | Text-normalization + chunking before prompt-injection classification | – | ✓ |
 | `\` + Enter line continuation in interactive CLI input | – | ✓ |
+| Bounded per-instance SQLite pool (prevents SQLITE_BUSY under concurrent sessions) | – | ✓ |
 
 ---
 
@@ -188,6 +189,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Scheduler | [#5346](https://github.com/aaif-goose/goose/issues/5346) | A scheduled job whose recipe failed to load (bad YAML, no `prompt`/`instructions`) failed with only a log line — now creates a session with a visible explanation |
 | Providers | [#7449](https://github.com/aaif-goose/goose/issues/7449) | A turn with multiple tool responses, one carrying an image, interleaved the image message between tool_result blocks instead of after all of them — Claude (via any Claude-backed provider routed through the OpenAI-compatible format) rejects non-contiguous tool_result blocks |
 | CLI | [#2145](https://github.com/aaif-goose/goose/issues/2145) | `\` + Enter now inserts a newline in interactive input (the shell line-continuation convention), alongside the existing `Ctrl`+`J` binding — the completer's `Validator` was previously a stub that always submitted on Enter |
+| Session storage | [`fix/sqlite-busy-connection-leak-7624`](https://github.com/aaif-goose/goose/tree/fix/sqlite-busy-connection-leak-7624) (adjusted) | Each `SessionManager` instance's SQLite pool used sqlx's default max size (10); multiple concurrent instances (e.g. one per ACP session) against the same file could multiply past what `busy_timeout` alone serializes. Capped at 2 connections per pool, not upstream's 1 — this fork's own `test_begin_immediate_prevents_lock_upgrade_deadlock` deliberately races two same-pool transactions and needs both slots, a real conflict caught only by running the full test suite before shipping |
 
 ### Fixed without an upstream ticket
 
