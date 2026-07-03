@@ -7,6 +7,9 @@ use rmcp::{
     tool, tool_handler, tool_router, ServerHandler,
 };
 
+use super::background_process::{
+    GetBackgroundProcessOutputParams, ListBackgroundProcessesParams, StopBackgroundProcessParams,
+};
 use super::edit::{EditTools, FileEditParams, FileWriteParams};
 use super::image::{ImageReadParams, ImageTool};
 use super::shell::{ShellParams, ShellTool};
@@ -103,6 +106,42 @@ impl DeveloperServer {
         params: Parameters<ShellParams>,
     ) -> Result<CallToolResult, ErrorData> {
         Ok(self.shell_tool.shell(params.0).await)
+    }
+
+    #[tool(
+        name = "list_background_processes",
+        description = "List background processes started via shell(background: true), with their status (running/completed/failed/cancelled), PID, and elapsed time."
+    )]
+    pub async fn list_background_processes(
+        &self,
+        _params: Parameters<ListBackgroundProcessesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.shell_tool.list_background_processes().await)
+    }
+
+    #[tool(
+        name = "get_background_process_output",
+        description = "Get buffered output from a background process (default: last 50 lines, max 500). Use the process ID returned by shell(background: true) or list_background_processes."
+    )]
+    pub async fn get_background_process_output(
+        &self,
+        params: Parameters<GetBackgroundProcessOutputParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self
+            .shell_tool
+            .get_background_process_output(params.0)
+            .await)
+    }
+
+    #[tool(
+        name = "stop_background_process",
+        description = "Stop a running background process, terminating it and its child processes."
+    )]
+    pub async fn stop_background_process(
+        &self,
+        params: Parameters<StopBackgroundProcessParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.shell_tool.stop_background_process(params.0).await)
     }
 
     #[tool(
@@ -204,6 +243,7 @@ mod tests {
             .shell(Parameters(ShellParams {
                 command: "echo hello".to_string(),
                 timeout_secs: None,
+                background: None,
             }))
             .await
             .unwrap();

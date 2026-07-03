@@ -161,7 +161,7 @@ const OUTPUT_SLOTS: usize = 8;
 /// for recipes that process untrusted input (e.g. reviewing a PR diff), where
 /// a prompt-injection payload should not be able to reach an unrestricted shell.
 #[derive(Clone, Debug)]
-enum ShellMode {
+pub(super) enum ShellMode {
     /// Normal mode: commands run through the resolved shell (`build_shell_command`).
     Unrestricted,
     /// Direct-exec mode: no shell, only allowlisted programs.
@@ -184,7 +184,7 @@ fn parse_shell_mode() -> ShellMode {
 
 /// Build a `Command` that directly executes `command_line` with no shell.
 /// Returns an error string if the program is not in the allowlist.
-fn build_direct_command(
+pub(super) fn build_direct_command(
     command_line: &str,
     allowed: &HashSet<String>,
     working_dir: Option<&std::path::Path>,
@@ -243,6 +243,12 @@ pub struct ShellParams {
     pub command: String,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    /// Run the command detached and return immediately with a process ID
+    /// instead of waiting for it to finish. Use for long-running commands
+    /// (dev servers, watchers); check on it with `list_background_processes`
+    /// / `get_background_process_output`, or end it with `stop_background_process`.
+    #[serde(default)]
+    pub background: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -388,6 +394,7 @@ pub struct ShellTool {
     #[cfg(not(windows))]
     login_path: LoginPath,
     shell_mode: ShellMode,
+    background: super::background_process::BackgroundProcessRegistry,
 }
 
 impl ShellTool {
@@ -405,6 +412,7 @@ impl ShellTool {
                 LoginPath::resolved(None)
             },
             shell_mode: parse_shell_mode(),
+            background: super::background_process::BackgroundProcessRegistry::new(),
         })
     }
 
@@ -416,6 +424,7 @@ impl ShellTool {
             #[cfg(not(windows))]
             login_path: LoginPath::resolved(None),
             shell_mode: ShellMode::AllowList(allowed.into_iter().collect()),
+            background: super::background_process::BackgroundProcessRegistry::new(),
         })
     }
 
@@ -427,6 +436,7 @@ impl ShellTool {
             #[cfg(not(windows))]
             login_path: LoginPath::resolved(None),
             shell_mode: ShellMode::Unrestricted,
+            background: super::background_process::BackgroundProcessRegistry::new(),
         })
     }
 
@@ -449,6 +459,22 @@ impl ShellTool {
         let login_path_ref = login_path.as_deref();
         #[cfg(windows)]
         let login_path_ref: Option<&str> = None;
+
+        if params.background.unwrap_or(false) {
+            return match self
+                .background
+                .spawn(
+                    &params.command,
+                    working_dir,
+                    login_path_ref,
+                    &self.shell_mode,
+                )
+                .await
+            {
+                Ok(info) => super::background_process::format_process_started(&info),
+                Err(error) => super::background_process::error_result(error),
+            };
+        }
 
         let execution = match run_command(
             &params.command,
@@ -566,6 +592,31 @@ impl ShellTool {
         let mut result = CallToolResult::success(content_blocks);
         result.structured_content = structured_content;
         result
+    }
+
+    pub async fn list_background_processes(&self) -> CallToolResult {
+        super::background_process::format_process_list(&self.background.list().await)
+    }
+
+    pub async fn get_background_process_output(
+        &self,
+        params: super::background_process::GetBackgroundProcessOutputParams,
+    ) -> CallToolResult {
+        let lines = super::background_process::clamp_lines(params.lines);
+        match self.background.get_output(&params.process_id, lines).await {
+            Ok((info, output)) => super::background_process::format_process_output(&info, &output),
+            Err(error) => super::background_process::error_result(error),
+        }
+    }
+
+    pub async fn stop_background_process(
+        &self,
+        params: super::background_process::StopBackgroundProcessParams,
+    ) -> CallToolResult {
+        match self.background.stop(&params.process_id).await {
+            Ok(info) => super::background_process::format_process_stopped(&info),
+            Err(error) => super::background_process::error_result(error),
+        }
     }
 
     pub fn error_result(message: &str, exit_code: Option<i32>) -> CallToolResult {
@@ -687,7 +738,7 @@ async fn run_command(
     })
 }
 
-fn build_shell_command(
+pub(super) fn build_shell_command(
     command_line: &str,
     working_dir: Option<&std::path::Path>,
     login_path: Option<&str>,
@@ -778,7 +829,7 @@ fn split_lines(lines: &[(bool, String)]) -> (String, String, String) {
 }
 
 /// Collect lines from stdout and stderr and send `(is_stderr, line)` tuples to `tx`.
-async fn collect_tagged_lines(
+pub(super) async fn collect_tagged_lines(
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
     tx: tokio::sync::mpsc::UnboundedSender<(bool, String)>,
@@ -889,6 +940,9 @@ fn save_full_output(
 
 #[cfg(test)]
 mod tests {
+    use super::super::background_process::{
+        GetBackgroundProcessOutputParams, StopBackgroundProcessParams,
+    };
     use super::*;
     use rmcp::model::RawContent;
 
@@ -914,11 +968,88 @@ mod tests {
             .shell(ShellParams {
                 command: "echo hello".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
         assert_eq!(result.is_error, Some(false));
         assert!(extract_text(&result).contains("hello"));
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn shell_background_returns_immediately_and_is_trackable() {
+        let tool = ShellTool::new_for_test().unwrap();
+        let start = tool
+            .shell(ShellParams {
+                command: "echo background-hello".to_string(),
+                timeout_secs: None,
+                background: Some(true),
+            })
+            .await;
+        assert_eq!(start.is_error, Some(false));
+        let started_text = extract_text(&start);
+        assert!(started_text.contains("Process ID:"));
+
+        let process_id = started_text
+            .lines()
+            .find_map(|line| line.strip_prefix("Process ID: "))
+            .expect("response should include a process id")
+            .to_string();
+
+        let listed = tool.list_background_processes().await;
+        assert_eq!(listed.is_error, Some(false));
+        assert!(extract_text(&listed).contains(&process_id));
+
+        let mut output_text = String::new();
+        for _ in 0..100 {
+            let output = tool
+                .get_background_process_output(GetBackgroundProcessOutputParams {
+                    process_id: process_id.clone(),
+                    lines: None,
+                })
+                .await;
+            assert_eq!(output.is_error, Some(false));
+            output_text = extract_text(&output).to_string();
+            if output_text.contains("background-hello") {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(output_text.contains("background-hello"));
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn stop_background_process_terminates_it() {
+        let tool = ShellTool::new_for_test().unwrap();
+        let start = tool
+            .shell(ShellParams {
+                command: "sleep 30".to_string(),
+                timeout_secs: None,
+                background: Some(true),
+            })
+            .await;
+        let started_text = extract_text(&start);
+        let process_id = started_text
+            .lines()
+            .find_map(|line| line.strip_prefix("Process ID: "))
+            .expect("response should include a process id")
+            .to_string();
+
+        let stopped = tool
+            .stop_background_process(StopBackgroundProcessParams {
+                process_id: process_id.clone(),
+            })
+            .await;
+        assert_eq!(stopped.is_error, Some(false));
+        assert!(extract_text(&stopped).contains(&process_id));
+
+        // Stopping an already-stopped process is reported as an error.
+        let stop_again = tool
+            .stop_background_process(StopBackgroundProcessParams { process_id })
+            .await;
+        assert_eq!(stop_again.is_error, Some(true));
     }
 
     #[cfg(not(windows))]
@@ -929,6 +1060,7 @@ mod tests {
             .shell(ShellParams {
                 command: "echo hello".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
@@ -943,6 +1075,7 @@ mod tests {
             .shell(ShellParams {
                 command: "cat /etc/hosts".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
@@ -960,6 +1093,7 @@ mod tests {
             .shell(ShellParams {
                 command: "echo $(whoami) | cat".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
@@ -974,6 +1108,7 @@ mod tests {
             .shell(ShellParams {
                 command: "/bin/echo hello".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
@@ -1018,6 +1153,7 @@ mod tests {
             .shell(ShellParams {
                 command: "echo fail && exit 7".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
@@ -1035,6 +1171,7 @@ mod tests {
                 ShellParams {
                     command: "pwd".to_string(),
                     timeout_secs: None,
+                    background: None,
                 },
                 Some(dir.path()),
             )
@@ -1056,6 +1193,7 @@ mod tests {
             .shell(ShellParams {
                 command: "ps -o pgid= -p $$".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 
@@ -1233,6 +1371,7 @@ mod tests {
             .shell(ShellParams {
                 command: "echo before && sleep 300 & echo bgpid:$! && echo after".to_string(),
                 timeout_secs: None,
+                background: None,
             })
             .await;
 

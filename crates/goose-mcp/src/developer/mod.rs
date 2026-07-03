@@ -1,3 +1,4 @@
+pub mod background_process;
 pub mod config_protection;
 pub mod edit;
 pub mod image;
