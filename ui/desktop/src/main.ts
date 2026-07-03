@@ -2313,9 +2313,12 @@ const registerGlobalShortcuts = () => {
 
   if (shortcuts.focusWindow) {
     try {
-      globalShortcut.register(shortcuts.focusWindow, () => {
+      const ok = globalShortcut.register(shortcuts.focusWindow, () => {
         focusWindow();
       });
+      if (!ok) {
+        log.warn(`Failed to register focus window hotkey: ${shortcuts.focusWindow}`);
+      }
     } catch (e) {
       console.error('Error registering focus window hotkey:', e);
     }
@@ -2323,9 +2326,12 @@ const registerGlobalShortcuts = () => {
 
   if (shortcuts.quickLauncher) {
     try {
-      globalShortcut.register(shortcuts.quickLauncher, () => {
+      const ok = globalShortcut.register(shortcuts.quickLauncher, () => {
         createLauncher();
       });
+      if (!ok) {
+        log.warn(`Failed to register launcher hotkey: ${shortcuts.quickLauncher}`);
+      }
     } catch (e) {
       console.error('Error registering launcher hotkey:', e);
     }
@@ -2334,7 +2340,7 @@ const registerGlobalShortcuts = () => {
   // Register New Chat shortcuts so they work even when the menu is not focused.
   if (shortcuts.newChat) {
     try {
-      globalShortcut.register(shortcuts.newChat, () => {
+      const ok = globalShortcut.register(shortcuts.newChat, () => {
         const focusedWindow = BrowserWindow.getFocusedWindow();
         if (focusedWindow) {
           focusedWindow.webContents.send('set-view', '');
@@ -2342,6 +2348,9 @@ const registerGlobalShortcuts = () => {
           void createNewWindow(app);
         }
       });
+      if (!ok) {
+        log.warn(`Failed to register new-chat hotkey: ${shortcuts.newChat}`);
+      }
     } catch (e) {
       console.error('Error registering new-chat hotkey:', e);
     }
@@ -2349,9 +2358,12 @@ const registerGlobalShortcuts = () => {
 
   if (shortcuts.newChatWindow) {
     try {
-      globalShortcut.register(shortcuts.newChatWindow, () => {
+      const ok = globalShortcut.register(shortcuts.newChatWindow, () => {
         ipcMain.emit('create-chat-window');
       });
+      if (!ok) {
+        log.warn(`Failed to register new-chat-window hotkey: ${shortcuts.newChatWindow}`);
+      }
     } catch (e) {
       console.error('Error registering new-chat-window hotkey:', e);
     }
