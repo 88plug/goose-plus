@@ -1373,13 +1373,40 @@ fn get_command_name(command: &Option<Command>) -> &'static str {
     }
 }
 
+#[cfg(unix)]
+const DEVELOPER_MCP_NO_SHELL_ENV: &str = "GOOSE_DEVELOPER_MCP_NO_SHELL";
+
+#[cfg(unix)]
+fn reexec_developer_mcp_through_login_shell() {
+    use std::os::unix::process::CommandExt;
+
+    if std::env::var_os(DEVELOPER_MCP_NO_SHELL_ENV).is_some() {
+        return;
+    }
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let command = std::env::args().collect::<Vec<_>>().join(" ");
+
+    let err = std::process::Command::new(&shell)
+        .env(DEVELOPER_MCP_NO_SHELL_ENV, "1")
+        .arg("-l")
+        .arg("-c")
+        .arg(command)
+        .exec();
+    eprintln!("failed to re-exec developer mcp server through login shell {shell}: {err}");
+}
+
 async fn handle_mcp_command(server: McpCommand) -> Result<()> {
     let name = server.name();
     let _ = crate::logging::setup_logging(Some(&format!("mcp-{name}")));
     match server {
         McpCommand::AutoVisualiser => serve(AutoVisualiserRouter::new()).await?,
         McpCommand::ComputerController => serve(ComputerControllerServer::new()).await?,
-        McpCommand::Developer => serve(DeveloperServer::new()).await?,
+        McpCommand::Developer => {
+            #[cfg(unix)]
+            reexec_developer_mcp_through_login_shell();
+            serve(DeveloperServer::new()).await?
+        }
         McpCommand::Memory => serve(MemoryServer::new()).await?,
         McpCommand::Tutorial => serve(TutorialServer::new()).await?,
     }
