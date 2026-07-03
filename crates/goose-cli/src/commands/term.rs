@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono;
 use goose::config::Config;
 use goose::conversation::message::{Message, MessageContent, MessageMetadata};
 use goose::session::{SessionManager, SessionType};
 use rmcp::model::Role;
 
-use crate::session::{build_session, SessionBuilderConfig};
+use crate::session::{SessionBuilderConfig, build_session};
 
 use clap::ValueEnum;
 
@@ -138,17 +138,17 @@ $env.config.hooks.command_not_found = {|command_name|
 
 static POWERSHELL_CONFIG: ShellConfig = ShellConfig {
     script_template: r#"$env:AGENT_SESSION_ID = "{session_id}"
-function @goose {{ & '{goose_bin}' term run @args }}
-function @g {{ & '{goose_bin}' term run @args }}
+function @goose { & '{goose_bin}' term run @args }
+function @g { & '{goose_bin}' term run @args }
 
-Set-PSReadLineKeyHandler -Chord Enter -ScriptBlock {{
+Set-PSReadLineKeyHandler -Chord Enter -ScriptBlock {
     $line = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$null)
-    if ($line -notmatch '^goose term' -and $line -notmatch '^(@goose|@g)($|\s)') {{
-        Start-Job -ScriptBlock {{ & '{goose_bin}' term log $using:line }} | Out-Null
-    }}
+    if ($line -notmatch '^goose term' -and $line -notmatch '^(@goose|@g)($|\s)') {
+        Start-Job -ScriptBlock { & '{goose_bin}' term log $using:line } | Out-Null
+    }
     [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
-}}"#,
+}"#,
     command_not_found: None,
 };
 
@@ -391,8 +391,11 @@ mod tests {
         let script = render_term_init_script(Shell::Nu, "session-123", "/tmp/goose", true);
 
         assert!(script.contains("$env.config.hooks.command_not_found = {|command_name|"));
-        assert!(script
-            .contains("run-external \"/tmp/goose\" \"term\" \"run\" $prompt | complete | ignore"));
+        assert!(
+            script.contains(
+                "run-external \"/tmp/goose\" \"term\" \"run\" $prompt | complete | ignore"
+            )
+        );
     }
 
     #[test]
@@ -400,5 +403,17 @@ mod tests {
         let script = render_term_init_script(Shell::Fish, "session-123", "/tmp/goose", true);
 
         assert!(!script.contains("command_not_found"));
+    }
+
+    #[test]
+    fn render_term_init_script_powershell_has_no_literal_double_braces() {
+        // script_template is rendered via plain .replace(), not format!(), so
+        // any `{{`/`}}` left in the template leaks into the emitted script
+        // as literal double braces — invalid PowerShell script-block syntax.
+        let script = render_term_init_script(Shell::Powershell, "session-123", "/tmp/goose", false);
+
+        assert!(!script.contains("{{"));
+        assert!(!script.contains("}}"));
+        assert!(script.contains("function @goose { & '/tmp/goose' term run @args }"));
     }
 }
