@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~125 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~126 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -141,6 +141,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Text-normalization + chunking before prompt-injection classification | – | ✓ |
 | `\` + Enter line continuation in interactive CLI input | – | ✓ |
 | Bounded per-instance SQLite pool (prevents SQLITE_BUSY under concurrent sessions) | – | ✓ |
+| Disabling a builtin extension (Developer) actually prevents it loading at session start | – | ✓ |
 
 ---
 
@@ -190,6 +191,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Providers | [#7449](https://github.com/aaif-goose/goose/issues/7449) | A turn with multiple tool responses, one carrying an image, interleaved the image message between tool_result blocks instead of after all of them — Claude (via any Claude-backed provider routed through the OpenAI-compatible format) rejects non-contiguous tool_result blocks |
 | CLI | [#2145](https://github.com/aaif-goose/goose/issues/2145) | `\` + Enter now inserts a newline in interactive input (the shell line-continuation convention), alongside the existing `Ctrl`+`J` binding — the completer's `Validator` was previously a stub that always submitted on Enter |
 | Session storage | [`fix/sqlite-busy-connection-leak-7624`](https://github.com/aaif-goose/goose/tree/fix/sqlite-busy-connection-leak-7624) (adjusted) | Each `SessionManager` instance's SQLite pool used sqlx's default max size (10); multiple concurrent instances (e.g. one per ACP session) against the same file could multiply past what `busy_timeout` alone serializes. Capped at 2 connections per pool, not upstream's 1 — this fork's own `test_begin_immediate_prevents_lock_upgrade_deadlock` deliberately races two same-pool transactions and needs both slots, a real conflict caught only by running the full test suite before shipping |
+| Security/ACP | [#10221](https://github.com/aaif-goose/goose/issues/10221), [PR #10223](https://github.com/aaif-goose/goose/pull/10223) (ported) | Disabling the Developer extension (Settings toggle, `enabled: false` in `config.yaml`) had no effect — `initial_session_extensions()` loaded every configured builtin unconditionally, so every new chat still got `shell`/`edit`/`write`/`tree`/`read_image` and could execute commands regardless of the toggle. Builtin selection now checks `is_builtin_disabled_by_user()`, which only treats an explicit `enabled: false` as an opt-out for extensions that are on by default — so an explicit `builtins` request (e.g. code mode's `code_execution`) still loads a default-off extension like `chatrecall` |
 
 ### Fixed without an upstream ticket
 
