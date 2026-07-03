@@ -55,6 +55,7 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 - **Faster first prompt** — session/ACP startup now pre-warms the system-prompt + tool-schema cache and polls platform extensions concurrently instead of serially, cutting measured first-token latency ~60% (1003ms→842ms). Opt out with `GOOSE_DISABLE_PREWARM=1`; live-measure any session with `GOOSE_PERF_LOG=1`.
 - **Internal security-audit sweeps** — 4 independent code-first passes across every crate found and fixed ~70 bugs, including three separate path-traversal guards (memory-tool categories, local-inference quantization filenames, scheduler job IDs) and several constant-time secret-comparison fixes (A2A/MCP-app-proxy routes, tunnel pairing) that were comparing secrets with `!=` or a non-cryptographic hash.
 - **Redacted diagnostics export** — `goose session diagnostics` scans every log, `session.json`, `config.yaml`, and scheduled-recipe file it bundles for high-entropy tokens (API keys, JWTs) and replaces them with `[REDACTED]` before zipping, so pasting a support bundle into a GitHub issue can't leak credentials.
+- **ACP locked down to local origins** — the local ACP server's CORS layer allowed any web origin and its WebSocket upgrade had no origin check at all; both now reject anything that isn't localhost/127.0.0.1/`[::1]`.
 
 ---
 
@@ -195,6 +196,7 @@ No open/closed upstream issue exists for these — the **Source** column links t
 | Desktop/npm | [`alexhancock/goose-tui-binary-resolution`](https://github.com/aaif-goose/goose/tree/alexhancock/goose-tui-binary-resolution) | Packaged npm `goose` binary shipping non-executable when resolved by path instead of through `node_modules/.bin` |
 | A2A/CLI | `691a14749` (own fix, live battle-testing) | A2A's `message:send` fully unusable end-to-end (missing session row, missing provider bootstrap, mangled streamed-reply text) |
 | Config | `43dfb2762` (own fix) | `GOOSE_A2A_ENABLE=1` / `GOOSE_NATS_DRIVE=1` silently no-op'd — only `"true"`/`"false"` parsed, not the conventional truthy `"1"` |
+| Security/ACP | [`micn/acp-cors`](https://github.com/aaif-goose/goose/tree/micn/acp-cors) | ACP's CORS layer allowed any web origin (`tower_http::cors::Any`) — CSRF exposure on the unauthenticated-by-default local ACP server. WebSocket upgrades, which CORS preflight doesn't protect, had no origin check at all |
 
 *(Security fixes from four independent code-first audit sweeps — `1af9f0fe2`, `a42722b1c`, `5f0d1536d`, all goose-plus's own code, not upstream-mined: path-traversal guards in the memory tool's category argument, local-inference's quantization filenames, and the scheduler's job IDs — the same class of bug `GOOSE_CONFINEMENT` above fixes for file write/edit; non-constant-time secret comparisons (`!=` or a non-cryptographic hash instead of the existing `token_matches` helper) in the A2A/MCP-app-proxy routes and the tunnel pairing-code check; unescaped shell-literal interpolation in the computer-controller's Linux command execution; and an integer-underflow panic from NFC-normalization-expanded text in conversation trimming.)*
 
