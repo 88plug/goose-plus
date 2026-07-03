@@ -301,7 +301,7 @@ export GOOSE_TOOLSHIM=true
 export GOOSE_TOOLSHIM_OLLAMA_MODEL=llama3.2
 export GOOSE_MODE="auto"
 export GOOSE_CLI_MIN_PRIORITY=0.2  # Show only medium and high importance output
-export GOOSE_CLI_TOOL_PARAMS_MAX_LENGTH=100  # Show up to 100 characters for tool parameters in CLI output
+export GOOSE_CLI_TOOL_PARAMS_TRUNCATION_MAX_LENGTH=100  # Show up to 100 characters for tool parameters in CLI output
 
 # Add custom tool directories for extensions
 export GOOSE_SEARCH_PATHS='["/usr/local/bin", "~/custom/tools", "/opt/homebrew/bin"]'

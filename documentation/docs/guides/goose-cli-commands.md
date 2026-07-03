@@ -209,7 +209,7 @@ Start or resume interactive chat sessions.
 - **`--fork`**: Create a new duplicate session with copied history. Must be used with `--resume`. Provide `--name` or `--session-id` to fork a specific session. Otherwise, forks the most recent session.
 - **`--history`**: Show previous messages when resuming a session
 - **`--container <container_id>`**: Run extensions inside a [Docker container](/docs/tutorials/goose-in-docker#running-extensions-in-docker-containers).
-- **`--debug`**: Enable debug mode to output complete tool responses, detailed parameter values, and full file paths
+- **`--debug`**: Enable debug mode to output complete tool responses, detailed parameter values, and full file paths (can also be set via the `GOOSE_DEBUG` environment variable)
 - **`--max-tool-repetitions <NUMBER>`**: Set the maximum number of times the same tool can be called consecutively with identical parameters. Helps prevent infinite loops.
 - **`--max-turns <NUMBER>`**: Set the maximum number of turns allowed without user input (default: 1000)
 
@@ -417,7 +417,7 @@ Execute commands from an instruction file or stdin. Check out the [full guide](/
 - **`--with-builtin <name>`**: Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')
 
 **Control Options:**
-- **`--debug`**: Output complete tool responses, detailed parameter values, and full file paths
+- **`--debug`**: Output complete tool responses, detailed parameter values, and full file paths (can also be set via the `GOOSE_DEBUG` environment variable)
 - **`--max-tool-repetitions <NUMBER>`**: Maximum number of times the same tool can be called consecutively with identical parameters. Helps prevent infinite loops
 - **`--max-turns <NUMBER>`**: Maximum number of turns allowed without user input (default: 1000)
 - **`--explain`**: Show a recipe's title, description, and parameters
