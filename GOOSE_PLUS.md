@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~122 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~124 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -138,6 +138,8 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Onboarding quick-setup card for env-detected provider credentials | – | ✓ |
 | `GOOSE_PROVIDER_TIMEOUT` global fallback honored by every provider | ◑ | ✓ |
 | Shell tool background process support (start/list/output/stop) | – | ✓ |
+| Text-normalization + chunking before prompt-injection classification | – | ✓ |
+| `\` + Enter line continuation in interactive CLI input | – | ✓ |
 
 ---
 
@@ -185,6 +187,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Context | [`micn/tool-sum-fixes`](https://github.com/aaif-goose/goose/tree/micn/tool-sum-fixes) | Tool-pair summarization created stale "ghost" messages once compaction could handle the context anyway — now off by default, gated to ≤65,536-token windows |
 | Scheduler | [#5346](https://github.com/aaif-goose/goose/issues/5346) | A scheduled job whose recipe failed to load (bad YAML, no `prompt`/`instructions`) failed with only a log line — now creates a session with a visible explanation |
 | Providers | [#7449](https://github.com/aaif-goose/goose/issues/7449) | A turn with multiple tool responses, one carrying an image, interleaved the image message between tool_result blocks instead of after all of them — Claude (via any Claude-backed provider routed through the OpenAI-compatible format) rejects non-contiguous tool_result blocks |
+| CLI | [#2145](https://github.com/aaif-goose/goose/issues/2145) | `\` + Enter now inserts a newline in interactive input (the shell line-continuation convention), alongside the existing `Ctrl`+`J` binding — the completer's `Validator` was previously a stub that always submitted on Enter |
 
 ### Fixed without an upstream ticket
 
@@ -278,6 +281,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Performance | `2c392bace` + `280245ac3` (own work) | Startup pre-warming cutting measured first-token latency ~60% |
 | ACP | [`wpfleger/acp-client`](https://github.com/aaif-goose/goose/tree/wpfleger/acp-client) (partial; `3933f9b70` own work) | `_goose/unstable/health` startup readiness check for programmatic ACP clients — the other two asks in this branch (settable system prompt, provider+model switching via `set_model`) were already met more generally by this fork's existing `SetSessionSystemPromptRequest` (mode `set`/`append` + key) and `SetSessionConfigOptionRequest` (`config_id: "provider"` + `meta.model`) |
 | Desktop | [`micn/env-provider-detector`](https://github.com/aaif-goose/goose/tree/micn/env-provider-detector) (redesigned; `b3becffdb` own work) | Onboarding "Quick Setup" card when a provider's credentials are already found in the environment — upstream added a new backend endpoint hardcoded to 3 providers; goose-plus instead surfaces the existing `is_configured` field (already env-aware via `Config::get_secret`) generalized across every provider, no backend change needed |
+| Security | [`feat/classifier-input-chunking-and-normalisation`](https://github.com/aaif-goose/goose/tree/feat/classifier-input-chunking-and-normalisation) (`ddfc25b27` own work) | Verbose, repetitive tool output could dilute or overflow the prompt-injection classifier's fixed token window — normalizes/dedupes/chunks input before classifying, taking the max confidence across chunks. Fixed a byte-index chunk-boundary panic risk on multi-byte UTF-8 present in the reference implementation |
 
 > The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back. For no-ticket rows, `Source` links the upstream branch (verified live; if a link 404s after the branch is deleted, `git log --all --grep=<branch>` on this repo still finds the porting commit) or gives the goose-plus commit hash for original fork work.
 
