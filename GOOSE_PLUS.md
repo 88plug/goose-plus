@@ -295,6 +295,23 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 
 ---
 
+## Graveyard status: what's actually done vs. still open
+
+Be honest about scale here rather than implying the matrices above are exhaustive: the ~128
+items landed are drawn from a much larger candidate pool that is **not** fully triaged.
+As of this writing, the untouched/partially-touched pool is roughly:
+
+- **~575 open/closed PRs** and **~465 closed issues** and **~107 open issues** — pre-filtered
+  candidate lists exist (engagement-sorted, deduped against what's already landed) but the large
+  majority have not been individually read.
+- **~35 branches** identified as real, non-merged work (branch pushed, no PR or a closed/stale
+  PR) — of these, a handful have been resolved (ported, or confirmed stale/superseded/duplicate)
+  and the rest are named but not yet evaluated past a one-line tip-commit glance.
+
+This is a living, incremental effort, not a finished sweep — treat any specific "N items fixed"
+count as a lower bound on what the graveyard actually contains, not a claim that the graveyard is
+empty.
+
 ## Contribute by porting
 
 **The whole point of a plus fork: nothing here has to stay here.** Every row in the matrices above is already implemented, tested, and isolated — which makes it a ready-to-open PR for *real* goose. You don't have to start from a blank issue; you can pick something that's **already solved** and carry it upstream.
