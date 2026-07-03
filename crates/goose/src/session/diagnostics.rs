@@ -5,13 +5,14 @@ use crate::prompt_template::list_templates;
 use crate::providers::utils::LOGS_TO_KEEP;
 use crate::session::SessionManager;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
 use std::io::Write;
 use std::path::PathBuf;
 use utoipa::ToSchema;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SystemInfo {
@@ -134,6 +135,142 @@ fn latest_entry_by_name(dir: &std::path::Path) -> Option<PathBuf> {
     entries.last().map(|e| e.path())
 }
 
+/// Shannon entropy in bits per character.
+fn shannon_entropy(s: &str) -> f64 {
+    let len = s.len() as f64;
+    if len == 0.0 {
+        return 0.0;
+    }
+    let mut counts: HashMap<u8, usize> = HashMap::new();
+    for &b in s.as_bytes() {
+        *counts.entry(b).or_default() += 1;
+    }
+    counts
+        .values()
+        .map(|&c| {
+            let p = c as f64 / len;
+            -p * p.log2()
+        })
+        .sum()
+}
+
+const ENTROPY_THRESHOLD: f64 = 3.5;
+const MIN_SECRET_LEN: usize = 20;
+
+/// Returns true if `token` looks like a secret based on length, entropy, and
+/// character composition. Secrets (API keys, tokens) are long, high-entropy
+/// strings composed almost entirely of alphanumeric chars, hyphens, and
+/// underscores. Non-secrets like URLs, paths, model names, and descriptions
+/// contain structural characters (slashes, spaces, colons, etc.).
+///
+/// Dotted tokens get special handling: JWT-shaped strings (three long base64
+/// segments separated by dots) are treated as secrets, while hostnames and
+/// version numbers are not.
+fn looks_like_secret(token: &str) -> bool {
+    if token.len() < MIN_SECRET_LEN {
+        return false;
+    }
+    if shannon_entropy(token) <= ENTROPY_THRESHOLD {
+        return false;
+    }
+    // Anything with URL, path, or natural-language characters is not a secret.
+    if token.bytes().any(|b| {
+        matches!(
+            b,
+            b' ' | b'/'
+                | b':'
+                | b'@'
+                | b','
+                | b';'
+                | b'!'
+                | b'?'
+                | b'('
+                | b')'
+                | b'['
+                | b']'
+                | b'{'
+                | b'}'
+                | b'='
+                | b'&'
+                | b'+'
+                | b'#'
+        )
+    }) {
+        return false;
+    }
+    // Dots need special handling: JWTs (header.payload.signature) are secrets,
+    // but hostnames (api.openai.com) and versions (6.2.9200) are not.
+    if token.contains('.') {
+        let parts: Vec<&str> = token.split('.').collect();
+        return parts.len() == 3 && parts.iter().all(|p| p.len() >= 4);
+    }
+    true
+}
+
+/// Redact high-entropy tokens that look like secrets from arbitrary text.
+///
+/// For `key: value` lines (YAML-style), checks the whole value and individual
+/// words within it. For JSON, checks quoted string values. Key names are always
+/// preserved for debugging.
+#[allow(clippy::string_slice)] // All splits are on ASCII delimiters ('"', ": ") — safe.
+fn redact_secrets(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            // YAML-style "KEY: value" — check the value and its individual words
+            if let Some(colon_pos) = line.find(": ") {
+                let key_part = &line[..colon_pos + 2];
+                let value_part = line[colon_pos + 2..].trim();
+                if looks_like_secret(value_part) {
+                    return format!("{}[REDACTED]", key_part);
+                }
+                // Check individual words (handles "Bearer <token>" etc.)
+                let words: Vec<&str> = value_part.split_whitespace().collect();
+                if words.iter().any(|w| looks_like_secret(w)) {
+                    let redacted_words: Vec<String> = words
+                        .iter()
+                        .map(|w| {
+                            if looks_like_secret(w) {
+                                "[REDACTED]".to_string()
+                            } else {
+                                w.to_string()
+                            }
+                        })
+                        .collect();
+                    return format!("{}{}", key_part, redacted_words.join(" "));
+                }
+            }
+
+            // JSON-style — redact quoted high-entropy values
+            let mut result = String::with_capacity(line.len());
+            let mut rest = line;
+            while !rest.is_empty() {
+                if let Some(q_start) = rest.find('"') {
+                    result.push_str(&rest[..q_start + 1]);
+                    let after_quote = &rest[q_start + 1..];
+                    if let Some(q_end) = after_quote.find('"') {
+                        let inner = &after_quote[..q_end];
+                        if looks_like_secret(inner) {
+                            result.push_str("[REDACTED]");
+                        } else {
+                            result.push_str(inner);
+                        }
+                        result.push('"');
+                        rest = &after_quote[q_end + 1..];
+                    } else {
+                        result.push_str(after_quote);
+                        break;
+                    }
+                } else {
+                    result.push_str(rest);
+                    break;
+                }
+            }
+            result
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub async fn generate_diagnostics(
     session_manager: &SessionManager,
     session_id: &str,
@@ -162,24 +299,29 @@ pub async fn generate_diagnostics(
             let path = entry.path();
             let name = path.file_name().unwrap().to_str().unwrap();
             zip.start_file(format!("logs/{}", name), options)?;
-            zip.write_all(&fs::read(&path)?)?;
+            let bytes = fs::read(&path)?;
+            let content = String::from_utf8_lossy(&bytes);
+            zip.write_all(redact_secrets(&content).as_bytes())?;
         }
 
         if let Some(server_log) = latest_server_log_path() {
-            if let Ok(content) = fs::read(&server_log) {
+            if let Ok(bytes) = fs::read(&server_log) {
                 let name = server_log.file_name().unwrap().to_str().unwrap();
                 zip.start_file(format!("logs/server/{}", name), options)?;
-                zip.write_all(&content)?;
+                let content = String::from_utf8_lossy(&bytes);
+                zip.write_all(redact_secrets(&content).as_bytes())?;
             }
         }
 
         let session_data = session_manager.export_session(session_id).await?;
         zip.start_file("session.json", options)?;
-        zip.write_all(session_data.as_bytes())?;
+        zip.write_all(redact_secrets(&session_data).as_bytes())?;
 
         if config_path.exists() {
+            let bytes = fs::read(&config_path)?;
+            let content = String::from_utf8_lossy(&bytes);
             zip.start_file("config.yaml", options)?;
-            zip.write_all(&fs::read(&config_path)?)?;
+            zip.write_all(redact_secrets(&content).as_bytes())?;
         }
 
         zip.start_file("system.txt", options)?;
@@ -187,8 +329,10 @@ pub async fn generate_diagnostics(
 
         let schedule_json = data_dir.join("schedule.json");
         if schedule_json.exists() {
+            let bytes = fs::read(&schedule_json)?;
+            let content = String::from_utf8_lossy(&bytes);
             zip.start_file("schedule.json", options)?;
-            zip.write_all(&fs::read(&schedule_json)?)?;
+            zip.write_all(redact_secrets(&content).as_bytes())?;
         }
 
         let scheduled_recipes_dir = data_dir.join("scheduled_recipes");
@@ -198,8 +342,10 @@ pub async fn generate_diagnostics(
                 let path = entry.path();
                 if path.is_file() {
                     let name = path.file_name().unwrap().to_str().unwrap();
+                    let bytes = fs::read(&path)?;
+                    let content = String::from_utf8_lossy(&bytes);
                     zip.start_file(format!("scheduled_recipes/{}", name), options)?;
-                    zip.write_all(&fs::read(&path)?)?;
+                    zip.write_all(redact_secrets(&content).as_bytes())?;
                 }
             }
         }
@@ -214,4 +360,141 @@ pub async fn generate_diagnostics(
     }
 
     Ok(buffer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Fake, non-functional key material shaped like real provider keys, assembled
+    // from split literals so the contiguous pattern never appears in source (avoids
+    // false-positive matches from secret-scanning tools against these test fixtures).
+    fn fake_openrouter_key() -> String {
+        format!(
+            "sk-or-v1-{}",
+            "6c82424c5c840f552c9240c2f208868c90e4c27612bc1c9f46cf124079451660"
+        )
+    }
+
+    fn fake_openai_key() -> String {
+        format!(
+            "sk-proj-{}",
+            "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+        )
+    }
+
+    fn fake_anthropic_key() -> String {
+        format!(
+            "sk-ant-api03-{}",
+            "xyzabc123def456ghi789jkl012mno345pqr678stu901vwx"
+        )
+    }
+
+    #[test]
+    fn redacts_api_key_in_yaml() {
+        let input = format!("OPENROUTER_API_KEY: {}", fake_openrouter_key());
+        let output = redact_secrets(&input);
+        assert_eq!(output, "OPENROUTER_API_KEY: [REDACTED]");
+    }
+
+    #[test]
+    fn redacts_api_key_in_json() {
+        let input = format!(
+            r#"{{"key": "OPENROUTER_API_KEY", "value": "{}"}}"#,
+            fake_openrouter_key()
+        );
+        let output = redact_secrets(&input);
+        assert!(output.contains("[REDACTED]"), "secret should be redacted");
+        assert!(
+            !output.contains("6c82424c"),
+            "raw key material must not appear"
+        );
+        assert!(
+            output.contains("OPENROUTER_API_KEY"),
+            "key name should survive"
+        );
+    }
+
+    #[test]
+    fn preserves_normal_config_values() {
+        let input = "GOOSE_PROVIDER: openrouter\nGOOSE_MODEL: openai/gpt-4o\nOPENROUTER_HOST: https://openrouter.ai";
+        assert_eq!(redact_secrets(input), input);
+    }
+
+    #[test]
+    fn preserves_short_values() {
+        let input = "GOOSE_MODE: auto\nenabled: true";
+        assert_eq!(redact_secrets(input), input);
+    }
+
+    #[test]
+    fn preserves_model_names() {
+        let input = "model: anthropic/claude-sonnet-4\nfast: google/gemini-2.5-flash";
+        assert_eq!(redact_secrets(input), input);
+    }
+
+    #[test]
+    fn preserves_descriptions() {
+        let input = "description: Write and edit files, and execute shell commands";
+        assert_eq!(redact_secrets(input), input);
+    }
+
+    #[test]
+    fn preserves_urls() {
+        let input = "host: https://api.openai.com\nreferer: https://goose-docs.ai";
+        assert_eq!(redact_secrets(input), input);
+    }
+
+    #[test]
+    fn redacts_bearer_token_in_yaml_value() {
+        let input = format!("Authorization: Bearer {}", fake_openrouter_key());
+        let output = redact_secrets(&input);
+        // The YAML-style "key: value" check fires on "Authorization: Bearer sk-..."
+        // The bearer value itself is the high-entropy part
+        assert!(!output.contains("6c82424c"), "raw key must not appear");
+    }
+
+    #[test]
+    fn redacts_multiple_secrets_preserves_normal() {
+        let input = format!(
+            "OPENAI_API_KEY: {}\nGOOSE_PROVIDER: openrouter\nANTHROPIC_API_KEY: {}",
+            fake_openai_key(),
+            fake_anthropic_key()
+        );
+        let output = redact_secrets(&input);
+        assert!(output.contains("OPENAI_API_KEY: [REDACTED]"));
+        assert!(output.contains("GOOSE_PROVIDER: openrouter"));
+        assert!(output.contains("ANTHROPIC_API_KEY: [REDACTED]"));
+    }
+
+    #[test]
+    fn detects_jwt_tokens() {
+        assert!(looks_like_secret(
+            "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123signature456xyz"
+        ));
+    }
+
+    #[test]
+    fn preserves_hostnames_and_versions() {
+        assert!(!looks_like_secret("api.openai.com"));
+        assert!(!looks_like_secret("openrouter.ai"));
+        assert!(!looks_like_secret("6.2.9200"));
+    }
+
+    #[test]
+    fn secret_detection_accuracy() {
+        // Real API keys: detected
+        assert!(looks_like_secret(&fake_openrouter_key()));
+        assert!(looks_like_secret(&fake_openai_key()));
+
+        // Normal values: not detected
+        assert!(!looks_like_secret("openrouter"));
+        assert!(!looks_like_secret("https://openrouter.ai"));
+        assert!(!looks_like_secret("anthropic/claude-sonnet-4"));
+        assert!(!looks_like_secret("google/gemini-2.5-flash"));
+        assert!(!looks_like_secret(
+            "Write and edit files, and execute shell commands"
+        ));
+        assert!(!looks_like_secret("OPENROUTER_API_KEY"));
+    }
 }
