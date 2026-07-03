@@ -121,6 +121,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | `GOOSE_CLI_BELL` opt-in terminal bell on turn completion | – | ✓ |
 | Hidden/internal extensions flagged instead of silently dropped (REST API) | – | ✓ |
 | New Chat as a true global shortcut (not just a menu accelerator) | – | ✓ |
+| Toast notice when a mode change needs other sessions restarted | – | ✓ |
 | OpenCode free/paid models provider | – | ✓ |
 | searxng-mcp: 8 free providers always run in full parallel | – | ✓ |
 | NATS JetStream KV claim/lease coordination bus | – | ✓ |
@@ -227,6 +228,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Recipes | [#9610](https://github.com/aaif-goose/goose/issues/9610) | Per-recipe model request params (`reasoning_effort`, `top_p`, etc.) via `Settings.request_params` |
 | Hooks | [#9969](https://github.com/aaif-goose/goose/issues/9969) | `AfterAgentResponse` lifecycle hook |
 | Desktop | [`micn/new-chat-shortcut`](https://github.com/aaif-goose/goose/tree/micn/new-chat-shortcut) | New Chat registered as a true global shortcut (not just a menu accelerator) |
+| Desktop | [`micn/note-restart-needed`](https://github.com/aaif-goose/goose/tree/micn/note-restart-needed) | Toast on mode change explaining other active sessions need a restart to pick up the new mode |
 
 ### Shipped without an upstream ticket
 
