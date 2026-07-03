@@ -1083,3 +1083,19 @@ fn test_custom_provider_supported_models_lists_raw_provider_models() {
         );
     });
 }
+
+#[test]
+#[serial]
+fn test_custom_health_returns_ok() {
+    write_acp_global_config(DEFAULT_ACP_TEST_CONFIG);
+    run_test(async move {
+        let openai = OpenAiFixture::new(vec![], Arc::new(EnforceSessionId::default())).await;
+        let conn = AcpServerConnection::new(TestConnectionConfig::default(), openai).await;
+
+        let response = send_custom(conn.cx(), "_goose/unstable/health", serde_json::json!({}))
+            .await
+            .expect("health check should succeed");
+
+        assert_eq!(response.get("status"), Some(&serde_json::json!("ok")));
+    });
+}

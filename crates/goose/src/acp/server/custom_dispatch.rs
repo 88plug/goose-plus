@@ -90,6 +90,11 @@ impl GooseAcpAgent {
         self.on_delete_session(req).await
     }
 
+    #[custom_method(HealthRequest)]
+    async fn dispatch_health(&self) -> Result<HealthResponse, agent_client_protocol::Error> {
+        self.on_health().await
+    }
+
     #[custom_method(GetConfigExtensionsRequest)]
     async fn dispatch_get_config_extensions(
         &self,

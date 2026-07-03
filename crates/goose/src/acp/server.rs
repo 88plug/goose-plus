@@ -869,6 +869,14 @@ impl GooseAcpAgent {
         Arc::clone(&self.permission_manager)
     }
 
+    /// Startup health check for programmatic clients that poll before sending
+    /// traffic to a freshly-launched goosed.
+    pub(super) async fn on_health(&self) -> Result<HealthResponse, agent_client_protocol::Error> {
+        Ok(HealthResponse {
+            status: "ok".to_string(),
+        })
+    }
+
     pub(super) fn supports_goose_custom_notifications(&self) -> bool {
         self.client_supports_goose_custom_notifications
             .get()

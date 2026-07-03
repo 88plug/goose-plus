@@ -233,6 +233,18 @@ pub struct GooseExtensionEntry {
 }
 
 /// List Goose-owned extension definitions available to configure or enable.
+/// Startup health check, for programmatic clients that poll before sending
+/// traffic to a freshly-launched goosed.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
+#[request(method = "_goose/unstable/health", response = HealthResponse)]
+pub struct HealthRequest {}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcResponse)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthResponse {
+    pub status: String,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(
     method = "_goose/unstable/extensions/available",
