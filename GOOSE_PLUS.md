@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~101 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~102 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -237,6 +237,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Hooks | [#9969](https://github.com/aaif-goose/goose/issues/9969) | `AfterAgentResponse` lifecycle hook |
 | Desktop | [`micn/new-chat-shortcut`](https://github.com/aaif-goose/goose/tree/micn/new-chat-shortcut) | New Chat registered as a true global shortcut (not just a menu accelerator) |
 | Desktop | [`micn/note-restart-needed`](https://github.com/aaif-goose/goose/tree/micn/note-restart-needed) | Toast on mode change explaining other active sessions need a restart to pick up the new mode |
+| CLI/Agent | [`micn/critical-advice`](https://github.com/aaif-goose/goose/tree/micn/critical-advice) | `CRITICAL_ADVISORY` env var appends an operator-set one-line advisory to every session's system prompt, without editing config/recipes; placeholder values ("None"/"null"/"undefined") are ignored |
 
 ### Shipped without an upstream ticket
 
