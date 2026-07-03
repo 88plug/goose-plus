@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~114 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~115 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -264,6 +264,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | NATS | `45532431e` (own work) | JetStream KV claim/lease bus for concurrent-instance file coordination |
 | Security | `2557f7c16` (redesigned; upstream's `code-review-security` had no PR) | `GOOSE_SHELL_ALLOWED_COMMANDS` opt-in allowlist mode — the shell tool bypasses the shell entirely and directly execs only listed programs, no expansion/pipes/redirections/subshells possible. For recipes that process untrusted input (e.g. reviewing a PR diff), where a prompt-injection payload shouldn't reach an unrestricted shell |
 | Security | `d5c43677d` (own work; same upstream branch) | `GOOSE_SKIP_CONTEXT_FILES` opts a session out of loading named repo-provided context files (`AGENTS.md`, `.goosehints`, `GOOSE.md`) — for the same untrusted-checkout scenario, so the session doesn't pick up instructions from the very repo it's reviewing |
+| Desktop | [`micn/module-default-lock`](https://github.com/aaif-goose/goose/tree/micn/module-default-lock) | Optional model lock (`GOOSE_MODEL_LOCK` env default + a Settings toggle) — once locked, the chat bottom bar shows a static, non-interactive model display instead of the switcher, for shared/managed installs that want to pin the model |
 | Deployment | `361ebdc7d` + `4ecb2d29a` (own work) | Dockerized headless `goosed` API server and a browser build of the desktop UI |
 | Performance | `2c392bace` + `280245ac3` (own work) | Startup pre-warming cutting measured first-token latency ~60% |
 
