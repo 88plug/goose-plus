@@ -42,6 +42,22 @@ const i18n = defineMessages({
     id: 'providerSelector.addCustomProviderTitle',
     defaultMessage: 'Add Custom Provider',
   },
+  readyToGo: {
+    id: 'providerSelector.readyToGo',
+    defaultMessage: 'Ready to Go!',
+  },
+  quickSetupTitle: {
+    id: 'providerSelector.quickSetupTitle',
+    defaultMessage: 'Quick Setup with {providerName}',
+  },
+  quickSetupDescription: {
+    id: 'providerSelector.quickSetupDescription',
+    defaultMessage: 'We found existing credentials for this provider on your machine.',
+  },
+  quickSetupHint: {
+    id: 'providerSelector.quickSetupHint',
+    defaultMessage: 'Click here to start using goose immediately.',
+  },
 });
 
 const FREE_OPTIONS = 'free-options' as const;
@@ -102,6 +118,25 @@ export default function ProviderSelector({
       }));
   }, [providerList]);
 
+  // is_configured already reflects credentials found in the environment (see
+  // Config::get_secret), so a provider showing up here means goose detected
+  // usable credentials (e.g. an ANTHROPIC_API_KEY) without the user doing
+  // anything — worth a one-click shortcut instead of routing them through the
+  // full provider picker.
+  const detectedProvider = useMemo(() => {
+    return options.find(
+      (option) =>
+        option.provider.is_configured &&
+        option.provider.name !== 'local' &&
+        option.provider.metadata.config_keys.some((key) => key.secret)
+    );
+  }, [options]);
+
+  const handleQuickSetup = () => {
+    if (!detectedProvider) return;
+    onConfigured(detectedProvider.provider.name, detectedProvider.provider.metadata.default_model);
+  };
+
   const fuzzyFilterOption = (option: { label: string; value: string }, inputValue: string) => {
     const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
     return (
@@ -138,6 +173,32 @@ export default function ProviderSelector({
 
   return (
     <div>
+      {detectedProvider && (
+        <div className="relative mb-6">
+          <div className="absolute -top-2 -right-2 z-10">
+            <span className="inline-block px-2 py-1 text-xs font-medium bg-green-600 text-white rounded-full">
+              {intl.formatMessage(i18n.readyToGo)}
+            </span>
+          </div>
+          <div
+            onClick={handleQuickSetup}
+            className="relative w-full p-4 sm:p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-2 border-green-500 dark:border-green-600 rounded-xl hover:border-green-600 dark:hover:border-green-500 transition-all duration-200 cursor-pointer group"
+          >
+            <h3 className="font-semibold text-text-standard text-sm sm:text-base mb-1">
+              {intl.formatMessage(i18n.quickSetupTitle, {
+                providerName: detectedProvider.label,
+              })}
+            </h3>
+            <p className="text-text-standard text-sm sm:text-base font-medium mb-1">
+              {intl.formatMessage(i18n.quickSetupDescription)}
+            </p>
+            <p className="text-text-muted text-sm sm:text-base">
+              {intl.formatMessage(i18n.quickSetupHint)}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div
           onClick={handleFreeCreditClick}

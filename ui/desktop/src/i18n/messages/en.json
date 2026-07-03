@@ -2903,6 +2903,18 @@
   "providerSelector.freeLocalDescription": {
     "defaultMessage": "Use a local model or a provider with free credits"
   },
+  "providerSelector.quickSetupDescription": {
+    "defaultMessage": "We found existing credentials for this provider on your machine."
+  },
+  "providerSelector.quickSetupHint": {
+    "defaultMessage": "Click here to start using goose immediately."
+  },
+  "providerSelector.quickSetupTitle": {
+    "defaultMessage": "Quick Setup with {providerName}"
+  },
+  "providerSelector.readyToGo": {
+    "defaultMessage": "Ready to Go!"
+  },
   "providerSelector.selectProvider": {
     "defaultMessage": "Select a provider"
   },
