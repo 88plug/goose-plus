@@ -201,6 +201,42 @@ pub fn is_extension_enabled(key: &str) -> bool {
     extensions.get(key).map(|e| e.enabled).unwrap_or(false)
 }
 
+/// Returns the configured enabled state for an extension, or `None` when the
+/// extension has no entry in the config at all.
+///
+/// This lets callers distinguish "not configured" (e.g. a fresh install where a
+/// bundled builtin should still load by default) from "explicitly turned off".
+pub fn configured_enabled_state(config: &Config, name: &str) -> Option<bool> {
+    let extensions = get_extensions_map_with_config(config);
+    let key = name_to_key(name);
+    extensions
+        .values()
+        .find(|entry| entry.config.name() == name)
+        .or_else(|| extensions.get(&key))
+        .map(|entry| entry.enabled)
+}
+
+/// Returns true when a builtin the platform wants to load has been turned off
+/// by the user.
+///
+/// A builtin is considered user-disabled only when its config entry is
+/// `enabled: false` *and* it would otherwise be on by default. This matters
+/// because `run_read_migrations` synthesizes a config entry for every platform
+/// extension using its `default_enabled` value, so a default-off extension
+/// (e.g. code_execution) looks identical to one a user turned off. Gating on
+/// the default lets an explicit builtins request still load default-off
+/// extensions while honoring a user disabling a default-on one (e.g. developer).
+pub fn is_builtin_disabled_by_user(config: &Config, name: &str) -> bool {
+    if configured_enabled_state(config, name) != Some(false) {
+        return false;
+    }
+
+    match PLATFORM_EXTENSIONS.get(name_to_key(name).as_str()) {
+        Some(def) => def.default_enabled,
+        None => true,
+    }
+}
+
 pub fn get_enabled_extensions() -> Vec<ExtensionConfig> {
     get_all_extensions()
         .into_iter()
@@ -678,5 +714,55 @@ extensions:
             "expected no logs for other extension keys, got {:?}",
             other_keys
         );
+    }
+
+    #[test]
+    fn test_configured_enabled_state_unknown_extension_is_none() {
+        let (config, _config_file, _secrets_file) = test_config("");
+
+        assert_eq!(
+            configured_enabled_state(&config, "not_a_real_extension"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_default_on_extension_not_disabled_when_config_empty() {
+        let (config, _config_file, _secrets_file) = test_config("");
+
+        assert_eq!(configured_enabled_state(&config, "developer"), Some(true));
+        assert!(!is_builtin_disabled_by_user(&config, "developer"));
+    }
+
+    #[test]
+    fn test_default_on_extension_disabled_by_user() {
+        let (config, _config_file, _secrets_file) = test_config("");
+        set_extension_with_config(&config, builtin_entry("developer", false));
+
+        assert_eq!(configured_enabled_state(&config, "developer"), Some(false));
+        assert!(is_builtin_disabled_by_user(&config, "developer"));
+
+        set_extension_enabled_with_config(&config, "developer", true);
+        assert!(!is_builtin_disabled_by_user(&config, "developer"));
+    }
+
+    #[test]
+    fn test_default_off_extension_not_treated_as_user_disabled() {
+        // chatrecall is default_enabled: false, so read-migration synthesizes
+        // `enabled: false`. That must NOT count as the user disabling it, otherwise
+        // an explicit builtins request (e.g. code mode's code_execution) would be
+        // skipped even though it is default-off.
+        let (config, _config_file, _secrets_file) = test_config("");
+
+        assert_eq!(configured_enabled_state(&config, "chatrecall"), Some(false));
+        assert!(!is_builtin_disabled_by_user(&config, "chatrecall"));
+    }
+
+    #[test]
+    fn test_unknown_builtin_disabled_when_explicitly_off() {
+        let (config, _config_file, _secrets_file) = test_config("");
+        set_extension_with_config(&config, builtin_entry("some_custom_builtin", false));
+
+        assert!(is_builtin_disabled_by_user(&config, "some_custom_builtin"));
     }
 }
