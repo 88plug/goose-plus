@@ -11,10 +11,27 @@ pub const GOOSE_HINTS_FILENAME: &str = ".goosehints";
 pub const GOOSE_MD_FILENAME: &str = "GOOSE.md";
 pub const AGENTS_MD_FILENAME: &str = "AGENTS.md";
 
+/// Removes any filename listed in `skip_csv` (a comma-separated list, e.g. from
+/// `GOOSE_SKIP_CONTEXT_FILES`) from `filenames`. Used to run a session without
+/// loading repo-provided context files — e.g. an automated code-review recipe
+/// that processes an untrusted PR diff and shouldn't pick up instructions from
+/// that same untrusted checkout's `AGENTS.md`/`.goosehints`.
+fn apply_skip_filter(mut filenames: Vec<String>, skip_csv: Option<&str>) -> Vec<String> {
+    if let Some(skip) = skip_csv {
+        let skip_set: HashSet<String> = skip
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        filenames.retain(|f| !skip_set.contains(f));
+    }
+    filenames
+}
+
 pub fn get_context_filenames() -> Vec<String> {
     use crate::config::Config;
 
-    Config::global()
+    let filenames = Config::global()
         .get_param::<Vec<String>>("CONTEXT_FILE_NAMES")
         .unwrap_or_else(|_| {
             vec![
@@ -22,7 +39,12 @@ pub fn get_context_filenames() -> Vec<String> {
                 GOOSE_MD_FILENAME.to_string(),
                 AGENTS_MD_FILENAME.to_string(),
             ]
-        })
+        });
+
+    apply_skip_filter(
+        filenames,
+        std::env::var("GOOSE_SKIP_CONTEXT_FILES").ok().as_deref(),
+    )
 }
 
 #[derive(Default)]
@@ -378,6 +400,64 @@ mod tests {
             filenames.iter().any(|name| name == GOOSE_MD_FILENAME),
             "GOOSE.md should be a recognized default context filename, got {filenames:?}"
         );
+    }
+
+    #[test]
+    fn test_skip_context_files_removes_agents_md() {
+        let filenames = apply_skip_filter(
+            vec![
+                GOOSE_HINTS_FILENAME.to_string(),
+                GOOSE_MD_FILENAME.to_string(),
+                AGENTS_MD_FILENAME.to_string(),
+            ],
+            Some("AGENTS.md"),
+        );
+
+        assert!(filenames.contains(&GOOSE_HINTS_FILENAME.to_string()));
+        assert!(filenames.contains(&GOOSE_MD_FILENAME.to_string()));
+        assert!(!filenames.contains(&AGENTS_MD_FILENAME.to_string()));
+    }
+
+    #[test]
+    fn test_skip_context_files_multiple_trims_whitespace() {
+        let filenames = apply_skip_filter(
+            vec![
+                GOOSE_HINTS_FILENAME.to_string(),
+                GOOSE_MD_FILENAME.to_string(),
+                AGENTS_MD_FILENAME.to_string(),
+            ],
+            Some(" AGENTS.md , .goosehints ,GOOSE.md"),
+        );
+
+        assert!(filenames.is_empty());
+    }
+
+    #[test]
+    fn test_skip_context_files_unset_loads_all() {
+        let filenames = apply_skip_filter(
+            vec![
+                GOOSE_HINTS_FILENAME.to_string(),
+                AGENTS_MD_FILENAME.to_string(),
+            ],
+            None,
+        );
+
+        assert!(filenames.contains(&GOOSE_HINTS_FILENAME.to_string()));
+        assert!(filenames.contains(&AGENTS_MD_FILENAME.to_string()));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_get_context_filenames_respects_skip_env_var() {
+        std::env::remove_var("CONTEXT_FILE_NAMES");
+        std::env::set_var("GOOSE_SKIP_CONTEXT_FILES", "AGENTS.md");
+
+        let filenames = get_context_filenames();
+
+        std::env::remove_var("GOOSE_SKIP_CONTEXT_FILES");
+
+        assert!(!filenames.iter().any(|name| name == AGENTS_MD_FILENAME));
+        assert!(filenames.iter().any(|name| name == GOOSE_HINTS_FILENAME));
     }
 
     #[test]
