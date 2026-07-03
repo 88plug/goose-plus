@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~103 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~104 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -207,6 +207,7 @@ No open/closed upstream issue exists for these — the **Source** column links t
 | Providers/release hygiene | [`remove-canonical-mapping-report`](https://github.com/aaif-goose/goose/tree/remove-canonical-mapping-report) | `build_canonical_models`'s release-time checker called every provider's live API with CI credentials and committed the raw result to a public 5,200+ line JSON file — risking internal/EAP model names leaking; checker/report machinery removed, registry build kept |
 | Agent/MOIM | [`wpfleger/tool-response-issue`](https://github.com/aaif-goose/goose/tree/wpfleger/tool-response-issue) | After a cancelled or tool-heavy turn, orphaned tool_use/tool_result blocks triggered a persistent provider 400 death-loop: `fix_conversation` repaired the orphan, but MOIM's allowlist only recognized merge/whitespace/trailing-assistant fixes and discarded any other repair, handing the still-broken conversation back every turn |
 | Session storage | [`micn/efficient-session-writes`](https://github.com/aaif-goose/goose/tree/micn/efficient-session-writes) | Persisting a turn's messages looped over `add_message`, opening a separate `BEGIN IMMEDIATE` transaction and `UPDATE sessions SET updated_at` per message; batched into one transaction with a single `updated_at` touch |
+| Providers | [`codex/usage-record-timings`](https://github.com/aaif-goose/goose/tree/codex/usage-record-timings) | `ProviderStats` already had `time_to_first_token_ms`/`elapsed_ms` fields, but only the MLX local-inference backend populated them (elapsed only, no TTFT); now measured uniformly for every provider around `stream_response_from_provider` |
 
 *(Security fixes from four independent code-first audit sweeps — `1af9f0fe2`, `a42722b1c`, `5f0d1536d`, all goose-plus's own code, not upstream-mined: path-traversal guards in the memory tool's category argument, local-inference's quantization filenames, and the scheduler's job IDs — the same class of bug `GOOSE_CONFINEMENT` above fixes for file write/edit; non-constant-time secret comparisons (`!=` or a non-cryptographic hash instead of the existing `token_matches` helper) in the A2A/MCP-app-proxy routes and the tunnel pairing-code check; unescaped shell-literal interpolation in the computer-controller's Linux command execution; and an integer-underflow panic from NFC-normalization-expanded text in conversation trimming.)*
 
