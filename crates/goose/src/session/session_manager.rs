@@ -426,6 +426,16 @@ impl SessionManager {
         self.storage.add_message(id, message).await
     }
 
+    /// Persists multiple messages in a single transaction (see
+    /// `SessionStorage::add_messages`). Each message is still published to
+    /// NATS individually so subscribers see one event per message.
+    pub async fn add_messages(&self, id: &str, messages: &[Message]) -> Result<()> {
+        for message in messages {
+            crate::nats::publish_message(id, message);
+        }
+        self.storage.add_messages(id, messages).await
+    }
+
     pub async fn replace_conversation(&self, id: &str, conversation: &Conversation) -> Result<()> {
         self.storage.replace_conversation(id, conversation).await
     }
@@ -1626,6 +1636,50 @@ impl SessionStorage {
         Ok(())
     }
 
+    /// Persists multiple messages in a single transaction, with a single
+    /// `updated_at` touch at the end instead of one per message — avoids the
+    /// per-message transaction/fsync overhead of calling `add_message` in a
+    /// loop when a turn produces several messages at once.
+    async fn add_messages(&self, session_id: &str, messages: &[Message]) -> Result<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
+        let pool = self.pool().await?;
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+
+        for message in messages {
+            let metadata_json = serde_json::to_string(&message.metadata)?;
+            let message_id = message
+                .id
+                .clone()
+                .unwrap_or_else(|| format!("msg_{}_{}", session_id, uuid::Uuid::new_v4()));
+
+            sqlx::query(
+                r#"
+                INSERT INTO messages (message_id, session_id, role, content_json, created_timestamp, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+            )
+            .bind(message_id)
+            .bind(session_id)
+            .bind(role_to_string(&message.role))
+            .bind(serde_json::to_string(&message.content)?)
+            .bind(message.created)
+            .bind(metadata_json)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        sqlx::query("UPDATE sessions SET updated_at = datetime('now') WHERE id = ?")
+            .bind(session_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn replace_conversation_inner(
         pool: &Pool<Sqlite>,
         session_id: &str,
@@ -2281,6 +2335,64 @@ mod tests {
         sm.add_message(session_id, &Message::user().with_text("hello world"))
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_add_messages_batch() {
+        let temp_dir = TempDir::new().unwrap();
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+
+        let session = sm
+            .create_session(
+                temp_dir.path().to_path_buf(),
+                "Batch test".to_string(),
+                SessionType::User,
+                GooseMode::default(),
+            )
+            .await
+            .unwrap();
+
+        let messages = vec![
+            Message::user().with_text("message 1"),
+            Message::assistant().with_text("response 1"),
+            Message::user().with_text("message 2"),
+            Message::assistant().with_text("response 2"),
+        ];
+
+        sm.add_messages(&session.id, &messages).await.unwrap();
+
+        let reloaded = sm.get_session(&session.id, true).await.unwrap();
+        let conversation = reloaded.conversation.unwrap();
+        let stored = conversation.messages();
+        assert_eq!(stored.len(), 4);
+        assert_eq!(stored[0].role, rmcp::model::Role::User);
+        assert_eq!(stored[1].role, rmcp::model::Role::Assistant);
+        assert_eq!(stored[2].role, rmcp::model::Role::User);
+        assert_eq!(stored[3].role, rmcp::model::Role::Assistant);
+        assert_eq!(stored[0].as_concat_text(), "message 1");
+        assert_eq!(stored[3].as_concat_text(), "response 2");
+    }
+
+    #[tokio::test]
+    async fn test_add_messages_empty_is_noop() {
+        let temp_dir = TempDir::new().unwrap();
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+
+        let session = sm
+            .create_session(
+                temp_dir.path().to_path_buf(),
+                "Empty batch test".to_string(),
+                SessionType::User,
+                GooseMode::default(),
+            )
+            .await
+            .unwrap();
+
+        sm.add_messages(&session.id, &[]).await.unwrap();
+
+        let reloaded = sm.get_session(&session.id, true).await.unwrap();
+        let conversation = reloaded.conversation.unwrap();
+        assert_eq!(conversation.messages().len(), 0);
     }
 
     #[tokio::test]

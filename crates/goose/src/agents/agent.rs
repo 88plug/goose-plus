@@ -2706,9 +2706,9 @@ impl Agent {
                     messages_to_add
                 };
 
-                for msg in &messages_to_add {
-                    session_manager.add_message(&session_config.id, msg).await?;
-                }
+                session_manager
+                    .add_messages(&session_config.id, messages_to_add.messages())
+                    .await?;
                 conversation.extend(messages_to_add);
 
                 if exit_chat && self.has_pending_steers(&session_config.id).await {
