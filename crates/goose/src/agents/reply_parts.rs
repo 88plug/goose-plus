@@ -2,11 +2,31 @@ use anyhow::Result;
 use goose_providers::errors::ProviderError;
 use regex::Regex;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use async_stream::try_stream;
 use futures::stream::StreamExt;
 use serde_json::{json, Value};
 use tracing::debug;
+
+fn duration_millis(duration: Duration) -> u64 {
+    duration.as_millis().min(u128::from(u64::MAX)) as u64
+}
+
+/// Attaches time-to-first-token / total-elapsed timings to a usage record,
+/// measured around the whole `stream_response_from_provider` call so every
+/// provider gets this uniformly (rather than each provider measuring it
+/// itself, which only local inference backends currently do).
+fn usage_with_timings(
+    usage: ProviderUsage,
+    started_at: Instant,
+    first_token_at: Option<Instant>,
+) -> ProviderUsage {
+    usage.with_timings(
+        first_token_at.map(|time| duration_millis(time.duration_since(started_at))),
+        duration_millis(started_at.elapsed()),
+    )
+}
 
 use super::super::agents::Agent;
 #[cfg(feature = "code-mode")]
@@ -317,6 +337,7 @@ impl Agent {
         let model_config = provider
             .get_model_config()
             .with_default_thinking_effort(Config::global().get_goose_thinking_effort());
+        let started_at = Instant::now();
         debug!("WAITING_LLM_STREAM_START");
         let stream_result = provider
             .stream(
@@ -343,6 +364,8 @@ impl Agent {
         };
 
         Ok(Box::pin(try_stream! {
+            let mut first_token_at: Option<Instant> = None;
+
             if config.toolshim {
                 // Toolshim mode: accumulate the full response before processing
                 // so that tool-use markers spanning multiple chunks are detected
@@ -352,6 +375,10 @@ impl Agent {
 
                 while let Some(result) = stream.next().await {
                     let (msg_opt, usage_opt) = result?;
+
+                    if msg_opt.is_some() {
+                        first_token_at.get_or_insert_with(Instant::now);
+                    }
 
                     if let Some(msg) = msg_opt {
                         accumulated_message = Some(match accumulated_message {
@@ -385,14 +412,27 @@ impl Agent {
 
                 if let Some(msg) = accumulated_message {
                     let processed = toolshim_postprocess(msg, &toolshim_tools).await?;
+                    let final_usage = final_usage.map(|usage| {
+                        usage_with_timings(usage, started_at, first_token_at)
+                    });
                     yield (Some(processed), final_usage);
                 } else if final_usage.is_some() {
                     // Preserve usage-only responses (no message content)
+                    let final_usage = final_usage.map(|usage| {
+                        usage_with_timings(usage, started_at, first_token_at)
+                    });
                     yield (None, final_usage);
                 }
             } else {
                 while let Some(result) = stream.next().await {
                     let (message, usage) = result?;
+
+                    if message.is_some() {
+                        first_token_at.get_or_insert_with(Instant::now);
+                    }
+                    let usage = usage.map(|usage| {
+                        usage_with_timings(usage, started_at, first_token_at)
+                    });
 
                     yield (message, usage);
                 }
@@ -680,6 +720,77 @@ mod tests {
             let usage = ProviderUsage::new("mock".to_string(), Usage::default());
             Ok(stream_from_single_message(message, usage))
         }
+    }
+
+    #[derive(Clone)]
+    struct TimedUsageProvider {
+        model_config: ModelConfig,
+    }
+
+    #[async_trait]
+    impl Provider for TimedUsageProvider {
+        fn get_name(&self) -> &str {
+            "timed"
+        }
+
+        fn get_model_config(&self) -> ModelConfig {
+            self.model_config.clone()
+        }
+
+        async fn stream(
+            &self,
+            _model_config: &ModelConfig,
+            _session_id: &str,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<MessageStream, ProviderError> {
+            use goose_providers::conversation::token_usage::ProviderStats;
+
+            let usage = ProviderUsage::new("timed-model".to_string(), Usage::default()).with_stats(
+                ProviderStats {
+                    output_tokens: Some(7),
+                    ..ProviderStats::default()
+                },
+            );
+
+            Ok(Box::pin(async_stream::try_stream! {
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                yield (Some(Message::assistant().with_text("ok")), None);
+
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                yield (None, Some(usage));
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_response_adds_timings_to_usage() {
+        let provider = Arc::new(TimedUsageProvider {
+            model_config: ModelConfig::new("timed-model").unwrap(),
+        });
+
+        let mut stream =
+            Agent::stream_response_from_provider(provider, "session", "system", &[], &[], &[])
+                .await
+                .unwrap();
+
+        let mut final_usage = None;
+        while let Some(next) = stream.next().await {
+            let (_message, usage) = next.unwrap();
+            final_usage = final_usage.or(usage);
+        }
+
+        let stats = final_usage.unwrap().stats.unwrap();
+        assert!(
+            stats.time_to_first_token_ms.is_some(),
+            "expected time_to_first_token_ms to be populated"
+        );
+        assert!(
+            stats.elapsed_ms.unwrap() >= stats.time_to_first_token_ms.unwrap(),
+            "elapsed time must be at least as long as time to first token"
+        );
+        assert_eq!(stats.output_tokens, Some(7));
     }
 
     #[tokio::test]
