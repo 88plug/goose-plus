@@ -339,6 +339,7 @@ interface ToolCallExpandableProps {
   label: string | React.ReactNode;
   isStartExpanded?: boolean;
   isForceExpand?: boolean;
+  hasContent?: boolean;
   children: React.ReactNode;
   className?: string;
 }
@@ -347,12 +348,15 @@ function ToolCallExpandable({
   label,
   isStartExpanded = false,
   isForceExpand,
+  hasContent = true,
   children,
   className = '',
 }: ToolCallExpandableProps) {
   const [isExpandedState, setIsExpanded] = React.useState<boolean | null>(null);
-  const isExpanded = isExpandedState === null ? isStartExpanded : isExpandedState;
-  const toggleExpand = () => setIsExpanded(!isExpanded);
+  const isExpanded = hasContent && (isExpandedState === null ? isStartExpanded : isExpandedState);
+  const toggleExpand = () => {
+    if (hasContent) setIsExpanded(!isExpanded);
+  };
   React.useEffect(() => {
     if (isForceExpand) setIsExpanded(true);
   }, [isForceExpand]);
@@ -361,16 +365,19 @@ function ToolCallExpandable({
     <div className={className}>
       <Button
         onClick={toggleExpand}
-        className="group w-full flex justify-between items-center pr-2 transition-colors rounded-none"
+        disabled={!hasContent}
+        className="group w-full flex justify-between items-center pr-2 transition-colors rounded-none disabled:cursor-default disabled:opacity-100"
         variant="ghost"
       >
         <span className="flex items-center font-sans text-sm truncate flex-1 min-w-0">{label}</span>
-        <ChevronRight
-          className={cn(
-            'group-hover:opacity-100 transition-transform opacity-70',
-            isExpanded && 'rotate-90'
-          )}
-        />
+        {hasContent && (
+          <ChevronRight
+            className={cn(
+              'group-hover:opacity-100 transition-transform opacity-70',
+              isExpanded && 'rotate-90'
+            )}
+          />
+        )}
       </Button>
       {isExpanded && <div>{children}</div>}
     </div>
@@ -555,8 +562,8 @@ function ToolCallView({
       ? 'success'
       : 'loading'
     : (toolResponse.toolResult as Record<string, unknown>).status === 'error'
-      ? 'error'
-      : 'success';
+    ? 'error'
+    : 'success';
 
   // Tool call timing tracking
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -819,10 +826,35 @@ function ToolCallView({
       <span className="truncate flex-1 min-w-0">{getToolLabelContent()}</span>
     </span>
   );
+
+  // Computed from the same data driving the children below (not by introspecting
+  // rendered output) so the chevron/expand affordance never appears for a tool
+  // call with nothing to show.
+  const code = toolCall.arguments?.code as unknown as string | undefined;
+  const toolGraph = toolCall.arguments?.tool_graph as unknown as ToolGraphNode[] | undefined;
+  const isCodeMode =
+    toolCall.name === 'code_execution__execute_typescript' &&
+    (typeof code === 'string' || Array.isArray(toolGraph));
+  const editDiff = getEditDiffArgs(getToolName(toolCall.name), toolCall.arguments ?? {});
+  const hasLogs = Boolean(logs && logs.length > 0);
+  const hasProgressOnly = toolResults.length === 0 && progressEntries.length > 0;
+  const hasResults = !isCancelledMessage && toolResults.length > 0;
+  const subagentSessionId =
+    loadingStatus === 'loading' ? null : getSubagentSessionId(toolResponse, notifications);
+  const hasContent =
+    isCodeMode ||
+    Boolean(editDiff) ||
+    isToolDetails ||
+    hasLogs ||
+    hasProgressOnly ||
+    hasResults ||
+    Boolean(subagentSessionId);
+
   return (
     <ToolCallExpandable
       isStartExpanded={isRenderingProgress || isExpandToolDetails}
       isForceExpand={false}
+      hasContent={hasContent}
       label={
         extensionTooltip ? (
           <TooltipWrapper tooltipContent={extensionTooltip} side="top" align="start">
@@ -833,50 +865,33 @@ function ToolCallView({
         )
       }
     >
-      {(() => {
-        const code = toolCall.arguments?.code as unknown as string | undefined;
-        const toolGraph = toolCall.arguments?.tool_graph as unknown as ToolGraphNode[] | undefined;
+      {isCodeMode && (
+        <div className="border-t border-border-primary">
+          <CodeModeView toolGraph={toolGraph} code={code} />
+        </div>
+      )}
 
-        if (
-          toolCall.name === 'code_execution__execute_typescript' &&
-          (typeof code === 'string' || Array.isArray(toolGraph))
-        ) {
-          return (
-            <div className="border-t border-border-primary">
-              <CodeModeView toolGraph={toolGraph} code={code} />
-            </div>
-          );
-        }
+      {!isCodeMode && editDiff && (
+        <div className="border-t border-border-primary">
+          <DiffView
+            path={editDiff.path}
+            before={editDiff.before}
+            after={editDiff.after}
+            isStartExpanded={isPendingApproval || isExpandToolDetails}
+          />
+        </div>
+      )}
 
-        const editDiff = getEditDiffArgs(getToolName(toolCall.name), toolCall.arguments ?? {});
-        if (editDiff) {
-          return (
-            <div className="border-t border-border-primary">
-              <DiffView
-                path={editDiff.path}
-                before={editDiff.before}
-                after={editDiff.after}
-                isStartExpanded={isPendingApproval || isExpandToolDetails}
-              />
-            </div>
-          );
-        }
+      {!isCodeMode && !editDiff && isToolDetails && (
+        <div className="border-t border-border-primary">
+          <ToolDetailsView toolCall={toolCall} isStartExpanded={isExpandToolDetails} />
+        </div>
+      )}
 
-        if (isToolDetails) {
-          return (
-            <div className="border-t border-border-primary">
-              <ToolDetailsView toolCall={toolCall} isStartExpanded={isExpandToolDetails} />
-            </div>
-          );
-        }
-
-        return null;
-      })()}
-
-      {logs && logs.length > 0 && (
+      {hasLogs && (
         <div className="border-t border-border-primary">
           <ToolLogsView
-            logs={logs}
+            logs={logs!}
             working={loadingStatus === 'loading'}
             isStartExpanded={
               loadingStatus === 'loading' || responseStyle === 'detailed' || responseStyle === null
@@ -885,8 +900,7 @@ function ToolCallView({
         </div>
       )}
 
-      {toolResults.length === 0 &&
-        progressEntries.length > 0 &&
+      {hasProgressOnly &&
         progressEntries.map((entry, index) => (
           <div className="p-3 border-t border-border-primary" key={index}>
             <ProgressBar progress={entry.progress} total={entry.total} message={entry.message} />
@@ -894,41 +908,33 @@ function ToolCallView({
         ))}
 
       {/* Tool Output */}
-      {!isCancelledMessage && (
-        <>
-          {toolResults.map((result, index) => (
-            <div key={index} className={cn('border-t border-border-primary')}>
-              <ToolResultView
-                toolCall={toolCall}
-                result={result}
-                isStartExpanded={isExpandToolDetails}
-              />
-            </div>
-          ))}
-        </>
-      )}
-
-      {(() => {
-        if (loadingStatus === 'loading') return null;
-        const subagentSessionId = getSubagentSessionId(toolResponse, notifications);
-        if (!subagentSessionId) return null;
-        return (
-          <div className="border-t border-border-primary">
-            <button
-              onClick={() => {
-                window.electron.createChatWindow({
-                  resumeSessionId: subagentSessionId,
-                  viewType: 'pair',
-                });
-              }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-background-secondary transition-colors cursor-pointer"
-            >
-              <ExternalLink className="w-3 h-3 flex-shrink-0" />
-              <span>{intl.formatMessage(i18n.viewSubagentSession)}</span>
-            </button>
+      {hasResults &&
+        toolResults.map((result, index) => (
+          <div key={index} className={cn('border-t border-border-primary')}>
+            <ToolResultView
+              toolCall={toolCall}
+              result={result}
+              isStartExpanded={isExpandToolDetails}
+            />
           </div>
-        );
-      })()}
+        ))}
+
+      {subagentSessionId && (
+        <div className="border-t border-border-primary">
+          <button
+            onClick={() => {
+              window.electron.createChatWindow({
+                resumeSessionId: subagentSessionId,
+                viewType: 'pair',
+              });
+            }}
+            className="w-full flex items-center gap-2 px-4 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-background-secondary transition-colors cursor-pointer"
+          >
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+            <span>{intl.formatMessage(i18n.viewSubagentSession)}</span>
+          </button>
+        </div>
+      )}
     </ToolCallExpandable>
   );
 }
@@ -1317,7 +1323,9 @@ function ToolLogsView({
     >
       <div
         ref={boxRef}
-        className={`flex flex-col items-start space-y-2 overflow-y-auto p-4 ${working ? 'max-h-[4rem]' : 'max-h-[20rem]'}`}
+        className={`flex flex-col items-start space-y-2 overflow-y-auto p-4 ${
+          working ? 'max-h-[4rem]' : 'max-h-[20rem]'
+        }`}
       >
         {logs.map((log, i) => (
           <SubagentLogEntry key={i} log={log} />
