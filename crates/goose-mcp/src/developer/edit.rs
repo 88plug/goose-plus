@@ -78,6 +78,14 @@ impl EditTools {
             Err(msg) => return CallToolResult::error(vec![Content::text(msg).with_priority(0.0)]),
         };
 
+        if crate::developer::config_protection::is_goose_config_path(&path) {
+            return CallToolResult::error(vec![Content::text(format!(
+                "Refusing to write to {}: this path is inside goose's own configuration directory.",
+                params.path
+            ))
+            .with_priority(0.0)]);
+        }
+
         // Claim the file on the NATS coordination bus (no-op unless coordination
         // is enabled and another instance holds it). Held until this returns.
         let _coord = crate::coord_hook::claim_file_blocking(&path.to_string_lossy());
@@ -129,6 +137,14 @@ impl EditTools {
             Ok(p) => p,
             Err(msg) => return CallToolResult::error(vec![Content::text(msg).with_priority(0.0)]),
         };
+
+        if crate::developer::config_protection::is_goose_config_path(&path) {
+            return CallToolResult::error(vec![Content::text(format!(
+                "Refusing to edit {}: this path is inside goose's own configuration directory.",
+                params.path
+            ))
+            .with_priority(0.0)]);
+        }
 
         // Claim the file on the NATS coordination bus (no-op unless coordination
         // is enabled and another instance holds it). Held until this returns.
@@ -486,6 +502,61 @@ mod tests {
 
         assert!(!result.is_error.unwrap_or(false));
         assert_eq!(fs::read_to_string(&path).unwrap(), "new content");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_file_write_rejects_goose_config_path() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("config")).unwrap();
+        // SAFETY: #[serial] ensures no other test reads/writes this env var concurrently.
+        unsafe {
+            std::env::set_var("GOOSE_PATH_ROOT", root.path());
+        }
+        let path = root.path().join("config").join("secrets.yaml");
+        let tools = EditTools::new();
+
+        let result = tools.file_write(FileWriteParams {
+            path: path.to_string_lossy().to_string(),
+            content: "api_key: leaked".to_string(),
+        });
+
+        unsafe {
+            std::env::remove_var("GOOSE_PATH_ROOT");
+        }
+
+        assert!(result.is_error.unwrap_or(false));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_file_edit_rejects_goose_config_path() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("config")).unwrap();
+        let path = root.path().join("config").join("config.yaml");
+        fs::write(&path, "GOOSE_PROVIDER: anthropic").unwrap();
+        // SAFETY: #[serial] ensures no other test reads/writes this env var concurrently.
+        unsafe {
+            std::env::set_var("GOOSE_PATH_ROOT", root.path());
+        }
+        let tools = EditTools::new();
+
+        let result = tools.file_edit(FileEditParams {
+            path: path.to_string_lossy().to_string(),
+            before: "anthropic".to_string(),
+            after: "compromised".to_string(),
+        });
+
+        unsafe {
+            std::env::remove_var("GOOSE_PATH_ROOT");
+        }
+
+        assert!(result.is_error.unwrap_or(false));
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "GOOSE_PROVIDER: anthropic"
+        );
     }
 
     #[test]

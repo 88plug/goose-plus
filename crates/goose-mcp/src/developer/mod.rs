@@ -1,3 +1,4 @@
+pub mod config_protection;
 pub mod edit;
 pub mod image;
 pub mod server;

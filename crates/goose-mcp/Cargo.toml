@@ -60,4 +60,5 @@ uuid = { workspace = true }
 libc = { workspace = true }
 
 [dev-dependencies]
+serial_test.workspace = true
 test-case = { workspace = true }
