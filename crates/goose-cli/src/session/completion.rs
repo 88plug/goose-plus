@@ -6,10 +6,18 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper, Result};
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use strum::VariantNames;
 
 use super::{CompletionCache, HintStatus};
+
+/// A file or directory candidate surfaced by `@`-mention completion.
+#[derive(Debug, Clone)]
+struct FileCandidate {
+    relative_path: String,
+    is_directory: bool,
+}
 
 /// Completer for goose CLI commands
 pub struct GooseCompleter {
@@ -24,6 +32,253 @@ impl GooseCompleter {
             completion_cache,
             filename_completer: FilenameCompleter::new(),
         }
+    }
+
+    /// Fuzzy match with scoring, matching the desktop `@`-mention picker's
+    /// algorithm (`ui/desktop/src/components/MentionPopover.tsx`'s `fuzzyMatch`)
+    /// so file-mention ranking is consistent between CLI and desktop.
+    /// Returns (score, match_positions); score of -1 means no match.
+    fn fuzzy_match(pattern: &str, text: &str) -> (i32, Vec<usize>) {
+        if pattern.is_empty() {
+            return (0, vec![]);
+        }
+
+        let pattern_lower = pattern.to_lowercase();
+        let text_lower = text.to_lowercase();
+        let pattern_chars: Vec<char> = pattern_lower.chars().collect();
+        let text_chars: Vec<char> = text_lower.chars().collect();
+        let mut matches = vec![];
+
+        let mut pattern_idx = 0;
+        let mut score = 0;
+        let mut consecutive_matches = 0;
+
+        for (i, &ch) in text_chars.iter().enumerate() {
+            if pattern_idx < pattern_chars.len() && ch == pattern_chars[pattern_idx] {
+                matches.push(i);
+                pattern_idx += 1;
+                consecutive_matches += 1;
+
+                // Bonus for consecutive matches (3 points per consecutive char)
+                score += consecutive_matches * 3;
+
+                // Bonus for matches at word boundaries or separators (+10)
+                if i == 0 || Self::is_boundary_char(text_chars.get(i - 1)) {
+                    score += 10;
+                }
+
+                // Bonus for matching start of filename after last / (+15)
+                if i > 0
+                    && text_lower[..i]
+                        .rfind('/')
+                        .map(|p| p == i - 1)
+                        .unwrap_or(false)
+                {
+                    score += 15;
+                }
+            } else {
+                consecutive_matches = 0;
+            }
+        }
+
+        // All pattern chars must match
+        if pattern_idx != pattern_chars.len() {
+            return (-1, vec![]);
+        }
+
+        // Small penalty for length (longer paths score slightly lower)
+        score -= (text.len() as i32) / 20;
+
+        // Bonus for exact substring match (+20)
+        if text_lower.contains(&pattern_lower) {
+            score += 20;
+        }
+
+        // Bonus for matching the filename specifically (+25)
+        let filename = text.rsplit('/').next().unwrap_or(text);
+        if filename.to_lowercase().contains(&pattern_lower) {
+            score += 25;
+        }
+
+        (score, matches)
+    }
+
+    fn is_boundary_char(ch: Option<&char>) -> bool {
+        matches!(ch, Some('/') | Some('_') | Some('-') | Some('.'))
+    }
+
+    /// Scan the working directory for `@`-mention candidates, skipping common
+    /// VCS/dependency/build directories (matching the desktop picker's own
+    /// hardcoded skip list, rather than real `.gitignore` parsing, so CLI and
+    /// desktop surface the same candidates).
+    fn scan_files_for_completion(&self, start_path: &Path, max_depth: usize) -> Vec<FileCandidate> {
+        const PRIORITY_DIRS: &[&str] = &["src", "components", "lib", "crates", "docs", "examples"];
+        const SKIP_DIRS: &[&str] = &[
+            ".git",
+            ".svn",
+            ".hg",
+            "node_modules",
+            "__pycache__",
+            ".vscode",
+            ".idea",
+            "target",
+            "dist",
+            "build",
+            ".cache",
+            ".npm",
+            ".yarn",
+        ];
+
+        let mut results = Vec::new();
+        self.scan_directory_recursive(
+            start_path,
+            "",
+            0,
+            max_depth,
+            PRIORITY_DIRS,
+            SKIP_DIRS,
+            &mut results,
+        );
+        results
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn scan_directory_recursive(
+        &self,
+        dir_path: &Path,
+        relative_path: &str,
+        depth: usize,
+        max_depth: usize,
+        priority_dirs: &[&str],
+        skip_dirs: &[&str],
+        results: &mut Vec<FileCandidate>,
+    ) {
+        if depth > max_depth {
+            return;
+        }
+
+        let Ok(entries) = std::fs::read_dir(dir_path) else {
+            return;
+        };
+
+        let mut items: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+        items.sort_by(|a, b| {
+            let a_name = a.file_name().to_string_lossy().to_string();
+            let b_name = b.file_name().to_string_lossy().to_string();
+            let a_priority = priority_dirs.contains(&a_name.as_str());
+            let b_priority = priority_dirs.contains(&b_name.as_str());
+            match (a_priority, b_priority) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a_name.cmp(&b_name),
+            }
+        });
+
+        let item_limit = match depth {
+            0 => 50,
+            1 => 40,
+            _ => 30,
+        };
+
+        for entry in items.into_iter().take(item_limit) {
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            if name.starts_with('.') || skip_dirs.contains(&name.as_str()) {
+                continue;
+            }
+
+            let full_path = entry.path();
+            let item_relative_path = if relative_path.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", relative_path, name)
+            };
+
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() {
+                    results.push(FileCandidate {
+                        relative_path: item_relative_path,
+                        is_directory: false,
+                    });
+                } else if metadata.is_dir() {
+                    results.push(FileCandidate {
+                        relative_path: item_relative_path.clone(),
+                        is_directory: true,
+                    });
+
+                    let should_recurse_deeper = depth < 4 || priority_dirs.contains(&name.as_str());
+                    if should_recurse_deeper {
+                        self.scan_directory_recursive(
+                            &full_path,
+                            &item_relative_path,
+                            depth + 1,
+                            max_depth,
+                            priority_dirs,
+                            skip_dirs,
+                            results,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Complete a file path after an `@` symbol using fuzzy matching, ranked
+    /// the same way the desktop `@`-mention picker ranks results.
+    fn complete_file_mention(&self, line: &str, _ctx: &Context) -> Result<(usize, Vec<Pair>)> {
+        let at_pos = match line.rfind('@') {
+            Some(pos) => pos,
+            None => return Ok((line.len(), vec![])),
+        };
+
+        let query = &line[at_pos + 1..];
+        if query.contains(' ') || query.contains('\n') {
+            return Ok((line.len(), vec![]));
+        }
+
+        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let candidates = self.scan_files_for_completion(&working_dir, 5);
+
+        if query.is_empty() {
+            let mut pairs: Vec<Pair> = candidates
+                .iter()
+                .take(20)
+                .map(|c| Pair {
+                    display: c.relative_path.clone(),
+                    replacement: c.relative_path.clone(),
+                })
+                .collect();
+            pairs.sort_by_key(|a| a.display.matches('/').count());
+            return Ok((at_pos + 1, pairs));
+        }
+
+        let mut scored_candidates: Vec<(FileCandidate, i32)> = candidates
+            .into_iter()
+            .filter_map(|candidate| {
+                let name_match = Self::fuzzy_match(query, &candidate.relative_path);
+                let filename_match = candidate
+                    .relative_path
+                    .rsplit('/')
+                    .next()
+                    .map(|name| Self::fuzzy_match(query, name))
+                    .unwrap_or((-1, vec![]));
+                let score = name_match.0.max(filename_match.0);
+                (score > 0).then_some((candidate, score))
+            })
+            .collect();
+
+        scored_candidates.sort_by(|a, b| b.1.cmp(&a.1));
+
+        let pairs: Vec<Pair> = scored_candidates
+            .into_iter()
+            .take(20)
+            .map(|(candidate, _score)| Pair {
+                display: candidate.relative_path.clone(),
+                replacement: candidate.relative_path,
+            })
+            .collect();
+
+        Ok((at_pos + 1, pairs))
     }
 
     /// Complete prompt names for the /prompt command
@@ -345,6 +600,18 @@ impl Completer for GooseCompleter {
         // If the cursor is not at the end of the line, don't try to complete
         if pos < line.len() {
             return Ok((pos, vec![]));
+        }
+
+        // Check for @ file mentions before slash commands, so "@foo /bar" still
+        // completes the file mention rather than being misread as a slash command.
+        if line.contains('@') {
+            let before_cursor = &line[..pos];
+            if let Some(at_pos) = before_cursor.rfind('@') {
+                let after_at = &before_cursor[at_pos + 1..];
+                if !after_at.contains(' ') && !after_at.contains('\n') {
+                    return self.complete_file_mention(line, ctx);
+                }
+            }
         }
 
         // If the line starts with '/', it might be a slash command
@@ -715,5 +982,223 @@ mod tests {
             .complete_argument_keys("/prompt nonexistent")
             .unwrap();
         assert_eq!(candidates.len(), 0);
+    }
+
+    #[test]
+    fn test_fuzzy_match_exact() {
+        let (score, matches) = GooseCompleter::fuzzy_match("readme", "README.md");
+        assert!(score > 0, "Exact match should have positive score");
+        assert_eq!(matches.len(), 6, "All 6 chars should match");
+    }
+
+    #[test]
+    fn test_fuzzy_match_partial() {
+        let (score, matches) = GooseCompleter::fuzzy_match("mai", "src/main.rs");
+        assert!(score > 0, "Partial match should have positive score");
+        assert_eq!(matches.len(), 3, "All 3 pattern chars should match");
+        assert!(matches.contains(&4)); // 'm' position in "src/main.rs"
+        assert!(matches.contains(&5)); // 'a' position
+        assert!(matches.contains(&6)); // 'i' position
+    }
+
+    #[test]
+    fn test_fuzzy_match_no_match() {
+        let (score, matches) = GooseCompleter::fuzzy_match("xyz", "main.rs");
+        assert_eq!(score, -1, "No match should return -1");
+        assert_eq!(matches.len(), 0, "No match should have empty matches");
+    }
+
+    #[test]
+    fn test_fuzzy_match_empty_pattern() {
+        let (score, matches) = GooseCompleter::fuzzy_match("", "main.rs");
+        assert_eq!(score, 0, "Empty pattern should return 0");
+        assert_eq!(matches.len(), 0, "Empty pattern should have no matches");
+    }
+
+    #[test]
+    fn test_fuzzy_match_filename_bonus() {
+        let score_filename = GooseCompleter::fuzzy_match("readme", "README.md").0;
+        let score_path = GooseCompleter::fuzzy_match("readme", "src/read_metadata.rs").0;
+        assert!(
+            score_filename > score_path,
+            "Filename match should score higher than path match (got {} vs {})",
+            score_filename,
+            score_path
+        );
+    }
+
+    #[test]
+    fn test_fuzzy_match_case_insensitive() {
+        let (score1, _) = GooseCompleter::fuzzy_match("READ", "readme.md");
+        let (score2, _) = GooseCompleter::fuzzy_match("read", "README.md");
+        assert!(score1 > 0, "Uppercase pattern should match lowercase text");
+        assert!(score2 > 0, "Lowercase pattern should match uppercase text");
+    }
+
+    #[test]
+    fn test_fuzzy_match_consecutive_bonus() {
+        let (score_consecutive, _) = GooseCompleter::fuzzy_match("mai", "main.rs");
+        let (score_scattered, _) = GooseCompleter::fuzzy_match("man", "main.rs");
+        assert!(
+            score_consecutive > 0,
+            "Consecutive match should have positive score"
+        );
+        assert!(
+            score_scattered > 0,
+            "Scattered match should have positive score"
+        );
+    }
+
+    #[test]
+    fn test_scan_files_basic() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+
+        let candidates = completer.scan_files_for_completion(Path::new("."), 5);
+        assert!(!candidates.is_empty(), "Should find some files");
+    }
+
+    #[test]
+    fn test_scan_files_respects_ignore_patterns() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+
+        let candidates = completer.scan_files_for_completion(Path::new("../.."), 5);
+
+        assert!(
+            !candidates
+                .iter()
+                .any(|c| c.relative_path.contains("node_modules")),
+            "Should skip node_modules"
+        );
+        assert!(
+            !candidates.iter().any(|c| c.relative_path.contains(".git/")),
+            "Should skip .git directories"
+        );
+    }
+
+    #[test]
+    fn test_scan_files_finds_nested_files() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+
+        let candidates = completer.scan_files_for_completion(Path::new("."), 5);
+
+        let has_files = candidates.iter().any(|c| !c.is_directory);
+        let has_dirs = candidates.iter().any(|c| c.is_directory);
+
+        assert!(has_files, "Should find some files");
+        assert!(has_dirs, "Should find some directories");
+    }
+
+    #[test]
+    fn test_complete_file_mention_basic() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let (pos, candidates) = completer.complete("@comp", 5, &ctx).unwrap();
+        assert_eq!(pos, 1, "Position should be right after @");
+        assert!(!candidates.is_empty(), "Should find some matches");
+    }
+
+    #[test]
+    fn test_complete_file_mention_empty_query() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let (pos, candidates) = completer.complete("@", 1, &ctx).unwrap();
+        assert_eq!(pos, 1);
+        assert!(
+            !candidates.is_empty(),
+            "Should return some files for empty query"
+        );
+        assert!(candidates.len() <= 20, "Should limit to 20 results");
+    }
+
+    #[test]
+    fn test_complete_file_mention_with_space() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let (_pos, candidates) = completer.complete("@README ", 8, &ctx).unwrap();
+        assert_eq!(candidates.len(), 0, "Should not complete after space");
+    }
+
+    #[test]
+    fn test_complete_file_mention_multiple_at() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let line = "Check @README.md and @comp";
+        let (pos, candidates) = completer.complete(line, line.len(), &ctx).unwrap();
+        assert_eq!(pos, 22, "Position should be after the last @");
+        assert!(!candidates.is_empty(), "Should find matches from last @");
+    }
+
+    #[test]
+    fn test_complete_file_mention_no_at_symbol() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let (_pos, candidates) = completer
+            .complete_file_mention("no at symbol here", &ctx)
+            .unwrap();
+        assert_eq!(candidates.len(), 0, "Should return no candidates without @");
+    }
+
+    #[test]
+    fn test_complete_file_mention_newline_after_at() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let (_pos, candidates) = completer.complete_file_mention("@foo\nbar", &ctx).unwrap();
+        assert_eq!(
+            candidates.len(),
+            0,
+            "Should not complete when @ is followed by a newline"
+        );
+    }
+
+    #[test]
+    fn test_fuzzy_match_ranks_results_by_score() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        let (_pos, candidates) = completer.complete("@complet", 8, &ctx).unwrap();
+        // completion.rs itself should be a strong match for "complet" in this crate.
+        assert!(
+            candidates.iter().any(|c| c.display.contains("completion")),
+            "Expected a completion.rs-like match, got: {:?}",
+            candidates.iter().map(|c| &c.display).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_at_mention_takes_priority_over_slash_command() {
+        let cache = create_test_cache();
+        let completer = GooseCompleter::new(cache);
+        let history = rustyline::history::DefaultHistory::new();
+        let ctx = Context::new(&history);
+
+        // A line starting with '/' but containing a later '@' should still
+        // resolve as a file mention, not a slash command.
+        let line = "/not-a-real-command @comp";
+        let (pos, candidates) = completer.complete(line, line.len(), &ctx).unwrap();
+        assert_eq!(pos, line.rfind('@').unwrap() + 1);
+        assert!(!candidates.is_empty(), "Should find file-mention matches");
     }
 }

@@ -109,6 +109,10 @@ These examples show two ways to reference other files:
 - **`@` syntax**: Automatically includes the file content in goose's immediate context
 - **Plain reference**: Points goose to files to review when needed (use for optional or very large files)
 
+:::tip CLI File Completion
+In the goose CLI, you can use `@` followed by Tab to trigger fuzzy file completion. For example, typing `@READ` and pressing Tab will suggest `README.md`. This makes it easy to reference files in your prompts. In the desktop app, file suggestions appear automatically as you type after `@`.
+:::
+
 ### Nested `.goosehints` Files
 
 goose supports hierarchical local hints in git repositories. When your session starts, goose loads the configured context files from your working directory up to the repository root. As goose reads or modifies files in nested subdirectories, it can also discover and load additional hint files from those directories automatically.

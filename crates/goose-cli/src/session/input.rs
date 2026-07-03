@@ -466,6 +466,8 @@ Navigation:
 Ctrl+C - Clear current line if text is entered, otherwise exit the session
 Ctrl+{newline_key} - Add a newline (configurable via GOOSE_CLI_NEWLINE_KEY)
 Up/Down arrows - Navigate through command history
+Tab - Complete slash commands, prompt names, arguments, and file paths after @ symbol
+    Example: Type '@READ' and press Tab to complete to '@README.md'
 GOOSE_CLI_BELL=true - Ring the terminal bell when goose finishes a turn or needs approval"
     )
 }
