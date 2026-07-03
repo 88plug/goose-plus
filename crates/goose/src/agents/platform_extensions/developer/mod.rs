@@ -1,4 +1,4 @@
-pub use goose_mcp::developer::{edit, image, shell, tree};
+pub use goose_mcp::developer::{edit, image, search, shell, tree};
 
 use crate::agents::extension::PlatformExtensionContext;
 use crate::agents::mcp_client::{Error, McpClientTrait};
@@ -13,6 +13,7 @@ use rmcp::model::{
     ServerCapabilities, Tool, ToolAnnotations,
 };
 use schemars::{schema_for, JsonSchema};
+use search::{SearchParams, SearchTool};
 use serde_json::Value;
 use shell::{shell_display_name, ShellOutput, ShellParams, ShellTool};
 use std::sync::Arc;
@@ -27,6 +28,7 @@ pub struct DeveloperClient {
     edit_tools: Arc<EditTools>,
     tree_tool: Arc<TreeTool>,
     image_tool: Arc<ImageTool>,
+    search_tool: Arc<SearchTool>,
 }
 
 fn developer_instructions() -> &'static str {
@@ -79,6 +81,7 @@ impl DeveloperClient {
             edit_tools: Arc::new(EditTools::new()),
             tree_tool: Arc::new(TreeTool::new()),
             image_tool: Arc::new(ImageTool::new()),
+            search_tool: Arc::new(SearchTool::new()),
         })
     }
 
@@ -169,6 +172,18 @@ impl DeveloperClient {
                 Some(true),
                 Some(false),
             )),
+            Tool::new(
+                "search".to_string(),
+                "Search Sourcegraph (code), GitHub Issues, and Reddit. Best: 2-3 keywords (\"redis timeout\" not \"how to fix redis timeout errors\").".to_string(),
+                Self::schema::<SearchParams>(),
+            )
+            .annotate(ToolAnnotations::from_raw(
+                Some("Search".to_string()),
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(true),
+            )),
         ]
     }
 }
@@ -250,6 +265,13 @@ impl McpClientTrait for DeveloperClient {
                 ))
                 .with_priority(0.0)])),
             },
+            "search" => match Self::parse_args::<SearchParams>(arguments) {
+                Ok(params) => Ok(self.search_tool.search(params).await),
+                Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
+                    "Error: {error}"
+                ))
+                .with_priority(0.0)])),
+            },
             _ => Ok(CallToolResult::error(vec![Content::text(format!(
                 "Error: Unknown tool: {name}"
             ))
@@ -277,7 +299,10 @@ mod tests {
             .map(|t| t.name.to_string())
             .collect();
 
-        assert_eq!(names, vec!["write", "edit", "shell", "tree", "read_image"]);
+        assert_eq!(
+            names,
+            vec!["write", "edit", "shell", "tree", "read_image", "search"]
+        );
     }
 
     fn test_context(data_dir: std::path::PathBuf) -> PlatformExtensionContext {

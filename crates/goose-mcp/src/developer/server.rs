@@ -12,6 +12,7 @@ use super::background_process::{
 };
 use super::edit::{EditTools, FileEditParams, FileWriteParams};
 use super::image::{ImageReadParams, ImageTool};
+use super::search::{SearchParams, SearchTool};
 use super::shell::{ShellParams, ShellTool};
 use super::tree::{TreeParams, TreeTool};
 
@@ -61,6 +62,7 @@ pub struct DeveloperServer {
     edit_tools: EditTools,
     tree_tool: TreeTool,
     image_tool: ImageTool,
+    search_tool: SearchTool,
 }
 
 #[tool_router(router = tool_router)]
@@ -72,6 +74,7 @@ impl DeveloperServer {
             edit_tools: EditTools::new(),
             tree_tool: TreeTool::new(),
             image_tool: ImageTool::new(),
+            search_tool: SearchTool::new(),
         }
     }
 
@@ -161,6 +164,17 @@ impl DeveloperServer {
         params: Parameters<ImageReadParams>,
     ) -> Result<CallToolResult, ErrorData> {
         Ok(self.image_tool.image_read_with_cwd(params.0, None).await)
+    }
+
+    #[tool(
+        name = "search",
+        description = "Search Sourcegraph (code), GitHub Issues, and Reddit. Best: 2-3 keywords (\"redis timeout\" not \"how to fix redis timeout errors\")."
+    )]
+    pub async fn search(
+        &self,
+        params: Parameters<SearchParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.search_tool.search(params.0).await)
     }
 }
 
