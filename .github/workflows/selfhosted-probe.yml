@@ -1,0 +1,36 @@
+name: Self-hosted runner probe
+
+# Manual diagnostic: reports what each registered self-hosted runner has
+# provisioned, so build legs can be retargeted onto them without a release
+# failing on a missing toolchain. Safe: dispatch-only, read-only commands.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-linux:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Probe Linux runner
+        run: |
+          echo "=== host ==="; uname -a; echo "nproc=$(nproc)"; free -h 2>/dev/null | head -2
+          echo "=== sudo (passwordless?) ==="; sudo -n true 2>&1 && echo "sudo: OK" || echo "sudo: NO"
+          echo "=== docker (manylinux container builds) ==="; docker version --format '{{.Server.Version}}' 2>&1 || echo "docker: MISSING"
+          echo "=== git / curl / zip ==="; for t in git curl zip unzip jq; do command -v $t >/dev/null && echo "$t: ok" || echo "$t: MISSING"; done
+          echo "=== rust / node already present? (hermit provides them too) ==="; (rustc --version 2>&1 || echo "rustc: not on PATH"); (node --version 2>&1 || echo "node: not on PATH")
+          echo "=== vulkan deps ==="; (command -v glslc && glslc --version 2>&1 | head -1) || echo "glslc: MISSING"
+
+  probe-macos:
+    if: github.repository == '88plug/goose-plus'
+    runs-on: [self-hosted, macOS, X64]
+    steps:
+      - name: Probe macOS runner
+        run: |
+          echo "=== host ==="; uname -a; echo "ncpu=$(sysctl -n hw.ncpu)"; echo "mem=$(sysctl -n hw.memsize)"
+          echo "=== arch ==="; arch; echo "=== xcode ==="; xcode-select -p 2>&1 || echo "xcode: MISSING"
+          echo "=== brew ==="; (brew --version 2>&1 | head -1) || echo "brew: MISSING"
+          echo "=== git / curl / zip ==="; for t in git curl zip unzip jq; do command -v $t >/dev/null && echo "$t: ok" || echo "$t: MISSING"; done
+          echo "=== rust / node already present? ==="; (rustc --version 2>&1 || echo "rustc: not on PATH"); (node --version 2>&1 || echo "node: not on PATH")
