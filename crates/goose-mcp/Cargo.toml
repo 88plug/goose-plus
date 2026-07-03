@@ -53,6 +53,8 @@ process-wrap = { version = "9", default-features = false, features = ["std", "pr
 tokio-stream = { workspace = true, features = ["io-util"] }
 which = { workspace = true }
 ignore = { workspace = true }
+regex = { workspace = true }
+uuid = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

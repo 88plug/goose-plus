@@ -19,6 +19,7 @@ pub mod mcp_server_runner;
 mod memory;
 #[cfg(target_os = "macos")]
 pub mod peekaboo;
+pub mod repomix;
 pub mod searxng;
 pub mod subprocess;
 pub mod tutorial;
@@ -29,6 +30,7 @@ pub use autovisualiser::AutoVisualiserRouter;
 pub use computercontroller::ComputerControllerServer;
 pub use developer::DeveloperServer;
 pub use memory::MemoryServer;
+pub use repomix::RepomixServer;
 pub use searxng::{SearchUpdate, SearxngServer};
 pub use tutorial::TutorialServer;
 
@@ -66,7 +68,21 @@ pub static BUILTIN_EXTENSIONS: Lazy<HashMap<&'static str, SpawnServerFn>> = Lazy
         builtin!(autovisualiser, AutoVisualiserRouter),
         builtin!(computercontroller, ComputerControllerServer),
         builtin!(memory, MemoryServer),
+        builtin!(repomix, RepomixServer),
         builtin!(searxng, SearxngServer),
         builtin!(tutorial, TutorialServer),
     ])
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repomix_is_registered_as_a_builtin_extension() {
+        assert!(
+            BUILTIN_EXTENSIONS.contains_key("repomix"),
+            "repomix must be registered in BUILTIN_EXTENSIONS to be loadable in-agent"
+        );
+    }
+}

@@ -5238,6 +5238,7 @@ dependencies = [
  "lopdf",
  "once_cell",
  "process-wrap",
+ "regex",
  "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",
@@ -5253,6 +5254,7 @@ dependencies = [
  "tracing-subscriber",
  "umya-spreadsheet",
  "url",
+ "uuid",
  "which 8.0.4",
 ]
 
