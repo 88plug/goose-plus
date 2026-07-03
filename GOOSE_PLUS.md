@@ -26,10 +26,11 @@ So goose-plus is two things at once:
 | **Agent interop (A2A)** | — | Serves an Agent Card + JSON-RPC/REST/WebSocket; bearer auth; incremental streaming; cancel. Calls remote A2A agents as tools |
 | **Event/Control bus (NATS)** | — | Opt-in publish firehose **and** bidirectional drive loop (fleet envelope: seq + instance + drop counter) |
 | **Standalone MCP servers** | builtin tools are in-agent only | `goose-plus mcp developer` serves the developer tools over stdio for any MCP client |
+| **Terminal UI** | Node/Ink shim (`node`/`npx` subprocess) | Native Rust TUI (ratatui + crossterm) talking to the agent directly over ACP |
 | **Dependencies** | Mixed freshness | Kept current via the `use-latest-version` pipeline; lockfiles consistent |
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports |
-| **Graveyard** | Open by definition | ~70 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~80 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -43,6 +44,8 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 - **A2A (Agent2Agent)** — goose speaks A2A both ways (Agent Card + JSON-RPC/REST/WS server with bearer auth, streaming, cancel; and an A2A client). See [`docs/a2a.md`](docs/a2a.md), [`AUTH.md`](AUTH.md).
 - **Native NATS bus** — opt-in publish + bidirectional drive. See [`docs/nats.md`](docs/nats.md).
 - **Standalone MCP** — `goose-plus mcp developer` exposes the builtin developer tools to any MCP host.
+- **Native Rust TUI** — `goose tui` is now a real terminal UI (ratatui + crossterm over ACP), replacing the old Node/Ink subprocess shim.
+- **Opt-in path confinement** — `GOOSE_CONFINEMENT=true` confines the developer extension's write/edit/analyze tools to the session's working directory, rejecting `..`-traversal and symlink escapes.
 
 ---
 
@@ -97,6 +100,15 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | Workspace-wide lint gate (all crates + prettier + feature code) | ◑ | ✓ |
 | Self-maintaining release + build provenance + upstream mirror | – | ✓ |
 | Portable Windows `.zip` / Linux `.AppImage` / Docker web UI | ◑ | ✓ |
+| Native Rust TUI (`goose tui`, ratatui + crossterm over ACP) | – | ✓ |
+| Opt-in filesystem path confinement for write/edit/analyze (`GOOSE_CONFINEMENT`) | – | ✓ |
+| Cursor as an ACP provider (`cursor-acp`) | – | ✓ |
+| `goose model` / `goose model list` CLI commands | – | ✓ |
+| Per-tool-call timing shown in interactive sessions | – | ✓ |
+| Inline `!<command>` shell passthrough in interactive sessions | – | ✓ |
+| `/copy` last-response-to-clipboard (OSC 52 fallback for SSH) | – | ✓ |
+| `GOOSE_CLI_BELL` opt-in terminal bell on turn completion | – | ✓ |
+| Hidden/internal extensions flagged instead of silently dropped (REST API) | – | ✓ |
 
 ---
 
@@ -106,26 +118,30 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 
 | Area | Upstream # | What goose-plus fixes |
 |---|---|---|
-| Providers/reasoning | #9397, #9675 | DeepSeek / openai-compatible `reasoning_content` no longer dropped |
-| Providers/streaming | #8503 | Final text segment after tool calls no longer lost |
-| Providers | #8321 | Unmapped `/v1/models` surfaced instead of silently dropped |
-| Providers | #9124, #7987 | Env-configurable retry + request timeout; sane 429/Retry-After |
-| Providers | #9489 | Ollama keep-alive keeps the model warm |
-| Providers | #9476 | Databricks serving-endpoints pagination — all models surface |
-| Providers | #8512 | Context-limit floor stops Context-Length-Exceeded on fresh install |
-| Providers | #2564, #9333 | Codex `v1/responses` handling; DeepSeek V4 |
-| Providers | #6293, #1863 | Gemini empty-reply-after-tool-use; fetch-400 |
-| Providers | #6573, #8495 | devstral context limits; `OPENAI_CUSTOM_HEADERS` with commas |
-| MCP | #7063 | MCP auto-reconnect on dropped transport |
-| Agent | #9082, #9640 | No-progress loop guard stops runaway turns |
-| Agent | #8777 | Unix login-shell process-group isolation |
-| Agent | #9398 | `detect_image_path` handles shell escapes |
-| Agent | #3085 | `GOOSE.md` recognized as a project context file |
-| CLI | #8059 | Bracketed paste — pasting no longer auto-executes |
-| Server | #9358 | `GET /sessions/{id}` message pagination |
-| Desktop | #9342, #8997 | Chat history not loading; reply-render delay under reduced-motion |
+| Providers/reasoning | [#9397](https://github.com/aaif-goose/goose/issues/9397), [#9675](https://github.com/aaif-goose/goose/issues/9675) | DeepSeek / openai-compatible `reasoning_content` no longer dropped |
+| Providers/streaming | [#8503](https://github.com/aaif-goose/goose/issues/8503) | Final text segment after tool calls no longer lost |
+| Providers | [#8321](https://github.com/aaif-goose/goose/issues/8321) | Unmapped `/v1/models` surfaced instead of silently dropped |
+| Providers | [#9124](https://github.com/aaif-goose/goose/issues/9124), [#7987](https://github.com/aaif-goose/goose/issues/7987) | Env-configurable retry + request timeout; sane 429/Retry-After |
+| Providers | [#9489](https://github.com/aaif-goose/goose/issues/9489) | Ollama keep-alive keeps the model warm |
+| Providers | [#9476](https://github.com/aaif-goose/goose/issues/9476) | Databricks serving-endpoints pagination — all models surface |
+| Providers | [#8512](https://github.com/aaif-goose/goose/issues/8512) | Context-limit floor stops Context-Length-Exceeded on fresh install |
+| Providers | [#2564](https://github.com/aaif-goose/goose/issues/2564), [#9333](https://github.com/aaif-goose/goose/issues/9333) | Codex `v1/responses` handling; DeepSeek V4 |
+| Providers | [#6293](https://github.com/aaif-goose/goose/issues/6293), [#1863](https://github.com/aaif-goose/goose/issues/1863) | Gemini empty-reply-after-tool-use; fetch-400 |
+| Providers | [#6573](https://github.com/aaif-goose/goose/issues/6573), [#8495](https://github.com/aaif-goose/goose/issues/8495) | devstral context limits; `OPENAI_CUSTOM_HEADERS` with commas |
+| MCP | [#7063](https://github.com/aaif-goose/goose/issues/7063) | MCP auto-reconnect on dropped transport |
+| Agent | [#9082](https://github.com/aaif-goose/goose/issues/9082), [#9640](https://github.com/aaif-goose/goose/issues/9640) | No-progress loop guard stops runaway turns |
+| Agent | [#8777](https://github.com/aaif-goose/goose/issues/8777) | Unix login-shell process-group isolation |
+| Agent | [#9398](https://github.com/aaif-goose/goose/issues/9398) | `detect_image_path` handles shell escapes |
+| Agent | [#3085](https://github.com/aaif-goose/goose/issues/3085) | `GOOSE.md` recognized as a project context file |
+| CLI | [#8059](https://github.com/aaif-goose/goose/issues/8059) | Bracketed paste — pasting no longer auto-executes |
+| CLI | [#10025](https://github.com/aaif-goose/goose/issues/10025), [#10056](https://github.com/aaif-goose/goose/issues/10056), [#10104](https://github.com/aaif-goose/goose/issues/10104) | Terminal cursor left hidden after Ctrl+C during `configure` — submitted/closed unmerged three times upstream, never landed |
+| CLI | [#7338](https://github.com/aaif-goose/goose/issues/7338) | WezTerm: arrow keys silently fail in `configure` menus (DECCKM application-cursor-key mode never reset) |
+| Providers | [#10179](https://github.com/aaif-goose/goose/issues/10179) | `claude-sonnet-5` missing from the canonical registry — fell back to 128k context instead of its real 1M window |
+| Developer tools | [#7587](https://github.com/aaif-goose/goose/issues/7587) | Write/edit/analyze path-target ambiguity — symlink and `..`-traversal escape from the workspace (opt-in `GOOSE_CONFINEMENT`) |
+| Server | [#9358](https://github.com/aaif-goose/goose/issues/9358) | `GET /sessions/{id}` message pagination |
+| Desktop | [#9342](https://github.com/aaif-goose/goose/issues/9342), [#8997](https://github.com/aaif-goose/goose/issues/8997) | Chat history not loading; reply-render delay under reduced-motion |
 
-*(Plus fixes proven in this fork without an upstream ticket: `GOOSE_A2A_ENABLE=1` / `GOOSE_NATS_DRIVE=1` truthy env flags, a guard against silent declarative-provider drop, and the SuperGrok 426/403 endpoint + credential fixes.)*
+*(Plus fixes proven in this fork without an upstream ticket: `GOOSE_A2A_ENABLE=1` / `GOOSE_NATS_DRIVE=1` truthy env flags, a guard against silent declarative-provider drop, the SuperGrok 426/403 endpoint + credential fixes, Mistral's OpenAI-compatible endpoint rejecting `stream_options`, bare `{"error": {...}}` SSE events (e.g. Gemini via Databricks) silently swallowed instead of surfaced, fast-model utility calls (compaction/session-naming) 400ing from inherited thinking-effort budget overflow, a panic on LLM-authored recipes with an empty `{}` response schema, session schema migration 7 erroring under concurrent-process races, a `.goosehints` symlink bypassing the import-boundary read restriction, HuggingFace `rfilename` path-traversal writing cached model files outside the intended cache dir, and the packaged npm `goose` binary shipping non-executable when resolved by path instead of through `node_modules/.bin`.)*
 
 ## Community-feature matrix (requests delivered)
 
@@ -133,21 +149,28 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 
 | Area | Upstream # | Feature |
 |---|---|---|
-| Agent | #7808 | Recipe-level tool blocking (denylist) |
-| Agent | #8183 | Graceful unknown-tool calls with suggestions |
-| Desktop | #6926 | Folders for organizing chats |
-| Desktop | #9080 | Model favorites |
-| Desktop | #9391 | Close-to-tray |
-| Desktop | #7554 | Per-window pinned certificates |
-| Desktop | #9143 | Same-window link navigation |
-| Desktop | #1505 | In-chat find filter |
-| Desktop | #8288 | Accessibility font scaling |
-| Desktop | #9390 | Syntax-highlighted diffs |
-| Desktop | #7965 | Delete apps |
-| Desktop | #8140 | Configurable sidebar session limit |
-| Desktop | #6472 | MCP Apps `ui/update-model-context` |
+| Agent | [#7808](https://github.com/aaif-goose/goose/issues/7808) | Recipe-level tool blocking (denylist) |
+| Agent | [#8183](https://github.com/aaif-goose/goose/issues/8183) | Graceful unknown-tool calls with suggestions |
+| Desktop | [#6926](https://github.com/aaif-goose/goose/issues/6926) | Folders for organizing chats |
+| Desktop | [#9080](https://github.com/aaif-goose/goose/issues/9080) | Model favorites |
+| Desktop | [#9391](https://github.com/aaif-goose/goose/issues/9391) | Close-to-tray |
+| Desktop | [#7554](https://github.com/aaif-goose/goose/issues/7554) | Per-window pinned certificates |
+| Desktop | [#9143](https://github.com/aaif-goose/goose/issues/9143) | Same-window link navigation |
+| Desktop | [#1505](https://github.com/aaif-goose/goose/issues/1505) | In-chat find filter |
+| Desktop | [#8288](https://github.com/aaif-goose/goose/issues/8288) | Accessibility font scaling |
+| Desktop | [#9390](https://github.com/aaif-goose/goose/issues/9390) | Syntax-highlighted diffs |
+| Desktop | [#7965](https://github.com/aaif-goose/goose/issues/7965) | Delete apps |
+| Desktop | [#8140](https://github.com/aaif-goose/goose/issues/8140) | Configurable sidebar session limit |
+| Desktop | [#6472](https://github.com/aaif-goose/goose/issues/6472) | MCP Apps `ui/update-model-context` |
+| CLI | [#10177](https://github.com/aaif-goose/goose/issues/10177) | Inline `!<command>` shell passthrough, output folded into conversation context |
+| CLI | [#10181](https://github.com/aaif-goose/goose/issues/10181) | `/copy` — copy last assistant response to clipboard (OSC 52 fallback for SSH) |
+| CLI | [#10182](https://github.com/aaif-goose/goose/issues/10182) | `GOOSE_CLI_BELL` — opt-in terminal bell on turn completion / approval prompts |
+| CLI | [#10173](https://github.com/aaif-goose/goose/issues/10173) | `/help` + tab-completion synced to the real builtin command registry |
+| Providers | [#8391](https://github.com/aaif-goose/goose/issues/8391) | Cursor as an ACP provider (`cursor-acp`) |
 
-> The `#` numbers reference the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back.
+*(Plus features ported without an upstream ticket: the native Rust TUI replacing the Node/Ink shim, `goose model` / `goose model list` CLI commands, per-tool-call timing in interactive sessions, hidden/internal extensions flagged instead of dropped from the REST API, and recipe-embedded extension config falling back to the user's working global config on load failure.)*
+
+> The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back.
 
 ---
 
@@ -181,7 +204,7 @@ If `origin` points at the source instead, `port-to-upstream.sh` and `just sync-u
 
 ### Pick → port → PR (one example)
 
-1. **Pick** an item from a matrix above — say the Nebius provider, or bug #8503 (lost final text segment).
+1. **Pick** an item from a matrix above — say the Nebius provider, or bug [#8503](https://github.com/aaif-goose/goose/issues/8503) (lost final text segment).
 2. **Branch a clean port** from the upstream mirror:
    ```bash
    git fetch upstream
@@ -200,7 +223,7 @@ If `origin` points at the source instead, `port-to-upstream.sh` and `just sync-u
 - Branching from `main` keeps the diff **upstream-shaped** (no fork noise) — exactly what reviewers want.
 - Bug/feature rows that reused a closed upstream PR are **80% done** — you're reviving real prior work the maintainers can recognize.
 
-Good first ports: single-file provider fixes (#8495, #6573), self-contained features (#1505 find filter, #9080 favorites), or a whole new provider (Nebius).
+Good first ports: single-file provider fixes ([#8495](https://github.com/aaif-goose/goose/issues/8495), [#6573](https://github.com/aaif-goose/goose/issues/6573)), self-contained features ([#1505](https://github.com/aaif-goose/goose/issues/1505) find filter, [#9080](https://github.com/aaif-goose/goose/issues/9080) favorites), or a whole new provider (Nebius).
 
 ---
 
