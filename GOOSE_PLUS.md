@@ -34,7 +34,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~96 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~97 closed/rejected issues & PRs implemented and verified |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -170,6 +170,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Providers | [#9993](https://github.com/aaif-goose/goose/issues/9993) | Responses-API stream parser crashed on a malformed known event mid-stream instead of skipping it |
 | Desktop | [#9881](https://github.com/aaif-goose/goose/issues/9881) | Extension toggle in Settings snapped back to On while disabling |
 | Providers | [#10032](https://github.com/aaif-goose/goose/issues/10032) | `GOOSE_CONTEXT_LIMIT` clobbered a known per-model context window instead of acting as a fallback |
+| Developer tools | [#5444](https://github.com/aaif-goose/goose/issues/5444) | Analyze tool's `follow_depth`/`max_depth` params rejected a string-typed value, only accepting a plain number |
 | Agent | [#8496](https://github.com/aaif-goose/goose/issues/8496) | Delegated agents treated `inherit` as a literal provider/model instead of falling back to the parent session's config |
 | Recipes | [#5280](https://github.com/aaif-goose/goose/issues/5280) | Recipe parse failures now show the raw recipe content, not just the parser error |
 | CLI | [#6224](https://github.com/aaif-goose/goose/issues/6224) | PowerShell `term init` output had leftover double braces — invalid PowerShell syntax |
