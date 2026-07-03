@@ -16,13 +16,29 @@ use rmcp::model::{
     CallToolResult, Content, Implementation, InitializeResult, JsonObject, ListToolsResult,
     ServerCapabilities, Tool, ToolAnnotations,
 };
-use schemars::{schema_for, JsonSchema};
+use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
 
 pub static EXTENSION_NAME: &str = "analyze";
+
+fn deserialize_string_or_u32<'de, D>(d: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StrOrU32 {
+        S(String),
+        N(u32),
+    }
+    match StrOrU32::deserialize(d)? {
+        StrOrU32::S(s) => s.parse().map_err(serde::de::Error::custom),
+        StrOrU32::N(n) => Ok(n),
+    }
+}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct AnalyzeParams {
@@ -32,10 +48,16 @@ pub struct AnalyzeParams {
     #[serde(default)]
     pub focus: Option<String>,
     /// Directory recursion depth limit (default 3, 0=unlimited). Also limits focus scan depth.
-    #[serde(default = "default_max_depth")]
+    #[serde(
+        default = "default_max_depth",
+        deserialize_with = "deserialize_string_or_u32"
+    )]
     pub max_depth: u32,
     /// Call graph traversal depth (default 2, 0=definitions only)
-    #[serde(default = "default_follow_depth")]
+    #[serde(
+        default = "default_follow_depth",
+        deserialize_with = "deserialize_string_or_u32"
+    )]
     pub follow_depth: u32,
     /// Allow large outputs without size warning
     #[serde(default)]
@@ -93,11 +115,10 @@ impl AnalyzeClient {
 
     fn analyze(&self, params: AnalyzeParams, path: PathBuf) -> CallToolResult {
         if !path.exists() {
-            return CallToolResult::error(vec![Content::text(format!(
-                "Error: path not found: {}",
-                path.display()
-            ))
-            .with_priority(0.0)]);
+            return CallToolResult::error(vec![
+                Content::text(format!("Error: path not found: {}", path.display()))
+                    .with_priority(0.0),
+            ]);
         }
 
         if let Some(ref focus) = params.focus {
@@ -154,11 +175,13 @@ impl AnalyzeClient {
                 let output = format::format_semantic(&analysis, root);
                 Self::finish(output, force)
             }
-            None => CallToolResult::error(vec![Content::text(format!(
-                "Error: could not analyze {} (unsupported language or binary file)",
-                path.display()
-            ))
-            .with_priority(0.0)]),
+            None => CallToolResult::error(vec![
+                Content::text(format!(
+                    "Error: could not analyze {} (unsupported language or binary file)",
+                    path.display()
+                ))
+                .with_priority(0.0),
+            ]),
         }
     }
 
@@ -246,21 +269,19 @@ impl McpClientTrait for AnalyzeClient {
                         Ok(p) => p,
                         Err(msg) => {
                             return Ok(CallToolResult::error(vec![
-                                Content::text(msg).with_priority(0.0)
-                            ]))
+                                Content::text(msg).with_priority(0.0),
+                            ]));
                         }
                     };
                     Ok(self.analyze(params, path))
                 }
-                Err(error) => Ok(CallToolResult::error(vec![Content::text(format!(
-                    "Error: {error}"
-                ))
-                .with_priority(0.0)])),
+                Err(error) => Ok(CallToolResult::error(vec![
+                    Content::text(format!("Error: {error}")).with_priority(0.0),
+                ])),
             },
-            _ => Ok(CallToolResult::error(vec![Content::text(format!(
-                "Error: Unknown tool: {name}"
-            ))
-            .with_priority(0.0)])),
+            _ => Ok(CallToolResult::error(vec![
+                Content::text(format!("Error: Unknown tool: {name}")).with_priority(0.0),
+            ])),
         }
     }
 
@@ -443,5 +464,23 @@ fn helper() { validate(0); }
         let big = "x".repeat(60_000);
         assert!(format::check_size(&big, false).is_err());
         assert!(format::check_size(&big, true).is_ok());
+    }
+
+    #[test]
+    fn analyze_params_accepts_depth_as_string_or_number() {
+        let from_numbers: AnalyzeParams =
+            serde_json::from_str(r#"{"path": ".", "max_depth": 5, "follow_depth": 1}"#).unwrap();
+        assert_eq!(from_numbers.max_depth, 5);
+        assert_eq!(from_numbers.follow_depth, 1);
+
+        let from_strings: AnalyzeParams =
+            serde_json::from_str(r#"{"path": ".", "max_depth": "5", "follow_depth": "1"}"#)
+                .unwrap();
+        assert_eq!(from_strings.max_depth, 5);
+        assert_eq!(from_strings.follow_depth, 1);
+
+        let defaults: AnalyzeParams = serde_json::from_str(r#"{"path": "."}"#).unwrap();
+        assert_eq!(defaults.max_depth, default_max_depth());
+        assert_eq!(defaults.follow_depth, default_follow_depth());
     }
 }
