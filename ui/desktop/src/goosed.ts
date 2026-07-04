@@ -349,6 +349,12 @@ export const startGoosed = async (options: StartGoosedOptions): Promise<GoosedRe
   }
 
   if (useSandbox) {
+    logger.error(
+      '[sandbox] GOOSE_SANDBOX=true — starting an EXPERIMENTAL, NOT-YET-INDEPENDENTLY-VERIFIED ' +
+        'network sandbox. Do not rely on it as your only protection against untrusted agent ' +
+        'activity until someone has confirmed on real macOS hardware that the seatbelt profile ' +
+        'actually blocks what it claims to.'
+    );
     const proxy = await ensureProxy();
     const sandboxSpawn = buildSandboxSpawn(goosedPath, spawnArgs, proxy.port);
     spawnCommand = sandboxSpawn.command;
