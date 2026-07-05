@@ -1607,21 +1607,16 @@ impl SummonClient {
             crate::model_config::model_config_from_user_config(provider_name, "default")
         })?;
 
-        let override_model = params
-            .model
-            .clone()
+        let override_model = Config::global()
+            .get_param::<String>("GOOSE_SUBAGENT_MODEL")
+            .ok()
             .filter(|m| !is_inherit(m))
+            .or_else(|| params.model.clone().filter(|m| !is_inherit(m)))
             .or_else(|| {
                 recipe
                     .settings
                     .as_ref()
                     .and_then(|s| s.goose_model.clone())
-                    .filter(|m| !is_inherit(m))
-            })
-            .or_else(|| {
-                Config::global()
-                    .get_param::<String>("GOOSE_SUBAGENT_MODEL")
-                    .ok()
                     .filter(|m| !is_inherit(m))
             });
 
@@ -1665,21 +1660,16 @@ impl SummonClient {
         session: &crate::session::Session,
         extensions: &[crate::config::ExtensionConfig],
     ) -> Result<Arc<dyn crate::providers::base::Provider>, anyhow::Error> {
-        let provider_name = params
-            .provider
-            .clone()
+        let provider_name = Config::global()
+            .get_param::<String>("GOOSE_SUBAGENT_PROVIDER")
+            .ok()
             .filter(|p| !is_inherit(p))
+            .or_else(|| params.provider.clone().filter(|p| !is_inherit(p)))
             .or_else(|| {
                 recipe
                     .settings
                     .as_ref()
                     .and_then(|s| s.goose_provider.clone())
-                    .filter(|p| !is_inherit(p))
-            })
-            .or_else(|| {
-                Config::global()
-                    .get_param::<String>("GOOSE_SUBAGENT_PROVIDER")
-                    .ok()
                     .filter(|p| !is_inherit(p))
             })
             .or_else(|| session.provider_name.clone())
@@ -2659,6 +2649,66 @@ You review code."#;
                 .as_ref()
                 .and_then(|p| p.get("anthropic_beta")),
             Some(&serde_json::json!("custom-beta-header")),
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_model_config_env_var_overrides_params_model() {
+        let _env = env_lock::lock_env([
+            ("GOOSE_CONTEXT_LIMIT", None::<&str>),
+            ("GOOSE_MAX_TOKENS", None::<&str>),
+            ("GOOSE_SUBAGENT_MODEL", Some(OVERRIDE_MODEL)),
+        ]);
+
+        let client = SummonClient::new(create_test_context()).unwrap();
+        let params = DelegateParams {
+            model: Some("params-model".to_string()),
+            ..Default::default()
+        };
+        let result = client
+            .resolve_model_config(
+                &params,
+                &empty_recipe(),
+                &session_with(parent_config()),
+                PROVIDER,
+            )
+            .expect("resolve_model_config");
+        assert_eq!(
+            result.model_name, OVERRIDE_MODEL,
+            "GOOSE_SUBAGENT_MODEL must take priority over params.model"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_model_config_env_var_overrides_recipe_model() {
+        let _env = env_lock::lock_env([
+            ("GOOSE_CONTEXT_LIMIT", None::<&str>),
+            ("GOOSE_MAX_TOKENS", None::<&str>),
+            ("GOOSE_SUBAGENT_MODEL", Some(OVERRIDE_MODEL)),
+        ]);
+
+        let client = SummonClient::new(create_test_context()).unwrap();
+        let mut recipe = empty_recipe();
+        recipe.settings = Some(crate::recipe::Settings {
+            goose_provider: None,
+            goose_model: Some("recipe-model".to_string()),
+            temperature: None,
+            max_turns: None,
+            request_params: None,
+        });
+        let result = client
+            .resolve_model_config(
+                &DelegateParams::default(),
+                &recipe,
+                &session_with(parent_config()),
+                PROVIDER,
+            )
+            .expect("resolve_model_config");
+        assert_eq!(
+            result.model_name, OVERRIDE_MODEL,
+            "GOOSE_SUBAGENT_MODEL must take priority over recipe settings"
         );
     }
 
