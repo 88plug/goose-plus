@@ -226,8 +226,19 @@ pub fn format_messages_with_options(
                 MessageContent::Thinking(t) => {
                     reasoning_text.push_str(&t.thinking);
                 }
-                MessageContent::RedactedThinking(_) => {
-                    continue;
+                MessageContent::RedactedThinking(redacted) => {
+                    // The underlying content is opaque, but providers like DeepSeek
+                    // still require a non-empty reasoning_content on tool-call
+                    // messages that followed thinking. Emit a placeholder so it
+                    // isn't silently dropped (see #9434). The placeholder carries a
+                    // fingerprint of the redacted data so that split messages of one
+                    // turn (cloned data) stay identical — the exact-match signal
+                    // merge_split_tool_call_messages relies on — while distinct
+                    // turns produce different placeholders and are never merged.
+                    let mut hasher = std::hash::DefaultHasher::new();
+                    std::hash::Hash::hash(&redacted.data, &mut hasher);
+                    let fingerprint = std::hash::Hasher::finish(&hasher);
+                    reasoning_text.push_str(&format!("[redacted:{fingerprint:016x}]"));
                 }
                 MessageContent::SystemNotification(_) => {
                     continue;
@@ -439,8 +450,11 @@ pub fn format_messages_with_options(
 /// This function merges them back into one assistant message with all tool_calls,
 /// followed by the tool results — the standard OpenAI format.
 ///
-/// Only merges when `reasoning_content` is present and matches, since that is
-/// the only signal that messages were split from the same turn.
+/// Only merges when `reasoning_content` is present and matches exactly, since
+/// that is the only signal that messages were split from the same turn: the
+/// agent clones the SAME reasoning onto every split message of a turn, while a
+/// genuine follow-up turn (same asst/tool/asst shape) carries fresh, different
+/// reasoning and must not be merged across the tool result it has already seen.
 fn merge_split_tool_call_messages(messages: &mut Vec<Value>) {
     let mut i = 0;
     while i < messages.len() {
@@ -3408,6 +3422,241 @@ data: [DONE]"#;
         assert_eq!(messages[2]["role"], "user");
         assert_eq!(messages[2]["content"], "what happened?");
         assert_eq!(messages[3]["tool_calls"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_merge_preserves_turn_boundary_with_fresh_reasoning() {
+        // Two REAL sequential turns look identical in shape to one split turn:
+        // asst(tool_call) / tool / asst(tool_call). The distinguishing signal
+        // is the reasoning text — agent.rs clones the SAME reasoning onto every
+        // split message of a turn, while a genuine second turn carries fresh,
+        // different reasoning. Differing reasoning must therefore NOT merge;
+        // merging would reorder history so the model appears to have requested
+        // both tools before seeing the first result.
+        let mut messages = vec![
+            json!({"role": "assistant", "tool_calls": [{"id": "tc1", "type": "function", "function": {"name": "read", "arguments": "{}"}}], "reasoning_content": "turn 1 reasoning"}),
+            json!({"role": "tool", "tool_call_id": "tc1", "content": "result1"}),
+            json!({"role": "assistant", "tool_calls": [{"id": "tc2", "type": "function", "function": {"name": "write", "arguments": "{}"}}], "reasoning_content": "turn 2 reasoning after seeing result1"}),
+            json!({"role": "tool", "tool_call_id": "tc2", "content": "result2"}),
+        ];
+        merge_split_tool_call_messages(&mut messages);
+
+        assert_eq!(messages.len(), 4, "distinct turns must not be merged");
+        assert_eq!(messages[0]["tool_calls"].as_array().unwrap().len(), 1);
+        assert_eq!(messages[2]["tool_calls"].as_array().unwrap().len(), 1);
+        assert_eq!(messages[0]["reasoning_content"], "turn 1 reasoning");
+        assert_eq!(
+            messages[2]["reasoning_content"],
+            "turn 2 reasoning after seeing result1"
+        );
+    }
+
+    #[test]
+    fn test_sequential_tool_calls_with_fresh_reasoning_not_merged() -> anyhow::Result<()> {
+        // End-to-end variant of the turn-boundary guarantee: a second turn that
+        // carries fresh thinking (the DeepSeek/Kimi common case) must stay a
+        // separate assistant message after formatting.
+        let tool_result1 = Message::user().with_tool_response(
+            "tool1",
+            Ok(rmcp::model::CallToolResult::success(vec![
+                rmcp::model::Content::text("result1"),
+            ])),
+        );
+        let messages = vec![
+            Message::assistant()
+                .with_content(MessageContent::thinking("turn1_reasoning", ""))
+                .with_tool_request(
+                    "tool1",
+                    Ok(CallToolRequestParams::new("tool_a").with_arguments(object!({}))),
+                ),
+            tool_result1,
+            Message::assistant()
+                .with_content(MessageContent::thinking("turn2_fresh_reasoning", ""))
+                .with_tool_request(
+                    "tool2",
+                    Ok(CallToolRequestParams::new("tool_b").with_arguments(object!({}))),
+                ),
+        ];
+
+        let spec = format_messages_with_options(
+            &messages,
+            &ImageFormat::OpenAi,
+            OpenAiFormatOptions {
+                preserve_thinking_context: true,
+            },
+        );
+
+        let assistant_msgs: Vec<_> = spec
+            .iter()
+            .filter(|m| m.get("role") == Some(&json!("assistant")))
+            .collect();
+        assert_eq!(
+            assistant_msgs.len(),
+            2,
+            "turns with fresh reasoning must not be merged"
+        );
+        assert_eq!(assistant_msgs[0]["reasoning_content"], "turn1_reasoning");
+        assert_eq!(
+            assistant_msgs[1]["reasoning_content"],
+            "turn2_fresh_reasoning"
+        );
+
+        let tool_idx = spec
+            .iter()
+            .position(|m| m.get("role") == Some(&json!("tool")))
+            .expect("tool result must be present");
+        let asst2_idx = spec
+            .iter()
+            .rposition(|m| m.get("role") == Some(&json!("assistant")))
+            .unwrap();
+        assert!(
+            tool_idx < asst2_idx,
+            "turn 2's tool call must come after turn 1's result"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_messages_redacted_thinking_still_sets_reasoning_content() -> anyhow::Result<()> {
+        // A RedactedThinking-only assistant message (signature verification /
+        // content filtering flows) followed by a tool call must still produce a
+        // non-empty reasoning_content, or DeepSeek rejects the request with 400
+        // (see #9434, pathway 1).
+        let messages = vec![Message::assistant()
+            .with_content(MessageContent::redacted_thinking("opaque-data"))
+            .with_tool_request(
+                "tool1",
+                Ok(CallToolRequestParams::new("tool_a").with_arguments(object!({}))),
+            )];
+
+        let spec = format_messages_with_options(
+            &messages,
+            &ImageFormat::OpenAi,
+            OpenAiFormatOptions {
+                preserve_thinking_context: true,
+            },
+        );
+
+        let assistant_msg = spec
+            .iter()
+            .find(|m| m.get("role") == Some(&json!("assistant")))
+            .expect("assistant message must be present");
+        assert!(
+            assistant_msg
+                .get("reasoning_content")
+                .is_some_and(|v| v.as_str().is_some_and(|s| !s.is_empty())),
+            "expected non-empty reasoning_content, got {:?}",
+            assistant_msg.get("reasoning_content")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_messages_redacted_thinking_split_tool_calls_still_merge() -> anyhow::Result<()> {
+        // Interplay of the two fixes: a redacted-thinking turn split into two
+        // tool calls produces the identical "[redacted]" placeholder on each
+        // split message, so the exact-match merge must reunite them into one
+        // assistant message.
+        let tool_result1 = Message::user().with_tool_response(
+            "tool1",
+            Ok(rmcp::model::CallToolResult::success(vec![
+                rmcp::model::Content::text("result1"),
+            ])),
+        );
+        let messages = vec![
+            Message::assistant()
+                .with_content(MessageContent::redacted_thinking("opaque-data"))
+                .with_tool_request(
+                    "tool1",
+                    Ok(CallToolRequestParams::new("tool_a").with_arguments(object!({}))),
+                ),
+            tool_result1,
+            Message::assistant()
+                .with_content(MessageContent::redacted_thinking("opaque-data"))
+                .with_tool_request(
+                    "tool2",
+                    Ok(CallToolRequestParams::new("tool_b").with_arguments(object!({}))),
+                ),
+        ];
+
+        let spec = format_messages_with_options(
+            &messages,
+            &ImageFormat::OpenAi,
+            OpenAiFormatOptions {
+                preserve_thinking_context: true,
+            },
+        );
+
+        let assistant_msgs: Vec<_> = spec
+            .iter()
+            .filter(|m| m.get("role") == Some(&json!("assistant")))
+            .collect();
+        assert_eq!(assistant_msgs.len(), 1);
+        assert!(
+            assistant_msgs[0]["reasoning_content"]
+                .as_str()
+                .is_some_and(|s| s.starts_with("[redacted")),
+            "expected redacted placeholder, got {:?}",
+            assistant_msgs[0]["reasoning_content"]
+        );
+        assert_eq!(assistant_msgs[0]["tool_calls"].as_array().unwrap().len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_messages_distinct_redacted_turns_not_merged() -> anyhow::Result<()> {
+        // Two genuine turns whose thinking is redacted must NOT merge: the
+        // placeholder carries a fingerprint of the redacted data, so different
+        // turns (different data) produce different reasoning_content while
+        // split messages (cloned data) still match exactly.
+        let tool_result1 = Message::user().with_tool_response(
+            "tool1",
+            Ok(rmcp::model::CallToolResult::success(vec![
+                rmcp::model::Content::text("result1"),
+            ])),
+        );
+        let messages = vec![
+            Message::assistant()
+                .with_content(MessageContent::redacted_thinking("turn-one-data"))
+                .with_tool_request(
+                    "tool1",
+                    Ok(CallToolRequestParams::new("tool_a").with_arguments(object!({}))),
+                ),
+            tool_result1,
+            Message::assistant()
+                .with_content(MessageContent::redacted_thinking("turn-two-data"))
+                .with_tool_request(
+                    "tool2",
+                    Ok(CallToolRequestParams::new("tool_b").with_arguments(object!({}))),
+                ),
+        ];
+
+        let spec = format_messages_with_options(
+            &messages,
+            &ImageFormat::OpenAi,
+            OpenAiFormatOptions {
+                preserve_thinking_context: true,
+            },
+        );
+
+        let assistant_msgs: Vec<_> = spec
+            .iter()
+            .filter(|m| m.get("role") == Some(&json!("assistant")))
+            .collect();
+        assert_eq!(
+            assistant_msgs.len(),
+            2,
+            "distinct redacted turns must not be merged"
+        );
+        assert_ne!(
+            assistant_msgs[0]["reasoning_content"], assistant_msgs[1]["reasoning_content"],
+            "different redacted data must produce different placeholders"
+        );
+
+        Ok(())
     }
 
     #[test]
