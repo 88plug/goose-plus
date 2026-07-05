@@ -2329,8 +2329,20 @@ impl Agent {
                                 // Kimi/DeepSeek require reasoning_content on assistant tool call messages.
                                 // Use thinking accumulated across all streamed partials, since the final
                                 // tool_call chunk often carries no Thinking of its own (#9397, #9675).
+                                //
+                                // Thinking belongs on the tool-call messages below, not also as a
+                                // separate standalone message: storing it both places duplicates the
+                                // signed block once merge_consecutive_messages glues the adjacent
+                                // standalone and tool-call messages together, which Anthropic rejects
+                                // with a 400 (signed thinking blocks must be replayed exactly, never
+                                // duplicated). Only fall back to a standalone message when none of
+                                // this turn's requests actually parsed (so nothing else carries it).
                                 let reasoning_content: Vec<MessageContent> = accumulated_thinking.clone();
-                                if !reasoning_content.is_empty() {
+                                let any_tool_call_parsed = frontend_requests
+                                    .iter()
+                                    .chain(remaining_requests.iter())
+                                    .any(|request| request.tool_call.is_ok());
+                                if !reasoning_content.is_empty() && !any_tool_call_parsed {
                                     let thinking_msg = Message::new(
                                         response.role.clone(),
                                         response.created,
