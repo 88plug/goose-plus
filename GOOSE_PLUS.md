@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 112 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 113 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -154,6 +154,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Area | Upstream # | What goose-plus fixes |
 |---|---|---|
 | Providers/reasoning | [#9397](https://github.com/aaif-goose/goose/issues/9397), [#9675](https://github.com/aaif-goose/goose/issues/9675) | DeepSeek / openai-compatible `reasoning_content` no longer dropped |
+| Providers/reasoning | [#9434](https://github.com/aaif-goose/goose/issues/9434), [PR #10229](https://github.com/aaif-goose/goose/pull/10229) (ported) | A turn whose only thinking content was redacted (signature verification / content-filtering) produced an assistant tool-call message with no `reasoning_content` at all — DeepSeek rejects that outright. Emits a fingerprinted `[redacted:...]` placeholder instead, keeping the field present so split messages from the same turn still merge correctly while distinct turns don't |
 | Providers/streaming | [#8503](https://github.com/aaif-goose/goose/issues/8503) | Final text segment after tool calls no longer lost |
 | Providers | [#8321](https://github.com/aaif-goose/goose/issues/8321) | Unmapped `/v1/models` surfaced instead of silently dropped |
 | Providers | [#9124](https://github.com/aaif-goose/goose/issues/9124), [#7987](https://github.com/aaif-goose/goose/issues/7987) | Env-configurable retry + request timeout; sane 429/Retry-After |
