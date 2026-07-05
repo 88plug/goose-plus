@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 119 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 120 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -185,6 +185,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Desktop | [#9881](https://github.com/aaif-goose/goose/issues/9881) | Extension toggle in Settings snapped back to On while disabling |
 | Desktop | [#8135](https://github.com/aaif-goose/goose/pull/8135) | A tool call with no arguments, output, logs, or progress still showed a clickable expand chevron that opened onto an empty panel — `hasContent` is now computed from the same data driving the panel instead of inferred from render output |
 | Providers | [#10032](https://github.com/aaif-goose/goose/issues/10032) | `GOOSE_CONTEXT_LIMIT` clobbered a known per-model context window instead of acting as a fallback |
+| Server | [#10163](https://github.com/aaif-goose/goose/issues/10163), [PR #10165](https://github.com/aaif-goose/goose/pull/10165) (ported) | `/model-info` — which drives the Desktop token indicator and auto-compaction threshold display — only applied `GOOSE_CONTEXT_LIMIT`/declarative-provider limits on its fallback path; the common success path returned a hardcoded 128k for any model without a canonical registry entry, regardless of an explicit override. Now resolves the effective limit through the same path session/agent creation uses on every path |
 | Developer tools | [#5444](https://github.com/aaif-goose/goose/issues/5444) | Analyze tool's `follow_depth`/`max_depth` params rejected a string-typed value, only accepting a plain number |
 | Context | [PR #10095](https://github.com/aaif-goose/goose/pull/10095) (ported) | `count_chat_tokens` counted every image (top-level or inside a tool result) as 0 tokens. This estimate gates auto-compaction when provider usage metadata is absent, so a screenshot-heavy conversation ran the estimate light in the dangerous direction — compaction fired late and context silently overflowed. Now estimates image cost from decoded pixel dimensions, clamped and never zero |
 | Agent | [#8496](https://github.com/aaif-goose/goose/issues/8496) | Delegated agents treated `inherit` as a literal provider/model instead of falling back to the parent session's config |
