@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 116 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 117 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -189,6 +189,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Agent | [#8496](https://github.com/aaif-goose/goose/issues/8496) | Delegated agents treated `inherit` as a literal provider/model instead of falling back to the parent session's config |
 | Agent | [#9644](https://github.com/aaif-goose/goose/issues/9644), [PR #9650](https://github.com/aaif-goose/goose/pull/9650) (ported) | `GOOSE_SUBAGENT_PROVIDER`/`GOOSE_SUBAGENT_MODEL` were checked last in `resolve_provider`/`resolve_model_config`'s fallback chain, so an operator's explicit override was silently bypassed whenever the orchestrator LLM injected its own `provider`/`model` into a `delegate()` call. The env vars now win over LLM-injected params |
 | Recipes | [#5280](https://github.com/aaif-goose/goose/issues/5280) | Recipe parse failures now show the raw recipe content, not just the parser error |
+| Agent/Code mode | [PR #10214](https://github.com/aaif-goose/goose/pull/10214) (ported) | `execute_typescript`/`execute_bash` had no timeout and ignored their cancellation token; since pctx serializes execution behind a process-wide V8 mutex, one hung script wedged code execution for every session in the process. Now races execution against the extension timeout and real cancellation, releasing the mutex either way, and propagates cancellation to nested tool calls (e.g. a script's `developer.shell` call) so they're killed too instead of orphaned |
 | CLI | [#6224](https://github.com/aaif-goose/goose/issues/6224) | PowerShell `term init` output had leftover double braces — invalid PowerShell syntax |
 | Desktop | [#5915](https://github.com/aaif-goose/goose/issues/5915) | `goosed`'s spawned environment could be missing the PATH entries a locally-installed `claude`/`codex` CLI needs to resolve |
 | Context | [`micn/tool-sum-fixes`](https://github.com/aaif-goose/goose/tree/micn/tool-sum-fixes) | Tool-pair summarization created stale "ghost" messages once compaction could handle the context anyway — now off by default, gated to ≤65,536-token windows |
