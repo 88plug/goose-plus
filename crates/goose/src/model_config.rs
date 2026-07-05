@@ -149,3 +149,49 @@ fn parse_yaml_bool_config(key: &str, value: serde_yaml::Value) -> Result<bool> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_limit_wins_over_global_context_limit() {
+        // Above this fork's own MINIMUM_CONTEXT_LIMIT floor (#8512, 8192) so
+        // this test isolates canonical-vs-global precedence rather than
+        // exercising that unrelated safety clamp.
+        let _guard = env_lock::lock_env([("GOOSE_CONTEXT_LIMIT", Some("10000"))]);
+
+        // A model with a known canonical context window keeps it instead of
+        // being capped to the much smaller global default.
+        let canonical = ModelConfig::new("claude-3-5-sonnet-20241022")
+            .unwrap()
+            .with_canonical_limits("anthropic")
+            .context_limit();
+        assert!(
+            canonical > 10000,
+            "expected a canonical context limit for the test model, got {canonical}"
+        );
+
+        let materialized = materialize_model_config(
+            "anthropic",
+            ModelConfig::new("claude-3-5-sonnet-20241022").unwrap(),
+        )
+        .expect("materialize");
+        assert_eq!(materialized.context_limit(), canonical);
+    }
+
+    #[test]
+    fn global_context_limit_is_last_resort_for_unknown_models() {
+        // Above this fork's own MINIMUM_CONTEXT_LIMIT floor (#8512, 8192) so
+        // this test isolates canonical-vs-global precedence rather than
+        // exercising that unrelated safety clamp.
+        let _guard = env_lock::lock_env([("GOOSE_CONTEXT_LIMIT", Some("10000"))]);
+
+        let materialized = materialize_model_config(
+            "anthropic",
+            ModelConfig::new("a-model-not-in-the-canonical-registry-xyz").unwrap(),
+        )
+        .expect("materialize");
+        assert_eq!(materialized.context_limit(), 10000);
+    }
+}
