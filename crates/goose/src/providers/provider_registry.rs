@@ -55,7 +55,7 @@ impl ProviderEntry {
         (self.inventory_configured)()
     }
 
-    fn normalize_model_config(&self, mut model: ModelConfig) -> Result<ModelConfig> {
+    pub fn normalize_model_config(&self, mut model: ModelConfig) -> Result<ModelConfig> {
         model = crate::model_config::materialize_model_config(&self.metadata.name, model)?;
 
         if model.context_limit.is_none() {
