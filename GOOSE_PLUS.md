@@ -317,9 +317,12 @@ see the extraction commands in `scratchpad/LEDGER.md` from the session that did 
 - **579 closed issues, 519 closed PRs, 141 open issues, 75 open PRs, 108 branches** = 1422 total,
   of which 68 are mechanically confirmed zero-engagement (zero comments AND zero reactions) and
   safe to deprioritize. ~1354 genuinely un-triaged.
-- **goose-plus is also ~119 commits behind live `upstream/main`** as of this writing (last synced
-  merge point vs. a fresh `upstream/main` fetch) — a separate, real gap from the graveyard-mining
-  backlog: this is upstream's *own* recent work not yet merged in, not community-graveyard mining.
+- **Upstream `main` has moved ~119 commits past this fork's last sync point.** This is
+  informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
+  A2A/NATS, standalone in-agent MCP servers, provider-catalog rewrites, and more) for a bulk merge
+  of upstream into `goose-plus` to ever make sense, and **that is never done here**. If anything in
+  those 119 commits is worth having, it goes through the same graveyard-mining triage as everything
+  else — evaluated and ported individually, never bulk-imported.
 
 This is a living, incremental effort, not a finished sweep — treat any specific "N items fixed"
 count as a lower bound on what the graveyard actually contains, not a claim that the graveyard is
