@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use lru::LruCache;
 use rmcp::model::Tool;
 use std::num::NonZeroUsize;
@@ -10,6 +11,38 @@ use crate::conversation::message::Message;
 static TOKENIZER: OnceCell<Arc<CoreBPE>> = OnceCell::const_new();
 
 const MAX_TOKEN_CACHE_SIZE: usize = 1_024;
+
+// Image token estimation. Providers resize images server-side and bill by the
+// resulting pixel area, so token cost tracks dimensions rather than the base64
+// payload length. The divisor approximates Anthropic's (width*height)/750, the
+// most expensive of the major providers at typical sizes, which keeps the
+// estimate conservative for OpenAI/Gemini. The cap mirrors the ~1568px long-edge
+// resize all of them apply. When dimensions can't be read we fall back to a
+// non-zero estimate so an image is never counted as free.
+const IMAGE_TOKEN_DIVISOR: f64 = 750.0;
+const IMAGE_TOKEN_CAP: usize = 1_600;
+const IMAGE_TOKEN_FALLBACK: usize = 1_000;
+const IMAGE_HEADER_PREFIX_BYTES: usize = 64 * 1_024;
+
+fn estimate_image_tokens(base64_data: &str) -> usize {
+    let max_b64 = (IMAGE_HEADER_PREFIX_BYTES / 3 * 4).min(base64_data.len());
+    let prefix_len = max_b64 - (max_b64 % 4);
+    let Ok(bytes) = base64::prelude::BASE64_STANDARD.decode(&base64_data.as_bytes()[..prefix_len])
+    else {
+        return IMAGE_TOKEN_FALLBACK;
+    };
+    match image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|reader| reader.into_dimensions().ok())
+    {
+        Some((width, height)) => {
+            let area = f64::from(width) * f64::from(height);
+            ((area / IMAGE_TOKEN_DIVISOR).ceil() as usize).clamp(1, IMAGE_TOKEN_CAP)
+        }
+        None => IMAGE_TOKEN_FALLBACK,
+    }
+}
 
 // token use for various bits of a tool calls:
 const FUNC_INIT: usize = 7;
@@ -147,6 +180,8 @@ impl TokenCounter {
             for content in &message.content {
                 if let Some(content_text) = content.as_text() {
                     num_tokens += self.count_tokens(content_text);
+                } else if let Some(image) = content.as_image() {
+                    num_tokens += estimate_image_tokens(&image.data);
                 } else if let Some(tool_request) = content.as_tool_request() {
                     if let Ok(tool_call) = tool_request.tool_call.as_ref() {
                         let text = format!(
@@ -155,8 +190,21 @@ impl TokenCounter {
                         );
                         num_tokens += self.count_tokens(&text);
                     }
-                } else if let Some(tool_response_text) = content.as_tool_response_text() {
-                    num_tokens += self.count_tokens(&tool_response_text);
+                } else if let Some(tool_response) = content.as_tool_response() {
+                    if let Ok(result) = &tool_response.tool_result {
+                        let texts: Vec<&str> = result
+                            .content
+                            .iter()
+                            .filter_map(|p| p.as_text())
+                            .map(|t| t.text.as_str())
+                            .collect();
+                        if !texts.is_empty() {
+                            num_tokens += self.count_tokens(&texts.join("\n"));
+                        }
+                        for image in result.content.iter().filter_map(|p| p.as_image()) {
+                            num_tokens += estimate_image_tokens(&image.data);
+                        }
+                    }
                 }
             }
         }
@@ -322,5 +370,44 @@ mod tests {
 
         assert!(counter.cache_size() > 0);
         assert!(counter.cache_size() <= MAX_TOKEN_CACHE_SIZE);
+    }
+
+    fn png_base64(width: u32, height: u32) -> String {
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(width, height));
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        base64::prelude::BASE64_STANDARD.encode(buf.into_inner())
+    }
+
+    #[tokio::test]
+    async fn test_count_chat_tokens_counts_top_level_image() {
+        use crate::conversation::message::Message;
+
+        let counter = create_token_counter().await.unwrap();
+        let text_only = Message::user().with_text("describe this");
+        let with_image = Message::user()
+            .with_text("describe this")
+            .with_image(png_base64(300, 300), "image/png");
+
+        let text_tokens = counter.count_chat_tokens("", std::slice::from_ref(&text_only), &[]);
+        let image_tokens = counter.count_chat_tokens("", std::slice::from_ref(&with_image), &[]);
+
+        assert_eq!(image_tokens - text_tokens, 120);
+    }
+
+    #[tokio::test]
+    async fn test_count_chat_tokens_counts_image_in_tool_response() {
+        use crate::conversation::message::Message;
+        use rmcp::model::{CallToolResult, Content};
+
+        let counter = create_token_counter().await.unwrap();
+        let result =
+            CallToolResult::success(vec![Content::image(png_base64(300, 300), "image/png")]);
+        let message = Message::user().with_tool_response("call_1", Ok(result));
+
+        let tokens = counter.count_chat_tokens("", std::slice::from_ref(&message), &[]);
+
+        // tokens_per_message (4) + reply primer (3) + the 120-token image.
+        assert_eq!(tokens, 4 + 3 + 120);
     }
 }

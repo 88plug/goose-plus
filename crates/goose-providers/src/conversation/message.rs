@@ -596,6 +596,14 @@ impl MessageContent {
         }
     }
 
+    /// Get the image content if this is an ImageContent variant
+    pub fn as_image(&self) -> Option<&ImageContent> {
+        match self {
+            MessageContent::Image(image) => Some(image),
+            _ => None,
+        }
+    }
+
     /// Get the thinking content if this is a ThinkingContent variant
     pub fn as_thinking(&self) -> Option<&ThinkingContent> {
         match self {
