@@ -318,18 +318,29 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~190-200 distinct improvements have actually landed**, not the ~128 an earlier count implied —
-  108 individually-cited issues/PRs/branches, ~70 fixes from the 4 internal audit sweeps
-  (documented as one summary line, not per-item rows, which is why a citation-count undercounts
-  them), and 15 headline own-work features. Treated as an evidenced estimate, not false precision
-  — the three buckets likely have some overlap a full one-by-one reconciliation would resolve.
+- **~200-210 distinct improvements have actually landed**, not the ~128 an earlier count implied —
+  121 individually-cited issues/PRs/branches (up from 108 as of this line's last full audit;
+  13 more real fixes landed and verified in the stretch that followed, each with its own bug-matrix
+  row, build+test+clippy+fmt pass, and mutation-tested regression coverage — see recent bug-matrix
+  entries from #8453 through the Bedrock Gemma-4 routing fix), ~70 fixes from the 4 internal audit
+  sweeps (documented as one summary line, not per-item rows, which is why a citation-count
+  undercounts them), and 15 headline own-work features. Treated as an evidenced estimate, not false
+  precision — the three buckets likely have some overlap a full one-by-one reconciliation would
+  resolve.
 
 Real remaining candidate pool, computed against the current citation list (re-derivable any time —
 see the extraction commands in `scratchpad/LEDGER.md` from the session that did this):
 
-- **579 closed issues, 519 closed PRs, 141 open issues, 75 open PRs, 108 branches** = 1422 total,
-  of which 68 are mechanically confirmed zero-engagement (zero comments AND zero reactions) and
-  safe to deprioritize. ~1354 genuinely un-triaged.
+- **579 closed issues, 519 closed PRs, 141 open issues, 75 open PRs, 108 branches** = 1422 total
+  as of that mechanical snapshot, of which 68 are mechanically confirmed zero-engagement (zero
+  comments AND zero reactions) and safe to deprioritize. ~1354 genuinely un-triaged at that point.
+  This snapshot is now stale in both directions: a manual pass since then individually resolved
+  roughly 20 more branches/PRs (13 landed as real fixes, the rest confirmed already-covered,
+  superseded, architecture-mismatched, or genuinely unreproducible — see
+  `scratchpad/remaining.txt` for the itemized reasoning on each), while upstream has continued
+  opening new issues/PRs in the meantime. A fresh mechanical re-extraction (same commands) would be
+  needed for an exact current total; treat ~1354 as "roughly this many, last measured on the date
+  above," not a live counter.
 - **Upstream `main` has moved ~119 commits past this fork's last sync point.** This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
   A2A/NATS, standalone in-agent MCP servers, provider-catalog rewrites, and more) for a bulk merge
