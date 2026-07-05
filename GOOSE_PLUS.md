@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~128 closed/rejected issues & PRs implemented and verified |
+| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 108 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -297,20 +297,34 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 
 ## Graveyard status: what's actually done vs. still open
 
-Be honest about scale here rather than implying the matrices above are exhaustive: the ~128
-items landed are drawn from a much larger candidate pool that is **not** fully triaged.
-As of this writing, the untouched/partially-touched pool is roughly:
+Be honest about scale here rather than implying the matrices above are exhaustive. Two corrections
+worth stating plainly, found by going past this doc's own citations to the real git history:
 
-- **~575 open/closed PRs** and **~465 closed issues** and **~107 open issues** — pre-filtered
-  candidate lists exist (engagement-sorted, deduped against what's already landed) but the large
-  majority have not been individually read.
-- **~35 branches** identified as real, non-merged work (branch pushed, no PR or a closed/stale
-  PR) — of these, a handful have been resolved (ported, or confirmed stale/superseded/duplicate)
-  and the rest are named but not yet evaluated past a one-line tip-commit glance.
+- **This repo was accidentally a shallow git clone** for a stretch, which silently breaks
+  `git merge-base`/ahead-behind comparisons against upstream. Fixed via
+  `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
+  accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
+  (`git fetch --unshallow upstream`) or the numbers will be nonsense.
+- **~190-200 distinct improvements have actually landed**, not the ~128 an earlier count implied —
+  108 individually-cited issues/PRs/branches, ~70 fixes from the 4 internal audit sweeps
+  (documented as one summary line, not per-item rows, which is why a citation-count undercounts
+  them), and 15 headline own-work features. Treated as an evidenced estimate, not false precision
+  — the three buckets likely have some overlap a full one-by-one reconciliation would resolve.
+
+Real remaining candidate pool, computed against the current citation list (re-derivable any time —
+see the extraction commands in `scratchpad/LEDGER.md` from the session that did this):
+
+- **579 closed issues, 519 closed PRs, 141 open issues, 75 open PRs, 108 branches** = 1422 total,
+  of which 68 are mechanically confirmed zero-engagement (zero comments AND zero reactions) and
+  safe to deprioritize. ~1354 genuinely un-triaged.
+- **goose-plus is also ~119 commits behind live `upstream/main`** as of this writing (last synced
+  merge point vs. a fresh `upstream/main` fetch) — a separate, real gap from the graveyard-mining
+  backlog: this is upstream's *own* recent work not yet merged in, not community-graveyard mining.
 
 This is a living, incremental effort, not a finished sweep — treat any specific "N items fixed"
 count as a lower bound on what the graveyard actually contains, not a claim that the graveyard is
-empty.
+empty. Never treat the full backlog as a completable-in-one-session goal; triage continues at a
+sustainable pace gated on verifiability in the working environment.
 
 ## Contribute by porting
 
