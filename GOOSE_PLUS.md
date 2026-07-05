@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 121 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 129 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -318,34 +318,42 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~200-210 distinct improvements have actually landed**, not the ~128 an earlier count implied —
-  121 individually-cited issues/PRs/branches (up from 108 as of this line's last full audit;
-  13 more real fixes landed and verified in the stretch that followed, each with its own bug-matrix
-  row, build+test+clippy+fmt pass, and mutation-tested regression coverage — see recent bug-matrix
-  entries from #8453 through the Bedrock Gemma-4 routing fix), ~70 fixes from the 4 internal audit
+- **~205-215 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  129 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
+  doc itself (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
+  never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
+  time while landing 13 fixes in one stretch, which undercounted: most of those rows cite *both*
+  an issue number and a PR number, so 13 new rows added 21 new distinct citations, not 13. Lesson
+  applied: re-run the extraction command, don't count by hand. ~70 fixes from the 4 internal audit
   sweeps (documented as one summary line, not per-item rows, which is why a citation-count
   undercounts them), and 15 headline own-work features. Treated as an evidenced estimate, not false
   precision — the three buckets likely have some overlap a full one-by-one reconciliation would
   resolve.
 
-Real remaining candidate pool, computed against the current citation list (re-derivable any time —
-see the extraction commands in `scratchpad/LEDGER.md` from the session that did this):
+Real remaining candidate pool. **A previous count here (579 closed issues, 519 closed PRs,
+141 open issues, 75 open PRs, 108 branches = 1422 total) was wrong by roughly 7x** — it came from
+a broken earlier data-extraction pass (one of its intermediate cache files was found to contain
+49.8 million lines of runaway/duplicated output, not real API data). Re-derived fresh via the
+GitHub search API and cross-checked against the repo's actual highest issue/PR number (10282,
+which lines up with the corrected total below — the earlier undercounted figures did not):
 
-- **579 closed issues, 519 closed PRs, 141 open issues, 75 open PRs, 108 branches** = 1422 total
-  as of that mechanical snapshot, of which 68 are mechanically confirmed zero-engagement (zero
-  comments AND zero reactions) and safe to deprioritize. ~1354 genuinely un-triaged at that point.
-  This snapshot is now stale in both directions: a manual pass since then individually resolved
-  roughly 20 more branches/PRs (13 landed as real fixes, the rest confirmed already-covered,
-  superseded, architecture-mismatched, or genuinely unreproducible — see
-  `scratchpad/remaining.txt` for the itemized reasoning on each), while upstream has continued
-  opening new issues/PRs in the meantime. A fresh mechanical re-extraction (same commands) would be
-  needed for an exact current total; treat ~1354 as "roughly this many, last measured on the date
-  above," not a live counter.
-- **Upstream `main` has moved ~119 commits past this fork's last sync point.** This is
+- **2,269 closed issues, 184 open issues, 7,408 closed PRs, 96 open PRs, 619 upstream branches**
+  = **10,576 total**, of which only 3 branches are mechanically already-merged into
+  `upstream/main`. The previous "68 mechanically confirmed zero-engagement" and "~1354 genuinely
+  un-triaged" figures were downstream of the same broken pipeline and are not trustworthy at any
+  scale — that filtering pass needs to be redone from scratch against the corrected totals above,
+  which has not happened yet. Of the corrected 10,576, roughly 20 items have been individually,
+  manually resolved across recent sessions (13 landed as real fixes with full build+test+clippy+
+  mutation verification, the rest confirmed already-covered/superseded/architecture-mismatched/
+  unreproducible — see `scratchpad/remaining.txt` for the itemized reasoning on each). At this
+  scale, that is a rounding error, not meaningful progress against the total — be explicit about
+  that rather than implying otherwise.
+- **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
+  was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
   A2A/NATS, standalone in-agent MCP servers, provider-catalog rewrites, and more) for a bulk merge
   of upstream into `goose-plus` to ever make sense, and **that is never done here**. If anything in
-  those 119 commits is worth having, it goes through the same graveyard-mining triage as everything
+  those 125 commits is worth having, it goes through the same graveyard-mining triage as everything
   else — evaluated and ported individually, never bulk-imported.
 
 This is a living, incremental effort, not a finished sweep — treat any specific "N items fixed"
