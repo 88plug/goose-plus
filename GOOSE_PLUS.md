@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 111 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~190-200 distinct improvements landed: 112 individually-cited closed/rejected issues & PRs & branches, ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -197,6 +197,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | MCP/OAuth | [#8453](https://github.com/aaif-goose/goose/issues/8453) ([`jhugo/fix-issue-8453`](https://github.com/aaif-goose/goose/tree/jhugo/fix-issue-8453), unmerged) | Remote MCP servers whose base URL returns a non-JSON HTTP 200 (or whose authorization server lives on a different host, or is behind a path-based deployment) made OAuth resource-metadata discovery fail fatally — no browser window ever opened, so auth-required remote extensions (e.g. Attio) could never connect. Adds an RFC 9728 / RFC 8414 well-known discovery fallback that builds the session through rmcp's public APIs when the primary discovery call fails |
 | Agent | [#7425](https://github.com/aaif-goose/goose/issues/7425), [PR #7459](https://github.com/aaif-goose/goose/pull/7459) (adapted) | MOIM injection found the latest user-effective message and spliced its context block in — but when a turn ends with a text-only assistant reply (no tool call), that message was left trailing, and the conversation-repair pass silently dropped it to satisfy the "must end with user" constraint, discarding the model's own final response text. Now detects this case and appends a new trailing user message instead, preserving the assistant's text |
 | Session storage | [#5094](https://github.com/aaif-goose/goose/issues/5094) (adapted) | Automatic session naming propagated any error from the naming LLM call (rate limit, network error) as a hard failure instead of the session just keeping its default name. Now falls back to a timestamped `Unnamed Session (...)` name |
+| Local inference | [#10073](https://github.com/aaif-goose/goose/issues/10073), [PR #10105](https://github.com/aaif-goose/goose/pull/10105) (ported) | `goosed` crashed with `SIGILL` on x86_64 CPUs predating Haswell (no FMA) — the bundled llama.cpp CPU backend ran an FMA instruction unconditionally on init, taking down every backend-dependent feature. Now precheck the CPU's instruction sets (FMA/AVX2/F16C/BMI2/SSE4.2) before initializing and fail cleanly with an actionable error instead |
 
 ### Fixed without an upstream ticket
 
