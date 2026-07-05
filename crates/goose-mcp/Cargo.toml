@@ -56,6 +56,7 @@ ignore = { workspace = true }
 regex = { workspace = true }
 uuid = { workspace = true }
 percent-encoding = "2.3.2"
+tokio-util.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
