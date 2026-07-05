@@ -585,7 +585,16 @@ impl SessionManager {
             .count();
 
         if user_message_count <= MSG_COUNT_FOR_SESSION_NAME_GENERATION {
-            let name = generate_session_name(provider.as_ref(), id, &conversation).await?;
+            let name = match generate_session_name(provider.as_ref(), id, &conversation).await {
+                Ok(name) => name,
+                Err(e) => {
+                    warn!("Failed to generate session name: {e}. Using fallback name.");
+                    format!(
+                        "Unnamed Session ({})",
+                        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S")
+                    )
+                }
+            };
             return Ok(Some(self.system_generated_name_update(id, name).await?));
         }
         Ok(None)
@@ -2388,6 +2397,50 @@ mod tests {
         })
     }
 
+    struct FailingNamingTestProvider {
+        model_config: ModelConfig,
+    }
+
+    #[async_trait::async_trait]
+    impl Provider for FailingNamingTestProvider {
+        fn get_name(&self) -> &str {
+            "failing-naming-test"
+        }
+
+        async fn stream(
+            &self,
+            _model_config: &ModelConfig,
+            _session_id: &str,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[rmcp::model::Tool],
+        ) -> std::result::Result<MessageStream, goose_providers::errors::ProviderError> {
+            unimplemented!("session naming calls complete_fast")
+        }
+
+        fn get_model_config(&self) -> ModelConfig {
+            self.model_config.clone()
+        }
+
+        async fn complete_fast(
+            &self,
+            _session_id: &str,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<(Message, ProviderUsage), ProviderError> {
+            Err(ProviderError::ServerError(
+                "simulated provider error".to_string(),
+            ))
+        }
+    }
+
+    fn failing_naming_test_provider() -> Arc<dyn Provider> {
+        Arc::new(FailingNamingTestProvider {
+            model_config: ModelConfig::new("test-model").unwrap(),
+        })
+    }
+
     fn test_recipe(title: &str) -> Recipe {
         Recipe::builder()
             .title(title)
@@ -2564,6 +2617,41 @@ mod tests {
 
         let reloaded = sm.get_session(&session.id, false).await.unwrap();
         assert_eq!(reloaded.name, GENERATED_SESSION_NAME);
+        assert!(!reloaded.user_set_name);
+    }
+
+    #[tokio::test]
+    async fn test_maybe_update_name_falls_back_when_provider_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+
+        let session = sm
+            .create_session(
+                temp_dir.path().to_path_buf(),
+                "New Chat".to_string(),
+                SessionType::User,
+                GooseMode::default(),
+            )
+            .await
+            .unwrap();
+
+        add_user_message(&sm, &session.id).await;
+
+        let update = sm
+            .maybe_update_name(&session.id, failing_naming_test_provider())
+            .await
+            .unwrap();
+        let name = update
+            .as_ref()
+            .map(|update| update.name.as_str())
+            .expect("a fallback name should still be generated");
+        assert!(
+            name.starts_with("Unnamed Session ("),
+            "expected a fallback name, got: {name}"
+        );
+
+        let reloaded = sm.get_session(&session.id, false).await.unwrap();
+        assert_eq!(reloaded.name, name);
         assert!(!reloaded.user_set_name);
     }
 
