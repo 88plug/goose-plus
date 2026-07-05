@@ -591,8 +591,14 @@ pub async fn session_reply(
         )
         .await;
 
-        _guard.disarm();
+        // Cleanup first, then disarm: if the task is cancelled between these two
+        // lines, the guard is still armed and its Drop impl will run cleanup
+        // again (a harmless no-op, since cleanup_request removes from a
+        // HashMap). Disarming first would leave a window where cancellation
+        // skips both the explicit cleanup call and the Drop fallback, leaking
+        // the active-request entry forever. See #10243.
         task_bus.cleanup_request(&task_request_id).await;
+        _guard.disarm();
     }));
 
     Ok(Json(SessionReplyResponse { request_id }))
