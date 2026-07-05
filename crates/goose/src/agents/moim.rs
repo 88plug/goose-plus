@@ -1,5 +1,5 @@
 use crate::agents::extension_manager::ExtensionManager;
-use crate::conversation::message::MessageContent;
+use crate::conversation::message::{Message, MessageContent};
 use crate::conversation::{effective_role, fix_conversation, Conversation};
 use std::path::{Path, PathBuf};
 
@@ -92,14 +92,29 @@ pub async fn inject_moim(
     else {
         return conversation;
     };
-    let insert_idx = messages[idx]
-        .content
-        .iter()
-        .take_while(|content| matches!(content, MessageContent::ToolResponse(_)))
-        .count();
-    messages[idx]
-        .content
-        .insert(insert_idx, MessageContent::text(moim));
+
+    let ends_with_assistant = messages
+        .last()
+        .is_some_and(|m| m.role == rmcp::model::Role::Assistant);
+
+    if ends_with_assistant {
+        // The conversation ends with an assistant message (e.g. a text-only
+        // final reply with no tool call). Splicing MOIM into the earlier
+        // user-effective message at `idx` would leave this assistant message
+        // trailing, and fix_conversation's fix_lead_trail would then silently
+        // drop it to satisfy the "must end with user" API constraint. Append
+        // a new trailing user message instead, preserving the assistant content.
+        messages.push(Message::user().with_text(moim));
+    } else {
+        let insert_idx = messages[idx]
+            .content
+            .iter()
+            .take_while(|content| matches!(content, MessageContent::ToolResponse(_)))
+            .count();
+        messages[idx]
+            .content
+            .insert(insert_idx, MessageContent::text(moim));
+    }
 
     let (fixed, issues) = fix_conversation(Conversation::new_unvalidated(messages));
 
@@ -461,6 +476,59 @@ mod tests {
         assert!(
             msgs.iter().any(|m| m.content.iter().any(is_moim)),
             "MOIM should have been injected after fixing the cancellation orphan"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_moim_preserves_trailing_text_only_assistant_message() {
+        // Regression test for upstream issue #7425: when the conversation ends
+        // with a text-only assistant message (no tool call), MOIM is inserted
+        // into an earlier user message, leaving the assistant message trailing.
+        // fix_conversation's fix_lead_trail then silently drops any trailing
+        // assistant message to satisfy the "must end with user" API constraint —
+        // discarding the model's own final response text instead of preserving it.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let em = ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
+        let session = em
+            .get_context()
+            .session_manager
+            .create_session(
+                PathBuf::from("/test/dir"),
+                "test".to_string(),
+                crate::session::SessionType::User,
+                crate::config::GooseMode::Auto,
+            )
+            .await
+            .unwrap();
+
+        let conv = Conversation::new_unvalidated(vec![
+            Message::user().with_text("clean up comments in check.sh"),
+            Message::assistant()
+                .with_text("Let me look at the file")
+                .with_tool_request("tool_1", Ok(CallToolRequestParams::new("text_editor"))),
+            Message::user()
+                .with_tool_response("tool_1", Ok(rmcp::model::CallToolResult::success(vec![]))),
+            Message::assistant().with_text("Now I'll clean this up..."),
+        ]);
+
+        let result = inject_moim(&session.id, conv, &em, 0, 100).await;
+        let msgs = result.messages();
+
+        assert!(
+            msgs.iter().any(|m| m.content.iter().any(is_moim)),
+            "MOIM should still be injected"
+        );
+
+        let has_trailing_assistant = msgs.iter().any(|m| {
+            m.role == rmcp::model::Role::Assistant
+                && m.content.iter().any(|c| {
+                    c.as_text()
+                        .is_some_and(|t| t.contains("Now I'll clean this up"))
+                })
+        });
+        assert!(
+            has_trailing_assistant,
+            "trailing assistant message should be preserved, not silently dropped"
         );
     }
 }
