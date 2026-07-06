@@ -397,11 +397,11 @@ which lines up with the corrected total below — the earlier undercounted figur
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
     self-correcting). All 164 of these branches have since been individually deep-read and
     verified (not just triaged) — see the finding directly below, which replaces the raw 164
-    figure with a real breakdown (103 already covered, 27 not applicable, 28 genuinely new and
+    figure with a real breakdown (104 already covered, 27 not applicable, 27 genuinely new and
     still queued, 4 already ported, 1 deferred, 1 uncertain). So the honest "genuinely worth a
     human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
-    issues/PRs with real engagement + 281 open issues/PRs + 28 verified-genuinely-new small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,045** (medium/large tiers haven't had
+    issues/PRs with real engagement + 281 open issues/PRs + 27 verified-genuinely-new small-tier
+    branches + 134 medium-tier + 70 large-tier branches ≈ 7,044** (medium/large tiers haven't had
     this same exhaustive per-branch verification yet, so those two counts are still raw, not
     net-of-already-covered), not counting 3,104 zero-engagement issues/PRs, 43 SKIP-experiment
     branches, or the 51 UNCLEAR branches needing a second look before they're triaged either way.
@@ -418,15 +418,22 @@ which lines up with the corrected total below — the earlier undercounted figur
     (`jhugo/fix-hermit-cmake-linux-arm64` — the literal proposed fix isn't present, but confirming
     whether it's actually needed requires live access to hermit's package repo, out of scope for
     this pass), and **30 GENUINELY_NEW** — real, currently-open gaps with concrete file:line
-    evidence. Two of those 30 have since been ported (`dkatz/subagent-instructions-fix` → PR #6096,
-    `codex/browserbase-gemini-key` → PR #10204, both now in the bug matrix above), leaving 28
-    still queued. Combined with the 15-branch spot-check (9 covered, 3 not applicable, 1 deferred,
-    2 already ported — see the bug-matrix rows above), across the full 164-branch pool: **103
-    already covered, 27 not applicable, 1 deferred, 1 uncertain, 4 ported, 28 queued as genuinely
-    new** (164 = 103+27+1+1+4+28). The 28 remaining genuinely-new candidates, with the exact
+    evidence. One of those 30 was subsequently reclassified to ALREADY_COVERED after a deeper
+    check: `alexhancock/oauth-auth-server-uri` looked like a real gap from the diff alone, but
+    reading the vendored `rmcp` 1.8.0 SDK source directly showed `OAuthState::
+    start_authorization_with_metadata_url` already calls `discover_metadata()`, which does full
+    RFC 9728 resource-metadata discovery (supporting a different-host authorization server) before
+    falling back to same-host discovery — upstream's manual pre-resolution was a workaround for an
+    older rmcp version that no longer applies here. Two of the remaining 29 have since been ported
+    (`dkatz/subagent-instructions-fix` → PR #6096, `codex/browserbase-gemini-key` → PR #10204, both
+    now in the bug matrix above), leaving 27 still queued. Combined with the 15-branch spot-check
+    (9 covered, 3 not applicable, 1 deferred, 2 already ported — see the bug-matrix rows above),
+    across the full 164-branch pool: **104 already covered, 27 not applicable, 1 deferred,
+    1 uncertain, 4 ported, 27 queued as genuinely
+    new** (164 = 104+27+1+1+4+27). The 27 remaining genuinely-new candidates, with the exact
     file/function each touches, are listed in
-    `scratchpad/graveyard-data-v2/verify_chunks/all_verified.json` — a ready-to-work queue, not a
-    vague "check this branch" pointer. None of the 103 already-covered branches' fixes were cited
+    `scratchpad/graveyard-data-v2/verify_chunks/remaining_queue.json` — a ready-to-work queue, not
+    a vague "check this branch" pointer. None of the 104 already-covered branches' fixes were cited
     anywhere in this doc by number or name before this pass, so the mechanical citation-exclusion
     above correctly couldn't have caught them — they were absorbed by the 4 internal audit sweeps
     or an earlier untracked session, not by a citable graveyard port.
