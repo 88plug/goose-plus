@@ -399,11 +399,11 @@ which lines up with the corrected total below — the earlier undercounted figur
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
     self-correcting). All 164 of these branches have since been individually deep-read and
     verified (not just triaged) — see the finding directly below, which replaces the raw 164
-    figure with a real breakdown (105 already covered, 27 not applicable, 23 genuinely new and
+    figure with a real breakdown (105 already covered, 28 not applicable, 22 genuinely new and
     still queued, 6 already ported, 2 deferred, 1 uncertain). So the honest "genuinely worth a
     human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
-    issues/PRs with real engagement + 281 open issues/PRs + 23 verified-genuinely-new small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,040** (medium/large tiers haven't had
+    issues/PRs with real engagement + 281 open issues/PRs + 22 verified-genuinely-new small-tier
+    branches + 134 medium-tier + 70 large-tier branches ≈ 7,039** (medium/large tiers haven't had
     this same exhaustive per-branch verification yet, so those two counts are still raw, not
     net-of-already-covered), not counting 3,104 zero-engagement issues/PRs, 43 SKIP-experiment
     branches, or the 51 UNCLEAR branches needing a second look before they're triaged either way.
@@ -435,15 +435,18 @@ which lines up with the corrected total below — the earlier undercounted figur
     reclassified to DEFERRED, not ported: it flips 5 platform extensions (Analyze, Apps, Extension
     Manager, Summon, Top Of Mind) from default-enabled to default-disabled — a product/UX
     preference about which tools ship on by default, not an unambiguous bug; reasonable
-    maintainers could disagree, so it isn't ported without stronger justification. Four of the
-    remaining 27 have since been ported (`dkatz/subagent-instructions-fix` → PR #6096,
-    `codex/browserbase-gemini-key` → PR #10204, `zane/lmstudio` → PR #7454,
+    maintainers could disagree, so it isn't ported without stronger justification. A fourth,
+    `zane/icon-tooltips`, moved to NOT_APPLICABLE: the `SidebarTrigger`/"New window" button it adds
+    tooltips to doesn't exist anywhere in the current desktop UI (repo-wide grep, zero matches) —
+    removed in the same `NavigationPanel` refactor that made `zane/hide-new-chat` not applicable
+    either. Four of the remaining 26 have since been ported (`dkatz/subagent-instructions-fix` →
+    PR #6096, `codex/browserbase-gemini-key` → PR #10204, `zane/lmstudio` → PR #7454,
     `jhugo/fix-sse-reconnect-followup` → PR #7992 — a session-switch race in `reloadConversation`,
-    all now in the bug matrix above), leaving 23 still queued. Combined with the 15-branch
+    all now in the bug matrix above), leaving 22 still queued. Combined with the 15-branch
     spot-check (9 covered, 3 not applicable, 1 deferred, 2 already ported — see the bug-matrix
-    rows above), across the full 164-branch pool: **105 already covered, 27 not applicable,
-    2 deferred, 1 uncertain, 6 ported, 23 queued as genuinely new**
-    (164 = 105+27+2+1+6+23). The 23 remaining
+    rows above), across the full 164-branch pool: **105 already covered, 28 not applicable,
+    2 deferred, 1 uncertain, 6 ported, 22 queued as genuinely new**
+    (164 = 105+28+2+1+6+22). The 22 remaining
     genuinely-new candidates, with the exact file/function each touches, are listed in
     `scratchpad/graveyard-data-v2/verify_chunks/remaining_queue.json` — a ready-to-work queue, not
     a vague "check this branch" pointer. None of the 104 already-covered branches' fixes were cited
