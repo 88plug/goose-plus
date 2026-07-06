@@ -238,8 +238,25 @@ pub async fn upsert_config(
         }
     }
 
-    config.set(&query.key, &query.value, query.is_secret)?;
+    let value = trim_secret_value(&query.value, query.is_secret);
+    config.set(&query.key, &value, query.is_secret)?;
     Ok(Json(Value::String(format!("Upserted key {}", query.key))))
+}
+
+/// Secret values (API keys, tokens) are pasted by hand and commonly carry
+/// leading/trailing whitespace or a trailing newline, which gets sent
+/// verbatim as an auth header and produces a confusing 401 from the
+/// provider. Trim them the same way the ACP save path already does
+/// (`crates/goose/src/acp/server/providers.rs`'s `on_save_provider_config`).
+/// Non-secret values are left untouched since they may be non-string JSON.
+fn trim_secret_value(value: &Value, is_secret: bool) -> Value {
+    if !is_secret {
+        return value.clone();
+    }
+    match value {
+        Value::String(s) => Value::String(s.trim().to_string()),
+        other => other.clone(),
+    }
 }
 
 #[utoipa::path(
@@ -1548,6 +1565,27 @@ mod tests {
         let config_path = std::env::temp_dir().join(format!("{unique}-config.yaml"));
         let secrets_path = std::env::temp_dir().join(format!("{unique}-secrets.yaml"));
         Config::new_with_file_secrets(config_path, secrets_path).unwrap()
+    }
+
+    #[test]
+    fn trim_secret_value_trims_whitespace_and_newlines_for_secrets() {
+        let value = Value::String("  sk-abc123\n".to_string());
+        assert_eq!(
+            trim_secret_value(&value, true),
+            Value::String("sk-abc123".to_string())
+        );
+    }
+
+    #[test]
+    fn trim_secret_value_leaves_non_secret_values_untouched() {
+        let value = Value::String("  https://example.com  ".to_string());
+        assert_eq!(trim_secret_value(&value, false), value);
+    }
+
+    #[test]
+    fn trim_secret_value_leaves_non_string_secret_values_untouched() {
+        let value = json!(true);
+        assert_eq!(trim_secret_value(&value, true), value);
     }
 
     #[test]

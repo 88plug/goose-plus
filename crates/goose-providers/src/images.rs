@@ -77,8 +77,7 @@ pub fn detect_image_path(text: &str) -> Option<String> {
         };
 
         let terminator = text.get(end..).and_then(|rest| rest.chars().next());
-        let terminated =
-            terminator.is_none_or(|c| c == '/' || c.is_whitespace() || c == '"' || c == '\'');
+        let terminated = terminator.is_none_or(is_path_terminator);
 
         if terminated {
             let mut floor = end.saturating_sub(MAX_PATH_LEN);
@@ -91,7 +90,7 @@ pub fn detect_image_path(text: &str) -> Option<String> {
                     let preceded_by_boundary = text
                         .get(..start)
                         .and_then(|prefix| prefix.chars().next_back())
-                        .is_none_or(|c| c.is_whitespace() || c == '"' || c == '\'');
+                        .is_none_or(is_path_leading_boundary);
                     if !preceded_by_boundary {
                         continue;
                     }
@@ -129,6 +128,38 @@ pub fn detect_image_path(text: &str) -> Option<String> {
         from = end;
     }
     best.map(|(_, candidate)| candidate)
+}
+
+fn is_path_leading_boundary(c: char) -> bool {
+    c.is_whitespace()
+        || matches!(
+            c,
+            '"' | '\'' | '\u{00AB}' | '\u{00BB}' | '\u{2018}'
+                ..='\u{201F}' | '\u{2039}' | '\u{203A}'
+        )
+}
+
+/// Characters that terminate an inline image path when they immediately
+/// follow the extension: quotes/whitespace as before, plus Unicode
+/// punctuation (smart quotes, guillemets, ellipsis, em/en dash) and emoji
+/// ranges commonly typed right after a pasted path (e.g. `photo.png🙂` or
+/// `photo.png… more text`). Deliberately conservative: `:` is not a
+/// terminator, and zero-width/combining marks remain glued to the path so
+/// they don't reintroduce the false-positive class the stricter parser was
+/// hardened against.
+fn is_path_terminator(c: char) -> bool {
+    c == '/'
+        || c.is_whitespace()
+        || matches!(
+            c,
+            '"' | '\'' | '\u{00AB}' | '\u{00BB}' | '\u{2013}'
+                ..='\u{201F}' | '\u{2026}' | '\u{2039}' | '\u{203A}'
+        )
+        || ('\u{2300}'..='\u{23FF}').contains(&c)
+        || ('\u{2600}'..='\u{27BF}').contains(&c)
+        || ('\u{2B00}'..='\u{2BFF}').contains(&c)
+        || ('\u{1F1E6}'..='\u{1F1FF}').contains(&c)
+        || ('\u{1F300}'..='\u{1FAFF}').contains(&c)
 }
 
 /// Case-insensitive ASCII substring search returning a byte index into
@@ -307,6 +338,53 @@ mod tests {
         assert_eq!(
             detect_image_path(&text).as_deref(),
             Some(a.to_str().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_detect_image_path_with_unicode_separators() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let png_data = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        let png_path = temp_dir.path().join("photo.png");
+        std::fs::write(&png_path, png_data).unwrap();
+        let png_path_str = png_path.to_str().unwrap();
+
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}🙂")).as_deref(),
+            Some(png_path_str)
+        );
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}🇺🇸")).as_deref(),
+            Some(png_path_str)
+        );
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}⌚")).as_deref(),
+            Some(png_path_str)
+        );
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}⭐")).as_deref(),
+            Some(png_path_str)
+        );
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}… more text")).as_deref(),
+            Some(png_path_str)
+        );
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}\u{2014}more text")).as_deref(),
+            Some(png_path_str)
+        );
+
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}\u{200B}.backup")).as_deref(),
+            None
+        );
+        assert_eq!(
+            detect_image_path(&format!("{png_path_str}\u{0301}")).as_deref(),
+            None
+        );
+        assert_eq!(
+            detect_image_path(&format!("file:{png_path_str}")).as_deref(),
+            None
         );
     }
 
