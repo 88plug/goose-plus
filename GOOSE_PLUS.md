@@ -398,8 +398,24 @@ which lines up with the corrected total below — the earlier undercounted figur
     issues/PRs with real engagement + 281 open issues/PRs + 164 promising small-tier branches +
     134 medium-tier + 70 large-tier branches ≈ 7,181**, not counting 3,104 zero-engagement
     issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a second look before
-    they're triaged either way. Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone
-    who wants to re-run or extend this.
+    they're triaged either way.
+  - **Spot-check finding: the 164 figure is a raw-triage ceiling, likely a real overcount.**
+    Deep-read (full diff + current-codebase comparison, not just log/file-list) the 6 smallest,
+    highest-confidence PROMISING branches across different subsystems — ACP cancellation, ACP
+    session listing, OpenAI-format multi-text-block handling, CLI `/clear` token reset, the
+    dictation API's size-limit doc comment, and `AgentManager::get_or_create_agent`'s creation
+    race. **All 6 were already independently covered**, several by strictly more sophisticated
+    fixes than the upstream branch proposed (e.g. this fork's agent-creation race fix adds
+    lock-leak pruning on error exit and cites a *different* issue, #9031, that upstream's #9181
+    branch never mentions — an independently-found instance of the same bug class). None of these
+    6 branches' fixes are cited anywhere in this doc by number or name, so the mechanical
+    exclusion above correctly couldn't have caught them — they were absorbed by the 4 internal
+    audit sweeps or an earlier untracked session, not by a citable graveyard port. This means the
+    true "still needs porting" count inside the 164 is smaller than 164, likely substantially so,
+    but confirming the exact number requires the same deep-read for all 164 — not yet done, flagged
+    honestly rather than extrapolated from a 6-branch sample into a false-precision estimate.
+    Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or
+    extend this; `promising_absolute_final.json` is the list to work through.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
