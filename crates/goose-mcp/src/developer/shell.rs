@@ -647,6 +647,25 @@ struct ExecutionOutput {
     output_collection_error: Option<String>,
 }
 
+/// Kill a shell command's whole process group on timeout/cancellation, not
+/// just the direct child. `configure_subprocess` places every shell command
+/// in its own process group (`process_group(0)`), so a plain `start_kill()`
+/// leaves any backgrounded grandchildren (e.g. `sleep 100 &` in a script)
+/// running after the tool call returns. Falls back to `start_kill()` if the
+/// child's pid is unavailable or the group-kill syscall itself fails.
+fn kill_process_tree(child: &mut tokio::process::Child) {
+    #[cfg(unix)]
+    {
+        if let Some(pid) = child.id() {
+            let killed = unsafe { libc::kill(-(pid as i32), libc::SIGKILL) } == 0;
+            if killed {
+                return;
+            }
+        }
+    }
+    let _ = child.start_kill();
+}
+
 async fn run_command(
     command_line: &str,
     timeout_secs: Option<u64>,
@@ -690,13 +709,13 @@ async fn run_command(
                     .code(),
                 Err(_) => {
                     timed_out = true;
-                    let _ = child.start_kill();
+                    kill_process_tree(&mut child);
                     let _ = child.wait().await;
                     None
                 }
             },
             _ = cancellation_token.cancelled() => {
-                let _ = child.start_kill();
+                kill_process_tree(&mut child);
                 let _ = child.wait().await;
                 None
             }
@@ -707,7 +726,7 @@ async fn run_command(
                 .map_err(|error| format!("Failed waiting on shell command: {}", error))?
                 .code(),
             _ = cancellation_token.cancelled() => {
-                let _ = child.start_kill();
+                kill_process_tree(&mut child);
                 let _ = child.wait().await;
                 None
             }
@@ -1234,6 +1253,51 @@ mod tests {
         assert!(
             shell_output.exit_code.is_none(),
             "cancelled process should have no exit code"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shell_cancellation_kills_backgrounded_grandchild() {
+        let tool = ShellTool::new_for_test().unwrap();
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
+        let pid_file = tempfile::NamedTempFile::new().unwrap();
+        let pid_path = pid_file.path().to_path_buf();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            token_clone.cancel();
+        });
+
+        // Background a long-lived grandchild and record its pid, then block
+        // the tracked shell process on `wait` so cancellation has to kill the
+        // whole group, not just the shell that's sitting in `wait`.
+        let command = format!("sleep 30 & echo $! > {}; wait", pid_path.display());
+        let result = tool
+            .shell_with_cwd(
+                ShellParams {
+                    command,
+                    timeout_secs: None,
+                    background: None,
+                },
+                None,
+                token,
+            )
+            .await;
+
+        let shell_output = extract_shell_output(&result);
+        assert!(shell_output.exit_code.is_none());
+
+        // Give the kill signal a moment to land, then confirm the
+        // backgrounded grandchild is actually dead, not orphaned.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let pid_str = std::fs::read_to_string(&pid_path).unwrap();
+        let pid: i32 = pid_str.trim().parse().expect("expected numeric pid");
+        let still_alive = unsafe { libc::kill(pid, 0) } == 0;
+        assert!(
+            !still_alive,
+            "backgrounded grandchild should be killed with the process group, not left orphaned"
         );
     }
 
