@@ -373,19 +373,26 @@ which lines up with the corrected total below — the earlier undercounted figur
     (11–30), 70 large (30+) — medium/large deprioritized for this pass, named not dropped.
   - Fanned out 12 haiku agents (one per ~27-branch chunk) across the **entire** small tier — not a
     sample — classifying each from its `git log -3`/changed-file list alone (no full diffs at this
-    stage): **210 PROMISING**, 53 UNCLEAR, 43 SKIP-experiment (wip/tmp/poc/"vibecoded" branches),
-    1 SKIP-superseded. Counts re-verified mechanically from the 12 result files, not from the
-    agents' own self-reported summaries (two of which arithmetic-drifted mid-response before
-    self-correcting — a live example of why every count in this doc is regenerated from source,
-    never trusted from a narrative claim). **This is a first-pass triage, not a verification pass**
-    — the 210 PROMISING branches still need the same deep-read-diff-and-port treatment every landed
-    fix in the matrices above got; none of them are ported yet. So the honest "genuinely worth a
-    human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
-    issues/PRs with real engagement + 281 open issues/PRs + 210 promising small-tier branches +
-    135 medium-tier + 70 large-tier branches ≈ 7,228**, not counting 3,104 zero-engagement
-    issues/PRs, 43 SKIP-experiment branches, or the 53 UNCLEAR branches needing a second look before
-    they're triaged either way. Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone
-    who wants to re-run or extend this.
+    stage): 210 PROMISING, 53 UNCLEAR, 43 SKIP-experiment (wip/tmp/poc/"vibecoded" branches),
+    1 SKIP-superseded. **33 of those 210 turned out to be branches already cited elsewhere in this
+    doc** — a mistake in this pass (already-cited branch names weren't excluded before the haiku
+    fan-out the way already-cited issue/PR numbers were for the zero-engagement filter above) —
+    but also a real validation signal: the haiku agents independently flagged 31 of those 33 as
+    PROMISING with zero knowledge they were already landed/documented, which is evidence the triage
+    method itself is sound. Excluding the overlap: **179 genuinely new PROMISING**, 51 UNCLEAR,
+    43 SKIP-experiment, 1 SKIP-superseded, out of 274 small-tier branches not already accounted for.
+    Counts re-verified mechanically from the 12 result files (then re-verified again against the
+    citation list), not from the agents' own self-reported summaries (two of which arithmetic-
+    drifted mid-response before self-correcting) — every count in this doc is regenerated from
+    source, never trusted from a narrative claim. **This is a first-pass triage, not a verification
+    pass** — the 179 PROMISING branches still need the same deep-read-diff-and-port treatment every
+    landed fix in the matrices above got; none of them are ported yet. So the honest "genuinely
+    worth a human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532
+    closed issues/PRs with real engagement + 281 open issues/PRs + 179 promising small-tier
+    branches + 135 medium-tier + 70 large-tier branches ≈ 7,197**, not counting 3,104
+    zero-engagement issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a
+    second look before they're triaged either way. Raw data + scripts are in
+    `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or extend this.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
