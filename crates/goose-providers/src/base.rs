@@ -319,6 +319,16 @@ pub fn model_info_for_provider_model(provider_name: &str, model_name: &str) -> M
     }
 }
 
+/// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
+fn truncate_for_tracing(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
+}
+
 /// Collect all chunks from a MessageStream into a single Message and ProviderUsage
 pub async fn collect_stream(
     mut stream: MessageStream,
@@ -399,7 +409,12 @@ pub trait Provider: Send + Sync {
     /// Complete with a specific model config.
     #[tracing::instrument(
         skip(self, model_config, session_id, system, messages, tools),
-        fields(session.id = %session_id, gen_ai.request.model = %model_config.model_name)
+        fields(
+            session.id = %session_id,
+            gen_ai.request.model = %model_config.model_name,
+            input = tracing::field::Empty,
+            output = tracing::field::Empty,
+        )
     )]
     async fn complete(
         &self,
@@ -409,10 +424,34 @@ pub trait Provider: Send + Sync {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
+        let span = tracing::Span::current();
+        if !span.is_disabled() {
+            let input_data = serde_json::json!({
+                "system": system,
+                "messages": messages,
+                "tools": tools,
+            });
+            if let Ok(input_json) = serde_json::to_string(&input_data) {
+                span.record("input", truncate_for_tracing(&input_json, 128_000).as_str());
+            }
+        }
+
         let stream = self
             .stream(model_config, session_id, system, messages, tools)
             .await?;
-        collect_stream(stream).await
+        let (message, usage) = collect_stream(stream).await?;
+
+        if !span.is_disabled() {
+            let output_text = message.as_concat_text();
+            if !output_text.is_empty() {
+                span.record(
+                    "output",
+                    truncate_for_tracing(&output_text, 64_000).as_str(),
+                );
+            }
+        }
+
+        Ok((message, usage))
     }
 
     /// Try fast model first, fall back to regular model on failure.
@@ -710,6 +749,19 @@ mod tests {
         let (msg, usage) = collect_stream(Box::pin(stream)).await.unwrap();
         assert_eq!(content_to_strings(&msg), vec!["Hello"]);
         assert_eq!(usage.model, "unknown");
+    }
+
+    #[test]
+    fn test_truncate_for_tracing_leaves_short_strings_untouched() {
+        assert_eq!(truncate_for_tracing("hello", 128_000), "hello");
+    }
+
+    #[test]
+    fn test_truncate_for_tracing_truncates_long_strings_with_ellipsis() {
+        let long = "a".repeat(100);
+        let truncated = truncate_for_tracing(&long, 10);
+        assert_eq!(truncated.chars().count(), 10);
+        assert!(truncated.ends_with("..."));
     }
 
     #[test]
