@@ -167,6 +167,7 @@ impl AppsManagerClient {
     }
 
     fn load_app(&self, name: &str) -> Result<GooseApp, String> {
+        validate_app_name(name)?;
         let path = self.apps_dir.join(format!("{}.html", name));
 
         let html =
@@ -176,6 +177,7 @@ impl AppsManagerClient {
     }
 
     fn save_app(&self, app: &GooseApp) -> Result<(), String> {
+        validate_app_name(&app.resource.name)?;
         let path = self.apps_dir.join(format!("{}.html", app.resource.name));
 
         let html_content = app.to_html()?;
@@ -186,6 +188,7 @@ impl AppsManagerClient {
     }
 
     fn delete_app(&self, name: &str) -> Result<(), String> {
+        validate_app_name(name)?;
         let path = self.apps_dir.join(format!("{}.html", name));
 
         fs::remove_file(&path).map_err(|e| format!("Failed to delete app file: {}", e))?;
@@ -651,6 +654,22 @@ fn schema<T: JsonSchema>() -> JsonObject {
     obj
 }
 
+fn validate_app_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("App name cannot be empty".to_string());
+    }
+    if name
+        .chars()
+        .any(|c| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+    {
+        return Err(format!(
+            "Invalid app name '{}': only letters, digits, hyphens, and underscores are allowed",
+            name
+        ));
+    }
+    Ok(())
+}
+
 fn extract_string(args: &JsonObject, key: &str) -> Result<String, String> {
     args.get(key)
         .and_then(|v| v.as_str())
@@ -685,4 +704,41 @@ fn extract_tool_response<T: serde::de::DeserializeOwned>(
     }
 
     Err(format!("LLM did not call the required tool: {}", tool_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_app_name_accepts_normal_names() {
+        assert!(validate_app_name("clock").is_ok());
+        assert!(validate_app_name("my-app-2").is_ok());
+        assert!(validate_app_name("My_App").is_ok());
+    }
+
+    #[test]
+    fn validate_app_name_rejects_empty() {
+        assert!(validate_app_name("").is_err());
+    }
+
+    #[test]
+    fn validate_app_name_rejects_path_traversal() {
+        assert!(validate_app_name("../../../etc/passwd").is_err());
+        assert!(validate_app_name("..").is_err());
+        assert!(validate_app_name("foo/../bar").is_err());
+    }
+
+    #[test]
+    fn validate_app_name_rejects_path_separators() {
+        assert!(validate_app_name("foo/bar").is_err());
+        assert!(validate_app_name("foo\\bar").is_err());
+        assert!(validate_app_name("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_app_name_rejects_dotfiles_and_extensions() {
+        assert!(validate_app_name("clock.html").is_err());
+        assert!(validate_app_name(".hidden").is_err());
+    }
 }
