@@ -219,6 +219,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Observability | [PR #5590](https://github.com/aaif-goose/goose/pull/5590) (adapted; ported only the input/output span-capture concept onto this fork's already-centralized instrumentation, not the branch's per-provider duplication removal, which doesn't apply here) | `Provider::complete()`'s tracing span recorded `session.id` and the model name but never the actual request/response content, so an opt-in observability layer (e.g. Langfuse) attached to that span had nothing to show beyond timing. Now records truncated input/output, but only when the span is actually enabled, so there's no cost when nothing is subscribed |
 | ACP/Config | [PR #8893](https://github.com/aaif-goose/goose/pull/8893) (adapted to this fork's config internals, which have diverged substantially since the branch was written) | `GooseAcpAgent` stores a per-instance `config_dir` (correctly used by `PermissionManager`), but `self.config()` always returned `Config::global()`, so ACP preferences/dictation/onboarding reads and writes silently used the process-wide config instead of the session's own directory whenever `config_dir` differed from the default — a real bug for concurrent per-directory ACP sessions |
 | ACP/Session | [PR #9483](https://github.com/aaif-goose/goose/pull/9483) (adapted) | `on_set_session_system_prompt` only mutated the in-memory `PromptManager`, so a client-set persona/system-prompt override was silently lost whenever the agent was rebuilt (daemon restart, LRU eviction, session resume). Persists `Set`-mode overrides and `client_`-prefixed `Append`-mode extras to the session record and re-applies them whenever a session's agent is (re)activated; server-managed append keys (`recipe`, `final_output`, `recipe_instructions`) are intentionally excluded since they're rebuilt from other session state |
+| Desktop | [PR #7545](https://github.com/aaif-goose/goose/pull/7545) (adapted; author stress-tested it for days and precisely diagnosed the root cause, but the PR sat with zero reviews/comments and was closed unmerged) | `resultsCache` in `useChatStream.ts` grew without bound over a long-running session (only cleared on explicit session deletion, never on the existing tab-eviction path) — added a weight-aware LRU cache capped at 5 sessions and wired eviction into `App.tsx`'s tab-limit logic. Independently found the same investigation missed: `goosed.ts`'s `stopErrorLogCollection()` removed the stderr `data` listener after startup but never called `resume()`, unlike the symmetric stdout handling right next to it, leaving the stream paused so goosed's own stderr writes would eventually block on a full OS pipe buffer. Also replaced `read-file`'s non-Windows `cat` subprocess spawn with the same native `fs.readFile` already used on Windows |
 
 ### Fixed without an upstream ticket
 
@@ -331,8 +332,8 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~212-222 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  145 individually-cited issues/PRs/branches (107 issues/PRs + 38 branches) — this figure is
+- **~213-223 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  146 individually-cited issues/PRs/branches (108 issues/PRs + 38 branches) — this figure is
   mechanically regenerated from the doc itself
   (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
@@ -409,14 +410,18 @@ which lines up with the corrected total below — the earlier undercounted figur
     and given a final disposition — none left in an open "still needs triage" state. Final
     breakdown: **106 already covered, 28 not applicable, 7 ported, 22 deferred as scope/product
     decisions, 1 uncertain** (164 = 106+28+7+22+1). The medium-tier (134) and large-tier (70)
-    branch buckets — 204 more — have since had this same exhaustive treatment too (see below), so
-    across all three size tiers **368 branches (164 small + 204 medium/large) have now been
+    branch buckets — 204 more — have since had this same exhaustive treatment too (see below), and
+    so have the 51 small-tier UNCLEAR branches (flagged by the original log/file-list-only triage
+    as needing "a second, deeper look" — not simply skipped). Across all four batches, **419
+    branches (164 small-PROMISING + 51 small-UNCLEAR + 204 medium/large) have now been
     individually deep-read and given a terminal disposition** — none left open. The honest
     "genuinely worth a human/agent triage pass" pool, replacing the old untrustworthy "~1354"
-    figure, is now down to **6,532 closed issues/PRs with real engagement + 281 open issues/PRs
-    ≈ 6,813**, plus the 51 small-tier UNCLEAR branches this pass didn't reach (a second look, not
-    a full re-triage). Not counted at all: 3,104 zero-engagement issues/PRs, or 43 SKIP-experiment
-    branches.
+    figure, is now down to just **6,532 closed issues/PRs with real engagement + 281 open
+    issues/PRs ≈ 6,813**. Not counted at all: 3,104 zero-engagement issues/PRs, or the 43
+    SKIP-experiment branches — those were classified by the original log/file-list-only pass as
+    personal/broken/draft fragments and have NOT had the same deep-read verification as the
+    UNCLEAR bucket; that classification is plausible on its face but hasn't been individually
+    confirmed the way everything else in this section has.
   - **Full-pool verification, not a sample: all 164 small-tier PROMISING branches have now been
     individually deep-read** (full diff + current-codebase comparison, not just log/file-list) —
     15 by hand in an initial spot-check, then the remaining 149 exhaustively via 11 parallel
@@ -526,6 +531,39 @@ which lines up with the corrected total below — the earlier undercounted figur
       removing a shipping provider that users depend on, over an approach the original maintainer
       himself walked back, is a product decision this fork should make deliberately, not one to
       silently inherit from an abandoned branch.
+- **The 51 small-tier UNCLEAR branches have now had the "second, deeper look" they were always
+  flagged as needing** — the original triage classified them from `git log -3`/file-list alone
+  (no diff content), and each carries a specific noted reason it couldn't be resolved that way
+  (vague commit messages, near-duplicate sibling branches, "might be incomplete WIP", "unclear if
+  still relevant"). Applied the same 3-layer citation exclusion used elsewhere first (2 were
+  already cited: `fix/8495-custom-headers-comma-in-quotes` → PR #8495, `goose/issue-7449` → #7449),
+  leaving 49. Fanned out 5 parallel deep-read agents (~10 branches each) instructed to read the
+  actual diff and resolve the SPECIFIC noted ambiguity, not just re-read the log. Mechanically
+  aggregated (never trusted a chunk's own tally): **27 ALREADY_COVERED, 14 NOT_APPLICABLE,
+  7 NEW_CAPABILITY, 1 BUG_FIX_CANDIDATE** (27+14+7+1=49).
+  - The 1 BUG_FIX_CANDIDATE (`zane/evict-sessions-from-cache-new`) was independently re-verified
+    before porting — see PR #7545 in the bug matrix above. Notably, verifying it surfaced a second,
+    related bug the branch itself never mentioned (`goosed.ts`'s stderr listener removal missing a
+    matching `resume()` call), found only by reading the current file closely enough to compare it
+    against the adjacent, symmetric stdout handling — the same "a first pass can miss something a
+    second, deeper look catches" lesson that recurred throughout this branch-mining effort.
+  - The 27 ALREADY_COVERED branches confirm, not undermine, the original triage's honesty about its
+    own limits: e.g. `micn/health-checks`/`micn/live-tests`/`micn/live2` are confirmed (via full git
+    history on the path) to be direct lineage predecessors of the fork's current
+    `pr-smoke-test.yml`; `pr-5607`/`pr-5610`/`pr-5614` are a near-duplicate/duplicate triplet (5610
+    and 5614 are byte-identical) targeting a Hub/TopNavigation tile-grid architecture this fork
+    replaced with an independently redesigned `Hub.tsx`/`NavigationPanel.tsx`.
+  - The 7 NEW_CAPABILITY branches (a client-fingerprinting mechanism, a subrecipe-import subsystem,
+    a whole customizable-navigation UI, a persistent-shell-session extension, etc.) are scope
+    decisions, not fixes — not ported, consistent with every other NEW_CAPABILITY verdict in this
+    doc.
+  - All three branch-size tiers are now fully resolved to a terminal disposition. Combining the
+    small-tier PROMISING batch (164) with this UNCLEAR batch (51): **135 already-covered
+    (106+27+2 excluded-via-citation), 42 not-applicable (28+14), 8 ported (7+1), 22 deferred +
+    7 new-capability (29 total scope decisions), 1 uncertain** — 135+42+8+29+1 = 215 small-tier
+    branches. Combined with the 204 medium/large-tier branches: **419 branches across all three
+    size tiers** now have a verified terminal disposition, none left in an open "still needs
+    triage" state.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
