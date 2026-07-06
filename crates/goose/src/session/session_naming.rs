@@ -12,10 +12,16 @@ fn strip_xml_tags(text: &str) -> String {
     static BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?s)<([a-zA-Z][a-zA-Z0-9_]*)[^>]*>.*?</[a-zA-Z][a-zA-Z0-9_]*>").unwrap()
     });
+    // Orphan closing tags with everything before them (e.g. reasoning content from local
+    // models whose chat template already consumes the opening tag, leaving output shaped
+    // like `reasoning...</think>answer` with no opening tag for BLOCK_RE to match).
+    static ORPHAN_CLOSE_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?s)^.*</[a-zA-Z][a-zA-Z0-9_]*>").unwrap());
     static TAG_RE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"</?[a-zA-Z][a-zA-Z0-9_]*[^>]*>").unwrap());
     let pass1 = BLOCK_RE.replace_all(text, "");
-    TAG_RE.replace_all(&pass1, "").into_owned()
+    let pass2 = ORPHAN_CLOSE_RE.replace_all(&pass1, "");
+    TAG_RE.replace_all(&pass2, "").into_owned()
 }
 
 fn extract_short_title(text: &str) -> String {
@@ -184,13 +190,22 @@ mod tests {
         );
         // self-closing tags
         assert_eq!(strip_xml_tags("<br/>self closing"), "self closing");
-        // orphan closing tags
-        assert_eq!(strip_xml_tags("orphan </think> tag"), "orphan  tag");
         // multiline content
         assert_eq!(
             strip_xml_tags("<think>\nline1\nline2\n</think>result"),
             "result"
         );
+        // orphan closing tag (opening tag consumed by the model's chat template) strips
+        // everything before it too, not just the tag itself
+        assert_eq!(
+            strip_xml_tags("1. Analyze... 2. Think...</think>Hello"),
+            "Hello"
+        );
+        assert_eq!(
+            strip_xml_tags("long reasoning here</think>Short Title"),
+            "Short Title"
+        );
+        assert_eq!(strip_xml_tags("</think>"), "");
     }
 
     #[test]
