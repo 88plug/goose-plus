@@ -393,48 +393,41 @@ which lines up with the corrected total below — the earlier undercounted figur
     deprioritized OPEN-PR bucket. Every count here is regenerated from source (result files →
     `pr_history.json` join → branch-name regex), never trusted from a narrative claim or the
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
-    self-correcting). **This is still a first-pass triage, not a verification pass** — the 164
-    PROMISING branches still need the same deep-read-diff-and-port treatment every landed fix in
-    the matrices above got; 2 have been ported so far (see below). So the honest "genuinely
-    worth a human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532
-    closed issues/PRs with real engagement + 281 open issues/PRs + 162 promising small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,179**, not counting 3,104
-    zero-engagement issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a
-    second look before they're triaged either way.
-  - **Spot-check finding: the raw 164-branch figure was mostly an overcount.** Deep-read (full
-    diff + current-codebase comparison, not just log/file-list) 15 of the smallest, highest-
-    confidence PROMISING branches across different subsystems. **9 were already independently
-    covered**, several by strictly more sophisticated fixes than the upstream branch proposed
-    (e.g. this fork's `AgentManager::get_or_create_agent` race fix adds lock-leak pruning on error
-    exit and cites a *different* issue, #9031, that upstream's #9181 branch never mentions — an
-    independently-found instance of the same bug class; `goose/issue-6236`'s session-resume
-    working-directory prompt is already gated behind `session_config.interactive`, and its other
-    half — a missing-extensions restore confirm — doesn't exist in this fork's resume path at all;
-    `best/builtin-extensions-fix`'s "fresh install shows no extensions" concern was empirically
-    disproven by writing a throwaway test against a genuinely empty config — a "read-migration"
-    layer in this fork's config system already synthesizes the full platform-extension default set
-    regardless of what's on disk). **3 didn't apply at all**: two branches' files
-    (`scripts/test_providers.sh`, `scripts/clean-gh-pages.sh` — upstream's own CI/Pages tooling)
-    don't exist in this fork, and one (`goose/issue-7134`, a deprecated "skills" extension filter)
-    addresses a builtin extension this fork never shipped, so there's nothing stale to filter.
-    **1 was deferred, not ported**: `jackamadeo/revert-expensive-tool-list` proposes
-    reverting this fork's existing `coerce_value`/schema-aware numeric coercion, but the revert's
-    own upstream PR (#5817) was itself closed without merging — no confirmed evidence the original
-    fix (#5478, merged) was actually wrong, so reverting a currently-working feature on an
-    abandoned revert attempt isn't justified without more signal. **2 were genuinely new and got
-    ported**: `upstream/fix-7288` → issue #7288/PR #7297 (Summon subrecipe parameters), and
-    `upstream/goose/issue-6405` → issue #6405/PR #6416 (CLI never wired a scheduler into
-    `build_session`'s agent, so the schedule-management tool failed with "Scheduler not available"
-    on every platform, not just the AARCH64 case upstream reported — both now in the bug matrix
-    above). None of the 7 already-covered branches' fixes were cited anywhere in this doc by number
-    or name before this pass, so the mechanical exclusion above correctly couldn't have caught
-    them — they were absorbed by the 4 internal audit sweeps or an earlier untracked session, not
-    by a citable graveyard port. This means the true "still needs porting" count inside the
-    remaining 162 is smaller still, likely substantially so, but confirming the exact number
-    requires the same deep-read for all 162 — not yet done, flagged honestly rather than
-    extrapolated from a 15-branch sample into a false-precision estimate.
+    self-correcting). All 164 of these branches have since been individually deep-read and
+    verified (not just triaged) — see the finding directly below, which replaces the raw 164
+    figure with a real breakdown (103 already covered, 27 not applicable, 30 genuinely new and
+    queued, 2 already ported, 1 deferred, 1 uncertain). So the honest "genuinely worth a
+    human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
+    issues/PRs with real engagement + 281 open issues/PRs + 30 verified-genuinely-new small-tier
+    branches + 134 medium-tier + 70 large-tier branches ≈ 7,047** (medium/large tiers haven't had
+    this same exhaustive per-branch verification yet, so those two counts are still raw, not
+    net-of-already-covered), not counting 3,104 zero-engagement issues/PRs, 43 SKIP-experiment
+    branches, or the 51 UNCLEAR branches needing a second look before they're triaged either way.
+  - **Full-pool verification, not a sample: all 164 small-tier PROMISING branches have now been
+    individually deep-read** (full diff + current-codebase comparison, not just log/file-list) —
+    15 by hand in an initial spot-check, then the remaining 149 exhaustively via 11 parallel
+    verification passes covering every branch, none skipped. Real, mechanically-tallied result
+    from the 149-branch pass: **94 ALREADY_COVERED** (often by more sophisticated or
+    architecturally-relocated fixes than the upstream branch proposed — e.g. OAuth token refresh
+    already lives in the vendored rmcp SDK's `CredentialStore`, tool-name resolution already
+    generic in `extension_manager.rs`'s `resolve_tool()`), **24 NOT_APPLICABLE** (most commonly:
+    the branch targets `ui/goose2/`, an experimental UI tree that doesn't exist in this fork —
+    9 of the 24 — or a shell script/workflow this fork never carried over), **1 UNCERTAIN**
+    (`jhugo/fix-hermit-cmake-linux-arm64` — the literal proposed fix isn't present, but confirming
+    whether it's actually needed requires live access to hermit's package repo, out of scope for
+    this pass), and **30 GENUINELY_NEW** — real, currently-open gaps with concrete file:line
+    evidence, not yet ported. Combined with the 15-branch spot-check (9 covered, 3 not applicable,
+    1 deferred, 2 already ported — see the two bug-matrix rows above), across the full 164-branch
+    pool: **103 already covered, 27 not applicable, 1 deferred, 1 uncertain, 2 ported, 30 queued as
+    genuinely new** (164 = 103+27+1+1+2+30). The 30 genuinely-new candidates, with the exact
+    file/function each touches, are listed in
+    `scratchpad/graveyard-data-v2/verify_chunks/all_verified.json` — a ready-to-work queue, not a
+    vague "check this branch" pointer. None of the 103 already-covered branches' fixes were cited
+    anywhere in this doc by number or name before this pass, so the mechanical citation-exclusion
+    above correctly couldn't have caught them — they were absorbed by the 4 internal audit sweeps
+    or an earlier untracked session, not by a citable graveyard port.
     Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or
-    extend this; `promising_absolute_final.json` is the list to work through.
+    extend this.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
