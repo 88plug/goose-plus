@@ -322,6 +322,7 @@ fn parse_responses_stream_event(data_line: &str) -> anyhow::Result<Option<Respon
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseMetadata {
+    #[serde(default)]
     pub id: String,
     pub object: String,
     pub created_at: i64,
@@ -340,6 +341,7 @@ pub struct ResponseMetadata {
 #[serde(rename_all = "snake_case")]
 pub enum ResponseOutputItemInfo {
     Reasoning {
+        #[serde(default)]
         id: String,
         #[serde(default)]
         summary: Vec<SummaryText>,
@@ -1082,6 +1084,35 @@ mod tests {
         assert_eq!(usage.model, "gpt-5.2-pro");
         assert_eq!(usage.usage.input_tokens, Some(10));
         assert_eq!(usage.usage.output_tokens, Some(4));
+        assert_eq!(usage.usage.total_tokens, Some(14));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_responses_stream_completed_allows_missing_id() -> anyhow::Result<()> {
+        // A `response.completed` event whose `response` object is missing `id`
+        // (e.g. from a non-conformant proxy) used to fail `serde_json::from_value`
+        // entirely, silently dropping the event (and its final usage) instead of
+        // just falling back to an empty id.
+        let lines = vec![
+            r#"data: {"type":"response.completed","sequence_number":1,"response":{"object":"response","created_at":1737368310,"status":"completed","model":"gpt-5.2-pro","usage":{"input_tokens":10,"output_tokens":4,"total_tokens":14}}}"#.to_string(),
+            "data: [DONE]".to_string(),
+        ];
+
+        let response_stream = tokio_stream::iter(lines.into_iter().map(Ok));
+        let messages = responses_api_to_streaming_message(response_stream);
+        futures::pin_mut!(messages);
+
+        let mut usage: Option<ProviderUsage> = None;
+        while let Some(item) = messages.next().await {
+            let (_message, maybe_usage) = item?;
+            if let Some(final_usage) = maybe_usage {
+                usage = Some(final_usage);
+            }
+        }
+
+        let usage = usage.expect("usage should still be captured despite the missing id");
         assert_eq!(usage.usage.total_tokens, Some(14));
 
         Ok(())

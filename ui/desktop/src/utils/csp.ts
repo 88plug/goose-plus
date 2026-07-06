@@ -64,14 +64,18 @@ export function buildCSP(externalGoosed?: ExternalGoosedConfig): string {
 
   return (
     "default-src 'self';" +
-    "style-src 'self' 'unsafe-inline';" +
+    // Allow inline styles (used by our React components) and external stylesheets (for MCP-UI)
+    "style-src 'self' 'unsafe-inline' https:;" +
+    "style-src-elem 'self' 'unsafe-inline' https:;" +
     "script-src 'self' 'unsafe-inline';" +
     "img-src 'self' data: https:;" +
     `connect-src ${connectSrc};` +
     "object-src 'none';" +
     "frame-src 'self' https: http:;" +
     "font-src 'self' data: https:;" +
-    "media-src 'self' mediastream:;" +
+    // Media sources - allow microphone, https media, and blobs/data URLs (for MCP-UI)
+    "media-src 'self' https: blob: data: mediastream:;" +
+    "media-src-elem 'self' https: blob: data: mediastream:;" +
     "form-action 'none';" +
     "base-uri 'self';" +
     "manifest-src 'self';" +

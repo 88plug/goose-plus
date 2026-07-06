@@ -145,4 +145,12 @@ describe('buildCSP', () => {
     expect(csp).toContain('connect-src');
     expect(csp).toContain("object-src 'none'");
   });
+
+  it('allows external stylesheets and media sources for MCP-UI webviews', () => {
+    const csp = buildCSP(undefined);
+    expect(csp).toContain("style-src 'self' 'unsafe-inline' https:");
+    expect(csp).toContain("style-src-elem 'self' 'unsafe-inline' https:");
+    expect(csp).toContain("media-src 'self' https: blob: data: mediastream:");
+    expect(csp).toContain("media-src-elem 'self' https: blob: data: mediastream:");
+  });
 });

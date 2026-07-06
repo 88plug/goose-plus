@@ -285,6 +285,15 @@ pub fn to_bedrock_tool(tool: &Tool) -> Result<bedrock::Tool> {
         input_schema.insert("type".to_string(), Value::String("object".to_string()));
     }
 
+    // Bedrock's Converse API rejects `oneOf`/`allOf`/`anyOf` at the top level of a
+    // tool's input_schema ("input_schema does not support oneOf, allOf, or anyOf at
+    // the top level"), which some MCP servers (e.g. Pydantic-generated schemas) use.
+    // Strip them rather than failing the whole tool call - the model can still
+    // respect the alternatives via property descriptions.
+    for key in ["oneOf", "allOf", "anyOf"] {
+        input_schema.remove(key);
+    }
+
     Ok(bedrock::Tool::ToolSpec(
         bedrock::ToolSpecification::builder()
             .name(tool.name.to_string())
@@ -549,6 +558,36 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn test_to_bedrock_tool_strips_top_level_one_of() -> Result<()> {
+        // Bedrock's Converse API rejects `oneOf`/`allOf`/`anyOf` at the top level
+        // of a tool's input_schema with "input_schema does not support oneOf,
+        // allOf, or anyOf at the top level" - common with Pydantic-generated
+        // MCP tool schemas.
+        let schema = json!({
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "oneOf": [{"required": ["query"]}]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let tool = rmcp::model::Tool::new("search", "search something", schema);
+
+        let bedrock_tool = to_bedrock_tool(&tool)?;
+        let bedrock::Tool::ToolSpec(spec) = bedrock_tool else {
+            panic!("expected ToolSpec");
+        };
+        let bedrock::ToolInputSchema::Json(document) = spec.input_schema.unwrap() else {
+            panic!("expected Json input schema");
+        };
+        let value = from_bedrock_json(&document)?;
+        assert!(value.get("oneOf").is_none());
+        assert!(value.get("properties").is_some());
+
+        Ok(())
     }
 
     #[test]

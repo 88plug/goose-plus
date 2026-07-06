@@ -4,7 +4,7 @@ use rmcp::model::Role;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 
 use super::base::{
@@ -230,6 +230,19 @@ impl CursorAgentProvider {
             .stdout
             .take()
             .ok_or_else(|| ProviderError::RequestFailed("Failed to capture stdout".to_string()))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| ProviderError::RequestFailed("Failed to capture stderr".to_string()))?;
+
+        // Drain stderr concurrently with stdout so the cursor-agent CLI never
+        // blocks on a full stderr pipe while we're only reading stdout.
+        let stderr_task = tokio::spawn(async move {
+            let mut stderr_reader = BufReader::new(stderr);
+            let mut buf = String::new();
+            let _ = stderr_reader.read_to_string(&mut buf).await;
+            buf
+        });
 
         let mut reader = BufReader::new(stdout);
         let mut lines = Vec::new();
@@ -257,6 +270,7 @@ impl CursorAgentProvider {
         let exit_status = child.wait().await.map_err(|e| {
             ProviderError::RequestFailed(format!("Failed to wait for command: {}", e))
         })?;
+        let stderr_output = stderr_task.await.unwrap_or_default();
 
         if !exit_status.success() {
             if !self.get_authentication_status().await {
@@ -264,9 +278,15 @@ impl CursorAgentProvider {
                     "You are not logged in to cursor-agent. Please run 'cursor-agent login' to authenticate first."
                         .to_string()));
             }
+            let stderr_suffix = if stderr_output.trim().is_empty() {
+                String::new()
+            } else {
+                format!(" stderr: {}", stderr_output.trim())
+            };
             return Err(ProviderError::RequestFailed(format!(
-                "Command failed with exit code: {:?}",
-                exit_status.code()
+                "Command failed with exit code: {:?}.{}",
+                exit_status.code(),
+                stderr_suffix
             )));
         }
 
@@ -367,5 +387,53 @@ impl Provider for CursorAgentProvider {
 
         let provider_usage = ProviderUsage::new(model_config.model_name.clone(), usage);
         Ok(stream_from_single_message(message, provider_usage))
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn make_fake_cursor_agent(stderr_message: &str) -> tempfile::TempPath {
+        let mut file = tempfile::NamedTempFile::new().expect("create temp script");
+        writeln!(
+            file,
+            r#"#!/bin/sh
+if [ "$1" = "status" ]; then
+    echo "✓ Logged in as test-user"
+    exit 0
+fi
+echo "{stderr_message}" >&2
+exit 1
+"#
+        )
+        .expect("write script");
+        let path = file.into_temp_path();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod script");
+        path
+    }
+
+    #[tokio::test]
+    async fn execute_command_surfaces_stderr_on_failure() {
+        let script = make_fake_cursor_agent("cursor-agent: invalid model 'auto'");
+        let provider = CursorAgentProvider {
+            command: script.to_path_buf(),
+            model: ModelConfig::new_or_fail("auto"),
+            name: CURSOR_AGENT_PROVIDER_NAME.to_string(),
+        };
+
+        let err = provider
+            .execute_command("system", &[], &[])
+            .await
+            .expect_err("expected the failing command to surface an error");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("cursor-agent: invalid model 'auto'"),
+            "error should surface the CLI's stderr output, got: {message}"
+        );
     }
 }

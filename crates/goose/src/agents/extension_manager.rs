@@ -189,6 +189,16 @@ fn resolve_command(cmd: &str) -> PathBuf {
         })
 }
 
+/// Stdio extension args are passed straight to `Command::args()` with no shell
+/// involved, so a leading `~` (e.g. `--prefix ~/my-server`) is never expanded to
+/// the user's home directory, unlike running the same command line in an actual
+/// shell.
+fn expand_arg_tildes(args: &[String]) -> Vec<String> {
+    args.iter()
+        .map(|arg| shellexpand::tilde(arg).into_owned())
+        .collect()
+}
+
 fn require_str_parameter<'a>(v: &'a serde_json::Value, name: &str) -> Result<&'a str, ErrorData> {
     let v = v.get(name).ok_or_else(|| {
         ErrorData::new(
@@ -1028,6 +1038,9 @@ impl ExtensionManager {
 
                 // Check for malicious packages before launching the process
                 extension_malware_check::deny_if_malicious_cmd_args(cmd, args).await?;
+
+                let args = expand_arg_tildes(args);
+                let args = &args;
 
                 let command = if let Some(container) = container {
                     let container_id = container.id();
@@ -2079,6 +2092,31 @@ mod tests {
     use rmcp::model::ServerNotification;
 
     use tokio::sync::mpsc;
+
+    #[test]
+    fn expand_arg_tildes_expands_leading_tilde() {
+        let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
+        let args = vec![
+            "--prefix".to_string(),
+            "~/Desktop/mcp-fundamentals".to_string(),
+            "run".to_string(),
+        ];
+        let expanded = expand_arg_tildes(&args);
+        assert_eq!(
+            expanded,
+            vec![
+                "--prefix".to_string(),
+                format!("{home}/Desktop/mcp-fundamentals"),
+                "run".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn expand_arg_tildes_leaves_non_tilde_args_untouched() {
+        let args = vec!["--flag".to_string(), "value".to_string()];
+        assert_eq!(expand_arg_tildes(&args), args);
+    }
 
     impl ExtensionManager {
         async fn add_mock_extension(&self, name: String, client: McpClientBox) {
