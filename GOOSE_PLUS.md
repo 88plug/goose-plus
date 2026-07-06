@@ -232,6 +232,9 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Providers/GCP | [#1807](https://github.com/aaif-goose/goose/issues/1807) | `GcpVertexAIProvider::from_env` accepted a `TlsConfig` parameter but discarded it entirely (`_tls_config`), unlike sibling providers (avian, databricks_v2, sagemaker_tgi) that already thread `GOOSE_CA_CERT_PATH`-backed TLS config into their HTTP clients — corporate-proxy/Zscaler TLS interception broke Vertex AI auth with no way to configure a trusted CA cert. Made `ApiClient::configure_tls` public and wired it into the client builder |
 | Providers | [PR #10039](https://github.com/aaif-goose/goose/pull/10039) (adapted; data-only, applied verbatim) | The canonical model registry's Cortecs entries were stuck at 56 (this fork never absorbed the fix) — 34 live models had no canonical mapping at all and 21 more were mislabeled under other providers' pricing/context metadata. All fields sourced from the live Cortecs API in the original PR; now 108 entries, matching the PR's own verified before/after counts |
 | Docs | [PR #9913](https://github.com/aaif-goose/goose/pull/9913) (adapted) | The hooks guide's "Hook Payload" section never named the `message` field that `UserPromptSubmit`/`AfterAgentResponse` hooks actually carry the prompt/response text in — hook script authors had to guess or read the source. Added an explicit example payload |
+| Providers | [PR #10106](https://github.com/aaif-goose/goose/pull/10106) (adapted) | `detect_image_path` only treated `/`, whitespace, and quotes as path terminators after an image extension, so a path immediately followed by an emoji or Unicode punctuation (ellipsis, em dash, smart quotes) — e.g. `photo.png🙂` or `photo.png… more text` — wasn't recognized as a complete path. Widened the terminator check to cover common Unicode punctuation and emoji ranges, keeping `:` a non-terminator and zero-width/combining marks glued to the path |
+| Server | [#6748](https://github.com/aaif-goose/goose/issues/6748) | The `/config/upsert` endpoint stored secret values (API keys, tokens) verbatim with no trimming — a pasted key with leading/trailing whitespace or a trailing newline (common when copying from an email) was sent as-is in an auth header, producing a confusing 401. The ACP provider-config save path already trims for exactly this reason; applied the same fix here |
+| Docs | [PR #9663](https://github.com/aaif-goose/goose/pull/9663) (ported) | Firecrawl already has a full tutorial doc (`/docs/mcp/firecrawl-mcp`) but was missing from the extensions directory (`servers.json`), so it never appeared in the browsable, one-click-install listing — unlike comparable web search/scraping providers (Exa, Tavily, Browserbase, Apify) |
 
 ### Fixed without an upstream ticket
 
@@ -344,8 +347,8 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~225-235 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  158 individually-cited issues/PRs/branches (120 issues/PRs + 38 branches) — this figure is
+- **~228-238 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  161 individually-cited issues/PRs/branches (123 issues/PRs + 38 branches) — this figure is
   mechanically regenerated from the doc itself
   (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
@@ -841,11 +844,78 @@ which lines up with the corrected total below — the earlier undercounted figur
   - Full 240-item raw output: `scratchpad/graveyard-data-v2/closed_pass_tier3/{chunk,result}_*.json`
     and `all_merged_tier3.json`.
   - **Citation count after this batch: 120 issues/PRs + 38 branches = 158** (mechanically
-    regenerated, up from 155). **Remaining pool, still the dominant untouched figure: ~5,695
-    closed issues/PRs with real engagement below the score-11 cutoff used across all three tiers
-    so far** — the next step, if continued, is either lowering the score cutoff further or
-    accepting a coarser, cheaper triage pass for the long tail, the way the branch graveyard's
-    small tier was first triaged by log/file-list alone before any deep read.
+    regenerated, up from 155).
+- **Fourth engagement tier of the closed pool resolved (this stretch)**: `score in [9, 11)`, the
+  band just below the third tier — **300 items (128 issues + 172 PRs)**, 15 chunks of ~20.
+  - Mechanically aggregated (300/300, zero duplicates): **160 ALREADY_COVERED, 82 NOT_APPLICABLE,
+    34 NEW_CAPABILITY, 10 UNCERTAIN, 14 BUG_FIX_CANDIDATE.**
+  - Independent re-verification overturned 2 of the 14 candidates — both instructive about the
+    limits of code-pattern matching alone:
+    - **#6366** (MCP Apps `size-changed` notification only reads `height`, never `width`) does
+      **not hold up**. The issue's own discussion thread (the reporter explicitly asked "is there
+      a reason for this?") ends with the maintainer's own comment: *"the original behavior was
+      right and the width should be ignored — in inline mode, apps simply need to adapt to the
+      width of the container."* Confirmed independently: every currently-active display-mode
+      config in `McpAppRenderer.tsx` declares `width: 'fixed'` (only a commented-out example mode
+      uses flexible width), so ignoring width in inline mode is deliberate, not an oversight.
+    - **#7190** (`GOOSE_PROVIDER=codex` silently falls back to `openrouter` at runtime) could
+      **not be confirmed** after tracing the actual resolution path: the "codex" provider is
+      genuinely registered in `ProviderRegistry` (`codex.rs`'s `CODEX_PROVIDER_NAME`, wired via
+      `init.rs`'s `registry.register::<CodexProvider>(true)`), and `get_active_provider()` in
+      `config/providers.rs` correctly checks the env var / structured config / legacy flat key in
+      order — none of the hypotheses that would explain a silent fallback to `openrouter`
+      specifically panned out. The catalog-exclusion test the triage agent originally cited
+      (`!provider_ids.contains("codex")`) turned out to be about a *different*, deliberately
+      curated onboarding-menu list, unrelated to runtime resolution. Left uncharacterized rather
+      than guessing at an unconfirmed mechanism or porting a fix for the wrong cause.
+  - **3 ported this stretch**, each independently re-verified:
+    - **PR #10106** — `detect_image_path` only recognized `/`, whitespace, and quotes as path
+      terminators, so a path immediately followed by an emoji or Unicode punctuation (e.g.
+      `photo.png🙂`, `photo.png… more text`) wasn't recognized as complete. Widened the terminator
+      check via two small helper functions covering common Unicode punctuation and emoji ranges,
+      deliberately keeping `:` a non-terminator and zero-width/combining marks glued to the path
+      (matching the upstream PR's own stated conservatism, since this fork's stricter path parser
+      predates the PR and has its own false-positive-guarding history).
+    - **#6748** — the `/config/upsert` endpoint (the desktop app's actual save path, distinct
+      from the ACP save path which already trims) stored secret values verbatim with no
+      whitespace trimming, so a pasted API key with a trailing newline (common when copying from
+      an email) produced a confusing 401. Extracted a small `trim_secret_value` helper,
+      independently unit-tested (mutation-tested: reverting it made the "trims a pasted key" test
+      fail with the exact untrimmed string).
+    - **PR #9663** — Firecrawl already has a full tutorial doc in this fork but was missing from
+      the extensions directory (`servers.json`), so it never appeared in the browsable
+      one-click-install listing. Applied the upstream diff verbatim (confirmed it applies
+      cleanly and the referenced tutorial doc already exists in this fork).
+  - **9 remaining candidates catalogued, not ported this stretch**: **#7625** (a "provider
+    unavailable, chat preserved" graceful-degradation UI state doesn't exist, though the backend
+    already tolerates a missing provider — a UI feature addition, not a narrow fix), **#7360**
+    (a recipe whose instructions call `delegate()` without declaring `sub_recipes:` silently gets
+    no delegate tool, since the summon extension's gating only checks for a declared sub-recipe —
+    needs care around the gating logic), **#4821** (two desktop files still build paths via raw
+    string concatenation with no `path.join`/`~`-expansion — Windows-specific, needs verification
+    without a live Windows environment), **#3944** (`error_from_event`'s naive substring match on
+    "context window exceeded" can misclassify unrelated errors — real, but the right fix needs a
+    design decision on what a more precise check looks like), **#9918** (no dedup guard on Nostr
+    deep-link session imports — moderate frontend change), **#4397** (`CustomProviderForm.tsx`'s
+    submit button has no `isSubmitting` guard, so a slow response or double-click can create
+    duplicate providers — frontend, not verified this stretch), **#3872** (missing-dependency
+    spawn errors, e.g. absent `uvx`/`npx`, surface a raw OS error instead of actionable guidance —
+    needs distinguishing ENOENT from other IO errors cleanly), **#9681** (Electron grants the
+    `media` permission but never calls `systemPreferences.askForMediaAccess('microphone')` for
+    macOS's separate TCC authorization — macOS-only, can't verify without a live macOS
+    environment), **#7509** (`goosed.ts`'s stdout handler and `main.ts`'s check-ollama handler
+    both still accumulate `data.toString()` synchronously per chunk instead of batching — the
+    same class of Node.js backpressure/allocation-pressure bug already fixed once this session
+    for a different stream in `goosed.ts`, worth a dedicated follow-up applying the same pattern
+    to these two handlers).
+  - Full 300-item raw output: `scratchpad/graveyard-data-v2/closed_pass_tier4/{chunk,result}_*.json`
+    and `all_merged_tier4.json`.
+  - **Citation count after this batch: 123 issues/PRs + 38 branches = 161** (mechanically
+    regenerated, up from 158). **Remaining pool, still the dominant untouched figure: ~5,395
+    closed issues/PRs with real engagement below the score-9 cutoff used across all four tiers so
+    far** — the next step, if continued, is either lowering the score cutoff further or accepting
+    a coarser, cheaper triage pass for the long tail, the way the branch graveyard's small tier
+    was first triaged by log/file-list alone before any deep read.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
