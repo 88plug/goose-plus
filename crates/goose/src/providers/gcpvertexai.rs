@@ -155,6 +155,21 @@ pub struct GcpVertexAIProvider {
     name: String,
 }
 
+/// Builds the reqwest client used for Vertex AI requests, applying `tls_config`
+/// (e.g. a corporate proxy's CA cert via `GOOSE_CA_CERT_PATH`) the same way
+/// sibling providers already do via `ApiClient` - previously this was silently
+/// discarded.
+fn build_gcp_client(
+    tls_config: Option<&crate::providers::api_client::TlsConfig>,
+) -> Result<Client> {
+    let mut client_builder = Client::builder().timeout(resolve_provider_timeout(None));
+    if let Some(tls_config) = tls_config {
+        client_builder =
+            crate::providers::api_client::ApiClient::configure_tls(client_builder, tls_config)?;
+    }
+    Ok(client_builder.build()?)
+}
+
 impl GcpVertexAIProvider {
     /// Creates a new provider instance from environment configuration.
     ///
@@ -165,16 +180,14 @@ impl GcpVertexAIProvider {
     /// * `model` - Configuration for the model to be used
     pub async fn from_env(
         model: ModelConfig,
-        _tls_config: Option<crate::providers::api_client::TlsConfig>,
+        tls_config: Option<crate::providers::api_client::TlsConfig>,
     ) -> Result<Self> {
         let config = crate::config::Config::global();
         let project_id = config.get_param("GCP_PROJECT_ID")?;
         let location = Self::determine_location(config)?;
         let host = Self::build_host_url(&location);
 
-        let client = Client::builder()
-            .timeout(resolve_provider_timeout(None))
-            .build()?;
+        let client = build_gcp_client(tls_config.as_ref())?;
 
         let auth = GcpAuth::new().await?;
 
@@ -664,6 +677,30 @@ mod tests {
     use super::*;
     use goose_providers::base::ProviderDescriptor as _;
     use reqwest::StatusCode;
+
+    #[test]
+    fn build_gcp_client_applies_tls_config() {
+        // A configured-but-invalid TlsConfig (nonexistent CA cert path) must
+        // surface an error, proving it's actually wired into the client
+        // builder instead of being silently discarded. Depending on which TLS
+        // feature is compiled in, the error is either a failed cert read or a
+        // "no TLS backend" rejection - either one proves `tls_config` was
+        // actually consumed rather than ignored.
+        let tls_config = crate::providers::api_client::TlsConfig::new()
+            .with_ca_cert(std::path::PathBuf::from("/nonexistent/ca-cert.pem"));
+        let err = build_gcp_client(Some(&tls_config))
+            .expect_err("a configured TlsConfig must not be silently ignored");
+        let message = err.to_string();
+        assert!(
+            message.contains("CA certificate") || message.contains("TLS"),
+            "unexpected error message: {message}"
+        );
+    }
+
+    #[test]
+    fn build_gcp_client_without_tls_config_succeeds() {
+        assert!(build_gcp_client(None).is_ok());
+    }
 
     #[test]
     fn test_retry_config_delay_calculation() {

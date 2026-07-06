@@ -167,6 +167,17 @@ Example payload for a tool event:
 }
 ```
 
+Example payload for `UserPromptSubmit` or `AfterAgentResponse` — the prompt or response text is carried in the `message` field (and mirrored into `matcher_context` for matching):
+
+```json
+{
+  "event": "UserPromptSubmit",
+  "session_id": "abc-123",
+  "matcher_context": "what's in this directory?",
+  "message": "what's in this directory?"
+}
+```
+
 Example script that reads the payload:
 
 ```bash

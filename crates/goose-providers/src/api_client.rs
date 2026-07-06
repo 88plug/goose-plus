@@ -284,9 +284,12 @@ impl ApiClient {
         Ok(())
     }
 
-    /// Configure TLS settings on a reqwest ClientBuilder
+    /// Configure TLS settings on a reqwest ClientBuilder. Public so providers
+    /// that build their own `reqwest::Client` directly (rather than going
+    /// through `ApiClient`) can still honor a configured `TlsConfig` (e.g. a
+    /// corporate proxy's CA cert) instead of silently discarding it.
     #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
-    fn configure_tls(
+    pub fn configure_tls(
         mut client_builder: reqwest::ClientBuilder,
         tls_config: &TlsConfig,
     ) -> Result<reqwest::ClientBuilder> {
@@ -307,7 +310,7 @@ impl ApiClient {
 
     /// Reject custom TLS settings when goose is compiled without a TLS backend.
     #[cfg(not(any(feature = "rustls-tls", feature = "native-tls")))]
-    fn configure_tls(
+    pub fn configure_tls(
         client_builder: reqwest::ClientBuilder,
         tls_config: &TlsConfig,
     ) -> Result<reqwest::ClientBuilder> {
