@@ -6,6 +6,20 @@
 /// (which contains a literal \n but is perfectly valid JSON) while still fixing
 /// broken JSON like `{"key1": "value1\n","key2": "value"}` (which contains an
 /// unescaped newline character).
+/// Describe a JSON value's type for error messages when a tool call's
+/// arguments parse as valid JSON but not an object (rmcp's `object()` helper
+/// panics in debug builds on non-object values).
+pub fn describe_json_value(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Array(_) => "an array",
+        serde_json::Value::String(_) => "a string",
+        serde_json::Value::Number(_) => "a number",
+        serde_json::Value::Bool(_) => "a boolean",
+        serde_json::Value::Null => "null",
+        serde_json::Value::Object(_) => "an object",
+    }
+}
+
 pub fn safely_parse_json(s: &str) -> Result<serde_json::Value, serde_json::Error> {
     // First, try parsing the string as-is
     match serde_json::from_str(s) {

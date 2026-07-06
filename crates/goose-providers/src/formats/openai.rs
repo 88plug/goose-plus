@@ -2,7 +2,7 @@ use crate::conversation::message::{Message, MessageContent, ProviderMetadata};
 use crate::conversation::token_usage::{ProviderUsage, Usage};
 use crate::errors::ProviderError;
 use crate::images::{convert_image, detect_image_path, load_image_file, ImageFormat};
-use crate::json::safely_parse_json;
+use crate::json::{describe_json_value, safely_parse_json};
 use crate::mcp_utils::extract_text_from_resource;
 use crate::model::ModelConfig;
 use crate::thinking::{
@@ -675,11 +675,30 @@ pub fn response_to_message(response: &Value) -> anyhow::Result<Message> {
                     ));
                 } else {
                     match safely_parse_json(&arguments_str) {
-                        Ok(params) => {
+                        Ok(params) if params.is_object() => {
                             content.push(MessageContent::tool_request_with_metadata(
                                 id,
                                 Ok(CallToolRequestParams::new(function_name)
                                     .with_arguments(object(params))),
+                                metadata.as_ref(),
+                            ));
+                        }
+                        // Valid JSON but NOT an object (a bare array/string/number).
+                        // Weaker models emit this; surface a tool error so the model
+                        // retries with a proper object instead of crashing the run
+                        // (rmcp's `object()` debug-asserts on non-objects).
+                        Ok(other) => {
+                            let error = ErrorData {
+                                code: ErrorCode::INVALID_PARAMS,
+                                message: Cow::from(format!(
+                                    "Tool arguments for {} (id {}) must be a JSON object, got {}. Raw arguments: '{}'",
+                                    function_name, id, describe_json_value(&other), arguments_str
+                                )),
+                                data: None,
+                            };
+                            content.push(MessageContent::tool_request_with_metadata(
+                                id,
+                                Err(error),
                                 metadata.as_ref(),
                             ));
                         }
@@ -1161,12 +1180,26 @@ where
                         };
 
                         let content = match parsed {
-                            Ok(params) => {
+                            Ok(params) if params.is_object() => {
                                 MessageContent::tool_request_with_metadata(
                                     id.clone(),
                                     Ok(CallToolRequestParams::new(function_name.clone()).with_arguments(object(params))),
                                     metadata.as_ref(),
                                 )
+                            },
+                            // Valid JSON but NOT an object. Mirrors the non-streaming decoder:
+                            // surface a tool error so the model retries instead of crashing the
+                            // run (rmcp's `object()` debug-asserts on non-objects).
+                            Ok(other) => {
+                                let error = ErrorData {
+                                    code: ErrorCode::INVALID_PARAMS,
+                                    message: Cow::from(format!(
+                                        "Tool arguments for {} (id {}) must be a JSON object, got {}",
+                                        function_name, id, describe_json_value(&other)
+                                    )),
+                                    data: None,
+                                };
+                                MessageContent::tool_request_with_metadata(id.clone(), Err(error), metadata.as_ref())
                             },
                             Err(e) => {
                                 let error = ErrorData {
@@ -2045,6 +2078,40 @@ mod tests {
     }
 
     #[test]
+    fn test_response_to_message_non_object_arguments() -> anyhow::Result<()> {
+        // Weaker models sometimes emit tool arguments that are valid JSON but
+        // not an object (here, a bare array). This must surface as a tool error,
+        // NOT panic via rmcp's `object()` debug-assert.
+        let mut response: Value = serde_json::from_str(OPENAI_TOOL_USE_RESPONSE)?;
+        response["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] =
+            json!("[1, 2, 3]");
+
+        let message = response_to_message(&response)?;
+
+        if let MessageContent::ToolRequest(request) = &message.content[0] {
+            match &request.tool_call {
+                Err(ErrorData {
+                    code: ErrorCode::INVALID_PARAMS,
+                    message: msg,
+                    data: None,
+                }) => {
+                    assert!(msg.contains("must be a JSON object"));
+                    assert!(msg.contains("an array"));
+                    assert!(
+                        msg.contains("example_fn"),
+                        "error must name the original tool so the model can retry it: {msg}"
+                    );
+                }
+                _ => panic!("Expected InvalidParameters error for non-object args"),
+            }
+        } else {
+            panic!("Expected ToolRequest content");
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn test_response_to_message_empty_argument() -> anyhow::Result<()> {
         let mut response: Value = serde_json::from_str(OPENAI_TOOL_USE_RESPONSE)?;
         response["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] =
@@ -2718,6 +2785,47 @@ data: [DONE]
         );
         assert_usage_yielded_once(&result, 7, 9, 16);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_streaming_non_object_arguments_does_not_panic() -> anyhow::Result<()> {
+        // Streamed tool call whose arguments are valid JSON but NOT an object.
+        // Must yield an INVALID_PARAMS tool error, not panic via rmcp `object()`.
+        let response_lines = r#"
+data: {"model":"test-model","choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_bad","type":"function","function":{"name":"test_tool","arguments":"[1, 2, 3]"}}]},"index":0,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110}}
+data: [DONE]
+"#;
+
+        let lines: Vec<String> = response_lines.lines().map(|s| s.to_string()).collect();
+        let response_stream = tokio_stream::iter(lines.into_iter().map(Ok));
+        let messages = response_to_streaming_message(response_stream);
+        pin!(messages);
+
+        let mut saw_error = false;
+        while let Some(Ok((message, _usage))) = messages.next().await {
+            if let Some(msg) = message {
+                for content in &msg.content {
+                    if let MessageContent::ToolRequest(req) = content {
+                        if let Err(ErrorData {
+                            code: ErrorCode::INVALID_PARAMS,
+                            message: m,
+                            ..
+                        }) = &req.tool_call
+                        {
+                            assert!(m.contains("must be a JSON object"));
+                            assert!(m.contains("test_tool"));
+                            saw_error = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(
+            saw_error,
+            "expected an INVALID_PARAMS tool error, not a panic or silent drop"
+        );
         Ok(())
     }
 
