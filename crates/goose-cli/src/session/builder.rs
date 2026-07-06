@@ -4,11 +4,14 @@ use super::output;
 use super::CliSession;
 use console::style;
 use goose::agents::{Agent, Container, ExtensionError};
+use goose::config::paths::Paths;
 use goose::config::resolve_extensions_for_new_session;
 use goose::config::{Config, ExtensionConfig, GooseMode};
 use goose::model_config::model_config_from_user_config;
 use goose::providers::create;
 use goose::recipe::Recipe;
+use goose::scheduler::Scheduler;
+use goose::scheduler_trait::SchedulerTrait;
 use goose::session::session_manager::SessionType;
 use goose::session::EnabledExtensionsState;
 use rustyline::EditMode;
@@ -499,12 +502,30 @@ async fn configure_session_prompts(
     }
 }
 
+/// Builds the scheduler service the CLI's schedule-management tool needs. `build_session`
+/// otherwise never wires one up (unlike the ACP/desktop path via `AgentManager::instance`),
+/// so every CLI session's schedule tool calls failed with "Scheduler not available".
+async fn build_cli_scheduler_service(
+    session_manager: Arc<goose::session::SessionManager>,
+) -> Option<Arc<dyn SchedulerTrait>> {
+    let schedule_file_path = Paths::data_dir().join("schedule.json");
+    match Scheduler::new(schedule_file_path, session_manager).await {
+        Ok(scheduler) => Some(scheduler as Arc<dyn SchedulerTrait>),
+        Err(e) => {
+            tracing::warn!("Failed to initialize scheduler: {}", e);
+            None
+        }
+    }
+}
+
 pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
     #[cfg(feature = "telemetry")]
     goose::posthog::set_session_context("cli", session_config.resume);
 
     let config = Config::global();
-    let agent: Agent = Agent::new();
+    let mut agent: Agent = Agent::new();
+    agent.config.scheduler_service =
+        build_cli_scheduler_service(agent.config.session_manager.clone()).await;
 
     if session_config.container.is_some() {
         agent.set_container(session_config.container.clone()).await;
@@ -715,6 +736,23 @@ fn is_provider_unavailable_error(e: &anyhow::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_build_cli_scheduler_service_wires_a_working_scheduler() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_manager = Arc::new(goose::session::SessionManager::new(
+            temp_dir.path().to_path_buf(),
+        ));
+
+        let scheduler = build_cli_scheduler_service(session_manager).await;
+
+        assert!(
+            scheduler.is_some(),
+            "CLI sessions must have a scheduler wired so the schedule-management tool works, \
+             matching the ACP/desktop path via AgentManager::instance"
+        );
+    }
 
     #[test]
     fn test_session_builder_config_creation() {
