@@ -220,6 +220,8 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | ACP/Config | [PR #8893](https://github.com/aaif-goose/goose/pull/8893) (adapted to this fork's config internals, which have diverged substantially since the branch was written) | `GooseAcpAgent` stores a per-instance `config_dir` (correctly used by `PermissionManager`), but `self.config()` always returned `Config::global()`, so ACP preferences/dictation/onboarding reads and writes silently used the process-wide config instead of the session's own directory whenever `config_dir` differed from the default — a real bug for concurrent per-directory ACP sessions |
 | ACP/Session | [PR #9483](https://github.com/aaif-goose/goose/pull/9483) (adapted) | `on_set_session_system_prompt` only mutated the in-memory `PromptManager`, so a client-set persona/system-prompt override was silently lost whenever the agent was rebuilt (daemon restart, LRU eviction, session resume). Persists `Set`-mode overrides and `client_`-prefixed `Append`-mode extras to the session record and re-applies them whenever a session's agent is (re)activated; server-managed append keys (`recipe`, `final_output`, `recipe_instructions`) are intentionally excluded since they're rebuilt from other session state |
 | Desktop | [PR #7545](https://github.com/aaif-goose/goose/pull/7545) (adapted; author stress-tested it for days and precisely diagnosed the root cause, but the PR sat with zero reviews/comments and was closed unmerged) | `resultsCache` in `useChatStream.ts` grew without bound over a long-running session (only cleared on explicit session deletion, never on the existing tab-eviction path) — added a weight-aware LRU cache capped at 5 sessions and wired eviction into `App.tsx`'s tab-limit logic. Independently found the same investigation missed: `goosed.ts`'s `stopErrorLogCollection()` removed the stderr `data` listener after startup but never called `resume()`, unlike the symmetric stdout handling right next to it, leaving the stream paused so goosed's own stderr writes would eventually block on a full OS pipe buffer. Also replaced `read-file`'s non-Windows `cat` subprocess spawn with the same native `fs.readFile` already used on Windows |
+| Providers | [#9688](https://github.com/aaif-goose/goose/issues/9688) | Canonical model registry listed a 393216 max output-token limit for `nvidia/deepseek-ai/deepseek-v4-pro`, exceeding NVIDIA's actual API cap — confirmed against the reporter's own quoted first-party NVIDIA error message ("This model supports at most 262144 completion tokens"). Corrected to 262144; the model's 1048576 context limit is unaffected |
+| Developer tools | [PR #9748](https://github.com/aaif-goose/goose/pull/9748) (adapted; ported only the process-group-kill fix, not the PR's larger environment-capture/working-dir-requirement changes, which are already handled differently or out of scope here) | The developer shell tool's timeout/cancellation path only called `child.start_kill()`, signaling the tracked child alone — but `configure_subprocess` already places every shell command in its own process group, so a script backgrounding a long-lived job (e.g. `sleep 100 &`) left it running, orphaned, after the tool call returned. Now sends `SIGKILL` to the whole process group first, falling back to `start_kill()` |
 
 ### Fixed without an upstream ticket
 
@@ -332,8 +334,8 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~213-223 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  146 individually-cited issues/PRs/branches (108 issues/PRs + 38 branches) — this figure is
+- **~215-225 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  148 individually-cited issues/PRs/branches (110 issues/PRs + 38 branches) — this figure is
   mechanically regenerated from the doc itself
   (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
@@ -564,6 +566,72 @@ which lines up with the corrected total below — the earlier undercounted figur
     branches. Combined with the 204 medium/large-tier branches: **419 branches across all three
     size tiers** now have a verified terminal disposition, none left in an open "still needs
     triage" state.
+- **The 208 not-yet-cited open issues/PRs (141 open issues + 67 open PRs) have now had the same
+  exhaustive per-item deep-read treatment as the branches** — the next-smallest bounded pool after
+  the branch graveyard was fully closed, picked deliberately over diving straight into the much
+  larger 6,532-item closed-with-engagement pool. Excluded already-cited numbers first (both pools
+  checked against the full citation list mechanically), fanned out 12 parallel deep-read agents (8
+  for issues, 4 for PRs — PR agents additionally pulled `gh pr diff` for the actual code change,
+  not just the description) using the same five-way taxonomy. Mechanically aggregated (never
+  trusted a chunk's own tally):
+  - **Issues (141): 34 ALREADY_COVERED, 24 NOT_APPLICABLE, 28 BUG_FIX_CANDIDATE, 46
+    NEW_CAPABILITY, 9 UNCERTAIN.**
+  - **PRs (67): 9 ALREADY_COVERED, 12 NOT_APPLICABLE, 17 BUG_FIX_CANDIDATE, 29 NEW_CAPABILITY,
+    0 UNCERTAIN.**
+  - **Combined: 208 items, 43 already-covered, 36 not-applicable, 45 bug-fix-candidate,
+    75 new-capability (deferred scope decisions), 9 uncertain.**
+  - One issue-level BUG_FIX_CANDIDATE (#9113) duplicates the branch-level Gemini-ACP/TOS finding
+    already covered above (deferred, needs operator sign-off) — not double-counted. Of the
+    remaining **44 distinct BUG_FIX_CANDIDATE findings, 2 were independently re-verified and
+    ported this stretch** (see the bug matrix above: #9688's stale NVIDIA output-token limit, and
+    PR #9748's process-group-kill fix) — **42 remain identified but not yet independently
+    re-verified or ported**, each already backed by concrete file/line evidence from a real
+    deep-read (not a guess), catalogued here rather than silently dropped:
+    - Issues (26): #3468 (OAuth token cache stored plaintext), #8993 (Code Mode `ToolKind::Execute`
+      not set per maintainer's own follow-up), #9136 (no per-turn tool-call-burst cap, distinct
+      from the existing no-progress-turn guard), #9332 (`PR_SET_PDEATHSIG` thread-affinity race),
+      #9467 (`flake.nix` missing `cargoLock.outputHashes` for git-sourced deps), #9526 (slash-command
+      recipes don't wire `sub_recipes` into Summon), #9534 (`cache_control` not gated for
+      `SessionType::SubAgent` — real cost issue, but needs `SessionType` threaded through the
+      `Provider` trait's call chain or a per-call session lookup, not a one-line fix), #9674 (OAuth
+      fallback primitives exist in `extension_manager.rs` but aren't fully wired), #9758/#9766 (moim
+      turn-context/turn-bounding edge cases), #9782 (code-analysis language registry gaps), #9822
+      (`claude_code.rs` subprocess missing the PDEATHSIG hardening pattern used elsewhere), #9910
+      (extension-count nudge threshold miscalculation), #9919 (`parse_env_value` doesn't strip unit
+      suffixes like "600s" — real, but touches a shared low-level parser used by every config key,
+      needs care), #9938 (cancellation doesn't promptly stop in-flight tool execution), #9978 (ACP
+      NewSession error passthrough lacks auth-failure detection), #10035 (`catalog_provider_id`
+      persisted but never consumed), #10055 (CI schema-check jobs run serialized, not parallel),
+      #10063 (race in `main.ts`'s `releaseWindowGoosedLease`), #10068 (sidebar session row missing
+      features the full History view has), #10075 (O(n²) `bat::PrettyPrinter` reconstruction in CLI
+      output), #10193 (OpenRouter doesn't override `skip_canonical_filtering()`), #10228 (Azure
+      `is_v1_endpoint` doesn't gate the completions-prefix), #10251 (sidebar missing an existing
+      delete action), #10256 (`pctx_codegen` unbounded recursion risk).
+    - PRs (16): #9289 (Electron deep-link handler ignores its own `window` argument, duplicate
+      windows), #9767 (system prompt mutated every turn via `load_subdirectory_hints`, invalidating
+      the KV-cache prefix), #9979 (no way to remove an image from a message before resubmitting),
+      #10007 (`InferenceMetadata` built conditionally, `None` when `resolved_model` fetch fails),
+      #10021 (accessibility gaps — plain `onClick` divs instead of buttons/radio inputs in provider
+      picker components), #10028 (hermit activation breaks under fish shell), #10041 (no
+      `canonical_provider_id()` method; custom-provider canonical resolution incomplete), #10089
+      (compaction check is once-per-turn only, can be skipped mid-turn during long tool-call loops),
+      #10096 (auto-compaction re-appends the latest user message unbounded after summarization),
+      #10116 (`rcgen`'s `aws_lc_rs` feature enabled unconditionally instead of gated behind
+      `rustls-tls`), #10127 (bundled default apps like clock/chat have no protection against
+      `delete_app` — a real gap surfaced while re-checking this session's own `validate_app_name`
+      fix), #10148 (CI has no matrix job validating both TLS backend feature configurations),
+      #10209 (`compose_moim`'s `<current-time>` has no UTC offset), #10258 (empty-string
+      `finish_reason` treated as terminal in the OpenAI-compatible streaming decoder), #10269 (stale
+      NVIDIA fallback model list plus synchronous keyring reads blocking the model picker), #10270
+      (Kimi Code OAuth login not recognized as "configured").
+    - The 9 UNCERTAIN issues (#9153, #9411, #9598, #9702, #9750, #9921, #9926, #9958, #10110) and
+      75 NEW_CAPABILITY items are not itemized here — UNCERTAIN genuinely needs live repro/access
+      this pass didn't have, and NEW_CAPABILITY follows the same "defer, don't silently build" rule
+      as every other new-capability verdict in this doc. Raw data for all 208 items (full detail
+      text, not just the number) is in `scratchpad/graveyard-data-v2/unclear_pass/{issues,prs}_all_verified.json`
+      for whoever picks up the next batch.
+  - Remaining un-triaged pool, unchanged by this pass: **6,532 closed issues/PRs with real
+    engagement** — the next, much larger step if this triage continues.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
