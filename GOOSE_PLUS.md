@@ -373,36 +373,33 @@ which lines up with the corrected total below — the earlier undercounted figur
     (11–30), 70 large (30+) — medium/large deprioritized for this pass, named not dropped.
   - Fanned out 12 haiku agents (one per ~27-branch chunk) across the **entire** small tier — not a
     sample — classifying each from its `git log -3`/changed-file list alone (no full diffs at this
-    stage): 210 PROMISING, 53 UNCLEAR, 43 SKIP-experiment (wip/tmp/poc/"vibecoded" branches),
-    1 SKIP-superseded. **Two rounds of exclusion were needed to get a trustworthy number**, caught
-    by checking, not assumed clean the first time: (1) 33 of the 210 were branches already cited by
-    *name* elsewhere in this doc — a mistake in this pass (name exclusion was applied to the
-    zero-engagement issue/PR filter above but forgotten here). (2) Excluding those still left 7 more
-    that were already covered under a *different* branch name — the actual fix landed via an issue
-    number citation (e.g. `dkatz/session-name-errors` → PR #5094 → already cited as issue #5094;
-    `fix-tool-call-expansion-issues` → PR #8135 → already cited as #8135) — found by joining every
-    remaining branch to its PR number (via the same bulk `gh pr list` data) and checking that number
-    against the citation list too, not just the branch name. Both overlaps are also a real
-    validation signal: the haiku agents independently flagged branches as PROMISING with zero
-    knowledge they were already landed, which is evidence the triage method itself is sound — but
-    it means a branch-name-only check isn't sufficient exclusion, a PR-number cross-check is
-    required too. Net of both rounds: **172 genuinely new PROMISING**, 51 UNCLEAR,
-    43 SKIP-experiment, 1 SKIP-superseded, out of 267 small-tier branches not already accounted for
-    by any citation. The same PR-number cross-check applied to medium/large tiers found 1 more
-    already-covered medium-tier branch (net: 134 medium, 70 large — unaffected) and 4 already-covered
-    branches in the deprioritized OPEN-PR bucket. Counts re-verified mechanically from the 12 result
-    files, then re-verified again by joining against `pr_history.json`, not from the agents' own
-    self-reported summaries (two of which arithmetic-drifted mid-response before self-correcting) —
-    every count in this doc is regenerated from source, never trusted from a narrative claim.
-    **This is still a first-pass triage, not a verification pass** — the 172 PROMISING branches
-    still need the same deep-read-diff-and-port treatment every landed fix in the matrices above
-    got; none of them are ported yet. So the honest "genuinely worth a human/agent triage pass"
-    pool, replacing the old untrustworthy "~1354" figure: **6,532 closed issues/PRs with real
-    engagement + 281 open issues/PRs + 172 promising small-tier branches + 134 medium-tier +
-    70 large-tier branches ≈ 7,189**, not counting 3,104 zero-engagement issues/PRs,
-    43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a second look before they're
-    triaged either way. Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone who
-    wants to re-run or extend this.
+    stage): 210 raw PROMISING calls. A raw haiku count is not a citable number until it's checked
+    against every way this doc already cites something, so three independent cross-checks were run
+    before trusting it: **(1) branch name** — 33 were already cited by their exact `tree/<name>`
+    link elsewhere in this doc. **(2) PR number** — joining every remaining branch to its actual PR
+    (via the same bulk `gh pr list` data) found 7 more whose fix landed and got cited under a
+    *different* branch name (e.g. `dkatz/session-name-errors` → PR #5094 → already cited as issue
+    #5094). **(3) number embedded in the branch name itself** — 8 more where the branch name
+    contains the issue number directly (`goose/issue-6293`, `wt-goose-8391`, `fix/inherit-sentinel-
+    8496`) and that number is already cited, which neither of the first two checks catches. All
+    three overlaps are also a validation signal for the method: the haiku agents independently
+    flagged real, already-landed fixes as PROMISING with zero knowledge they were already done.
+    Net of all three rounds: **164 genuinely new PROMISING**, 51 UNCLEAR, 43 SKIP-experiment,
+    1 SKIP-superseded, out of 267 small-tier branches not already accounted for by name/PR-number.
+    The same cross-checks applied to medium/large tiers found 1 more already-covered medium-tier
+    branch (net: 134 medium, 70 large — unaffected) and 4 already-covered branches in the
+    deprioritized OPEN-PR bucket. Every count here is regenerated from source (result files →
+    `pr_history.json` join → branch-name regex), never trusted from a narrative claim or the
+    agents' own self-reported sums (two of which arithmetic-drifted mid-response before
+    self-correcting). **This is still a first-pass triage, not a verification pass** — the 164
+    PROMISING branches still need the same deep-read-diff-and-port treatment every landed fix in
+    the matrices above got; none of them are ported yet. So the honest "genuinely worth a
+    human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
+    issues/PRs with real engagement + 281 open issues/PRs + 164 promising small-tier branches +
+    134 medium-tier + 70 large-tier branches ≈ 7,181**, not counting 3,104 zero-engagement
+    issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a second look before
+    they're triaged either way. Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone
+    who wants to re-run or extend this.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
