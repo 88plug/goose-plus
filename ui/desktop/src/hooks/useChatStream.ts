@@ -31,10 +31,58 @@ import { maybeHandlePlatformEvent } from '../utils/platform_events';
 import { useSessionEvents, type SessionEvent } from './useSessionEvents';
 import type { UseChatSessionParams, UseChatSessionResult } from './useChatSessionTypes';
 
+const MAX_CACHED_SESSIONS = 5;
+const MAX_ENTRY_WEIGHT = 200;
+
 const resultsCache = new Map<string, { messages: Message[]; session: Session }>();
 
 export function clearSessionCache(sessionId: string): void {
   resultsCache.delete(sessionId);
+}
+
+export function getCachedSession(
+  sessionId: string
+): { messages: Message[]; session: Session } | undefined {
+  return resultsCache.get(sessionId);
+}
+
+// Tool messages carry more content (params/results) than a plain text turn,
+// so they're weighted higher when deciding whether a conversation is too
+// large to cache.
+export function messageWeight(messages: Message[]): number {
+  let weight = 0;
+  for (const msg of messages) {
+    for (const content of msg.content) {
+      weight += content.type === 'toolResponse' || content.type === 'toolRequest' ? 3 : 1;
+    }
+  }
+  return weight;
+}
+
+// Bounded, weight-aware replacement for `resultsCache.set` — every write site
+// must go through this so the cache can't grow without bound over a
+// long-running session (oversized conversations are skipped entirely, and
+// the cache evicts its oldest entry once it exceeds MAX_CACHED_SESSIONS).
+export function resultsCacheSet(
+  key: string,
+  value: { messages: Message[]; session: Session }
+): void {
+  if (messageWeight(value.messages) > MAX_ENTRY_WEIGHT) {
+    resultsCache.delete(key);
+    return;
+  }
+
+  resultsCache.delete(key);
+  resultsCache.set(key, value);
+
+  while (resultsCache.size > MAX_CACHED_SESSIONS) {
+    const oldest = resultsCache.keys().next().value;
+    if (oldest !== undefined) {
+      resultsCache.delete(oldest);
+    } else {
+      break;
+    }
+  }
 }
 
 // A cached session snapshot is "poisoned" when it holds no messages but the
@@ -470,7 +518,7 @@ export function useChatStream({
     if (!cachedEntryHasHistory(state.messages, state.session)) {
       return;
     }
-    resultsCache.set(sessionId, { session: state.session, messages: state.messages });
+    resultsCacheSet(sessionId, { session: state.session, messages: state.messages });
   }, [sessionId, state.session, state.messages]);
 
   const onFinish = useCallback(
@@ -1192,7 +1240,7 @@ export function useChatStream({
 
       const nextSession = updater(currentSession);
       dispatch({ type: 'SET_SESSION', payload: nextSession });
-      resultsCache.set(sessionId, {
+      resultsCacheSet(sessionId, {
         session: nextSession,
         messages: stateRef.current.messages.length
           ? stateRef.current.messages

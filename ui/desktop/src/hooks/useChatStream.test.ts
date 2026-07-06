@@ -11,7 +11,14 @@ vi.mock('../i18n', () => ({
   useIntl: () => ({ formatMessage: () => '' }),
 }));
 
-import { createEventProcessor } from './useChatStream';
+import {
+  createEventProcessor,
+  clearSessionCache,
+  getCachedSession,
+  messageWeight,
+  resultsCacheSet,
+} from './useChatStream';
+import type { Session } from '../api';
 
 function assistantMessage(text: string): Message {
   return {
@@ -21,6 +28,20 @@ function assistantMessage(text: string): Message {
     content: [{ type: 'text', text }],
     metadata: { agentVisible: true, userVisible: true },
   };
+}
+
+function toolMessage(type: 'toolRequest' | 'toolResponse'): Message {
+  return {
+    role: 'assistant',
+    created: Date.now(),
+    id: `${type}-1`,
+    content: [{ type } as unknown as Message['content'][number]],
+    metadata: { agentVisible: true, userVisible: true },
+  };
+}
+
+function fakeSession(id: string): Session {
+  return { id, message_count: 0 } as unknown as Session;
 }
 
 function messageEvent(message: Message): SessionEvent {
@@ -120,5 +141,42 @@ describe('createEventProcessor reduced-motion flush (#8997)', () => {
 describe('chat state constant sanity', () => {
   it('exposes the Streaming state used while batching', () => {
     expect(ChatState.Streaming).toBeDefined();
+  });
+});
+
+describe('resultsCache bounding (prevent unbounded growth over long sessions)', () => {
+  it('weighs tool messages 3x a plain text message', () => {
+    expect(messageWeight([assistantMessage('hi')])).toBe(1);
+    expect(messageWeight([toolMessage('toolRequest')])).toBe(3);
+    expect(messageWeight([toolMessage('toolResponse')])).toBe(3);
+    expect(messageWeight([assistantMessage('hi'), toolMessage('toolRequest')])).toBe(4);
+  });
+
+  it('refuses to cache a conversation heavier than the entry weight limit', () => {
+    const sessionId = 'weight-limit-test';
+    const heavyMessages = Array.from({ length: 70 }, () => toolMessage('toolRequest')); // weight 210 > 200
+    resultsCacheSet(sessionId, { session: fakeSession(sessionId), messages: heavyMessages });
+    expect(getCachedSession(sessionId)).toBeUndefined();
+  });
+
+  it('caches a conversation at or under the entry weight limit', () => {
+    const sessionId = 'weight-ok-test';
+    const okMessages = Array.from({ length: 60 }, () => toolMessage('toolRequest')); // weight 180 <= 200
+    resultsCacheSet(sessionId, { session: fakeSession(sessionId), messages: okMessages });
+    expect(getCachedSession(sessionId)).toBeDefined();
+    clearSessionCache(sessionId);
+  });
+
+  it('evicts the oldest entry once more than MAX_CACHED_SESSIONS are held', () => {
+    const ids = Array.from({ length: 6 }, (_, i) => `evict-test-${i}`);
+    for (const id of ids) {
+      resultsCacheSet(id, { session: fakeSession(id), messages: [assistantMessage('hi')] });
+    }
+    // Cache is capped at 5 — the first (oldest) of the 6 inserted must be gone.
+    expect(getCachedSession(ids[0])).toBeUndefined();
+    expect(getCachedSession(ids[5])).toBeDefined();
+    for (const id of ids) {
+      clearSessionCache(id);
+    }
   });
 });

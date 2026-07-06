@@ -53,6 +53,7 @@ import StandaloneAppView from './components/apps/StandaloneAppView';
 import { View, ViewOptions } from './utils/navigationUtils';
 
 import { useNavigation } from './hooks/useNavigation';
+import { clearSessionCache } from './hooks/useChatStream';
 import { errorMessage } from './utils/conversionUtils';
 import { getInitialWorkingDir } from './utils/workingDir';
 import { usePageViewTracking } from './hooks/useAnalytics';
@@ -396,6 +397,10 @@ export function AppInner() {
         const newSession = { sessionId, initialMessage, noAutoSubmit };
         const updated = [...prev, newSession];
         if (updated.length > MAX_ACTIVE_SESSIONS) {
+          const evicted = updated.slice(0, updated.length - MAX_ACTIVE_SESSIONS);
+          for (const s of evicted) {
+            clearSessionCache(s.sessionId);
+          }
           return updated.slice(updated.length - MAX_ACTIVE_SESSIONS);
         }
         return updated;

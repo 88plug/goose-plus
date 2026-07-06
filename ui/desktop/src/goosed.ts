@@ -455,6 +455,11 @@ export const startGoosed = async (options: StartGoosedOptions): Promise<GoosedRe
 
   const stopErrorLogCollection = () => {
     goosedProcess.stderr?.off('data', onStderrData);
+    // Removing the last 'data' listener leaves the stream paused rather than
+    // draining it, so goosed's own writes to stderr would eventually block on
+    // a full OS pipe buffer once nothing reads from it — resume() (mirroring
+    // the stdout handling above) lets it drain harmlessly instead.
+    goosedProcess.stderr?.resume();
   };
 
   goosedProcess.on('exit', (code, signal) => {
