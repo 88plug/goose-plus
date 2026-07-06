@@ -222,6 +222,8 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Desktop | [PR #7545](https://github.com/aaif-goose/goose/pull/7545) (adapted; author stress-tested it for days and precisely diagnosed the root cause, but the PR sat with zero reviews/comments and was closed unmerged) | `resultsCache` in `useChatStream.ts` grew without bound over a long-running session (only cleared on explicit session deletion, never on the existing tab-eviction path) — added a weight-aware LRU cache capped at 5 sessions and wired eviction into `App.tsx`'s tab-limit logic. Independently found the same investigation missed: `goosed.ts`'s `stopErrorLogCollection()` removed the stderr `data` listener after startup but never called `resume()`, unlike the symmetric stdout handling right next to it, leaving the stream paused so goosed's own stderr writes would eventually block on a full OS pipe buffer. Also replaced `read-file`'s non-Windows `cat` subprocess spawn with the same native `fs.readFile` already used on Windows |
 | Providers | [#9688](https://github.com/aaif-goose/goose/issues/9688) | Canonical model registry listed a 393216 max output-token limit for `nvidia/deepseek-ai/deepseek-v4-pro`, exceeding NVIDIA's actual API cap — confirmed against the reporter's own quoted first-party NVIDIA error message ("This model supports at most 262144 completion tokens"). Corrected to 262144; the model's 1048576 context limit is unaffected |
 | Developer tools | [PR #9748](https://github.com/aaif-goose/goose/pull/9748) (adapted; ported only the process-group-kill fix, not the PR's larger environment-capture/working-dir-requirement changes, which are already handled differently or out of scope here) | The developer shell tool's timeout/cancellation path only called `child.start_kill()`, signaling the tracked child alone — but `configure_subprocess` already places every shell command in its own process group, so a script backgrounding a long-lived job (e.g. `sleep 100 &`) left it running, orphaned, after the tool call returned. Now sends `SIGKILL` to the whole process group first, falling back to `start_kill()` |
+| Providers | [PR #9832](https://github.com/aaif-goose/goose/pull/9832) (ported) | Weak/cheap models occasionally emit tool-call arguments that are valid JSON but not an object (a bare array, string, or number). Both the OpenAI/OpenRouter and Databricks response decoders (streaming and non-streaming) passed the parsed value straight to rmcp's `object()`, whose `debug_assert!(value.is_object())` panics the process in debug builds and silently discards arguments in release. Now guards both decoder sites and returns an `INVALID_PARAMS` tool error instead, so the model gets feedback and can retry |
+| Desktop | [PR #5349](https://github.com/aaif-goose/goose/pull/5349) (ported) | `goosed`'s startup healthcheck poll budget had regressed from a merged 120s back down to 30s in a later refactor — not enough time to enter a keychain password when running `goose ui` from source, leaving the app stuck |
 
 ### Fixed without an upstream ticket
 
@@ -334,8 +336,8 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~215-225 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  148 individually-cited issues/PRs/branches (110 issues/PRs + 38 branches) — this figure is
+- **~217-227 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  150 individually-cited issues/PRs/branches (112 issues/PRs + 38 branches) — this figure is
   mechanically regenerated from the doc itself
   (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
@@ -632,6 +634,87 @@ which lines up with the corrected total below — the earlier undercounted figur
       for whoever picks up the next batch.
   - Remaining un-triaged pool, unchanged by this pass: **6,532 closed issues/PRs with real
     engagement** — the next, much larger step if this triage continues.
+- **First cut into the 6,532-item closed-with-real-engagement pool, top-engagement tier resolved
+  (this stretch)**: the full pool is too large for one exhaustive deep-read pass (~435 chunks at
+  the ~20-items-per-chunk rate used elsewhere in this doc), so it was tiered by engagement rather
+  than sampled arbitrarily. Re-derived the pool fresh from the cached
+  `scratchpad/graveyard-data-v2/{closed_issues,closed_prs}.jsonl` (2,269 closed issues + 7,408
+  closed PRs, each carrying `comments`/`reactions`), filtered to real engagement and not already
+  cited → 6,520 items (matches the previously-reported 6,532 within normal re-derivation drift).
+  Scored every item as `comments*2 + reactions` and cut at `score >= 20` — a mechanical,
+  reproducible threshold, not a hand-picked sample — yielding **279 items (149 issues + 130 PRs)**,
+  split into 14 chunks of 20 for parallel deep-read triage (same 5-way taxonomy, same discipline:
+  read the actual issue/PR body + comments + current fork code before verdicting, never trust a
+  chunk's self-reported tally, mechanically re-aggregate from the JSON files instead). One chunk's
+  agent went off-script mid-run (inspected broader session/task state instead of doing its
+  assigned triage, never wrote its output file) and was relaunched cleanly from scratch.
+  - Mechanically aggregated (279/279, zero duplicates): **181 ALREADY_COVERED, 64 NOT_APPLICABLE,
+    18 NEW_CAPABILITY, 12 BUG_FIX_CANDIDATE, 4 UNCERTAIN.**
+  - Of the 12 candidates, 3 were overturned on independent re-verification before deciding what to
+    port — the same "second, deeper look" discipline that caught false positives earlier in this
+    doc's history:
+    - **#3821** (Windows CLI-provider launch failure) — the triage agent's claim of "no
+      PATHEXT/shim resolution" was wrong: `gemini_cli.rs`'s constructor already calls
+      `SearchPaths::builder().with_npm().resolve(&command)?`, which resolves through the `which`
+      crate (honors `PATHEXT` on Windows) — `self.command` is already a fully-resolved path by the
+      time `Command::new` runs it. Corrected to ALREADY_COVERED.
+    - **#2787** (GitHub Copilot device-auth failure) — the triage agent proposed adding
+      backoff to the 3-attempt retry loop, but the issue thread's own root cause was a missing
+      keyring, and `crates/goose/src/config/base.rs`'s `is_keyring_availability_error`/
+      `handle_keyring_fallback_error` already auto-detects exactly that and falls back to file
+      storage — the actual reported failure mode is already fixed elsewhere; a bare backoff
+      wouldn't address what was reported. Corrected to ALREADY_COVERED.
+    - **#6284** (anonymous CLI-added MCP extensions get opaque names) — the triage agent
+      checked only `extension_manager.rs` in isolation; `crates/goose-cli/src/session/mod.rs`
+      already derives a readable, deterministic name from the URL host/path (`mcp_kiwi_com`,
+      `localhost_8080_api`, confirmed via its own `test_case`-driven unit tests) before
+      `ExtensionConfig::key()` is ever called — `sanitized_name` is never actually empty in
+      practice. A different, arguably more deterministic mechanism than upstream's
+      server-info-plus-random-suffix approach already solves this. Corrected to ALREADY_COVERED.
+  - **1 of the remaining 9 ported this stretch**: **PR #9832** — weak/cheap models occasionally
+    emit tool-call arguments that are valid JSON but not an object (bare array/string/number); the
+    fork's `openai.rs` (streaming + non-streaming) and `databricks.rs` decoders passed the value
+    straight into rmcp's `object()`, whose `debug_assert!(value.is_object())` panics in debug
+    builds and silently empties the arguments in release — reproduced the exact panic via mutation
+    testing (revert-the-guard, confirm the identical `rmcp-1.8.0/src/model.rs:37` assertion fires,
+    restore). Guarded both decoder sites with an `is_object()` check plus an `INVALID_PARAMS` tool
+    error, added a shared `describe_json_value` helper, and added regression tests at each site.
+    Also restored `goosed.ts`'s healthcheck startup budget from a regressed 30s back to the merged
+    120s (**PR #5349**) — a one-line data fix confirmed against the merged upstream PR body.
+  - **8 remaining candidates catalogued, not ported this stretch** (real, but each needs more than
+    a rubber-stamp change): **#1267** (Bedrock's 5-document-per-request API cap — the fix requires
+    threading a shared document counter through 4 function signatures and updating ~15 existing
+    test call sites in `formats/bedrock.rs`, not a one-line change; the issue reporter's own
+    suggested approach — always use plain text instead of Bedrock's document content type — is the
+    right shape but needs dedicated scoping), **#5911** (Windows Gemini CLI multi-line prompt
+    argument passed through a `.cmd`-wrapped npm shim, where cmd.exe's own line-based batch parsing
+    could corrupt an embedded newline — plausible but unverifiable without a live Windows repro,
+    and the safer fix (stdin instead of an argv element) needs confirming the actual `gemini` CLI
+    supports it), **#7070** (`claude_code.rs`'s `OnceCell<Arc<Mutex<CliProcess>>>` permanently
+    poisons after the CLI process dies; upstream's own PR for this was closed unmerged because
+    reviewers rejected the naive blind-respawn fix — the underlying gap is real but needs the
+    process-group/signal-isolation redesign reviewers actually asked for, not a resurrection of the
+    rejected diff), **#4468** (Terminal.app markdown highlighting gated too strictly by
+    `is_terminal()` — the issue's own closing comment says this was fixed on upstream `main`, but
+    the actual upstream diff wasn't tracked down this stretch to port precisely), **#2825**
+    (trailing-newline normalization in `edit.rs`'s `file_write_with_cwd` — real, but an existing
+    test (`test_file_write_new`) explicitly asserts the current no-normalization behavior, so this
+    needs a judgment call on whether verbatim-write is deliberate design before changing it, not
+    just flipping a test's expectation), **#3697** (Windows backslash paths losing characters —
+    the triage agent couldn't pin down a concrete code location, only the maintainer's own proposed
+    remediation ideas; not implementation-ready), **#2821** (`computercontroller/mod.rs` still has
+    the verbose misleading-parameter-error anti-pattern already fixed elsewhere via typed
+    `Parameters<...>` structs — mechanical but spans 9+ call sites in one file, a bigger lift than
+    the ones ported this stretch).
+  - The 4 UNCERTAIN and 18 NEW_CAPABILITY verdicts from this tier, plus the full 279-item raw
+    triage output, are in `scratchpad/graveyard-data-v2/closed_pass/{chunk,result}_*.json` and
+    `all_merged.json` for whoever picks up the next tier.
+  - **Citation count after this batch: 112 issues/PRs + 38 branches = 150** (mechanically
+    regenerated, up from 148). **Remaining pool, still the dominant untouched figure: ~6,241
+    closed issues/PRs with real engagement below the score-20 cutoff** — this tier-based approach
+    means the next step (if continued) is either lowering the score cutoff (e.g. `score >= 10` is
+    ~1,047 items) or accepting a coarser, cheaper triage pass for the long tail the way the branch
+    graveyard's small tier was first triaged by log/file-list alone before any deep read.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
