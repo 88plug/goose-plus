@@ -37,6 +37,13 @@ pub async fn inject_moim(
         return conversation;
     }
 
+    if crate::config::Config::global()
+        .get_goose_disable_moim()
+        .unwrap_or(false)
+    {
+        return conversation;
+    }
+
     let session = extension_manager
         .get_context()
         .session_manager
@@ -274,6 +281,39 @@ mod tests {
         assert_eq!(text_at(&msgs[1], 0), "Hi");
         assert!(is_moim(&msgs[2].content[0]));
         assert_eq!(text_at(&msgs[2], 1), "Bye");
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_moim_disabled_via_config_skips_injection() {
+        std::env::set_var("GOOSE_DISABLE_MOIM", "true");
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let em = ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
+        let session = em
+            .get_context()
+            .session_manager
+            .create_session(
+                PathBuf::from("/test/dir"),
+                "test".to_string(),
+                crate::session::SessionType::User,
+                crate::config::GooseMode::Auto,
+            )
+            .await
+            .unwrap();
+
+        let conv = Conversation::new_unvalidated(vec![
+            Message::user().with_text("Hello"),
+            Message::assistant().with_text("Hi"),
+            Message::user().with_text("Bye"),
+        ]);
+        let result = inject_moim(&session.id, conv, &em, 0, 100).await;
+        let msgs = result.messages();
+
+        std::env::remove_var("GOOSE_DISABLE_MOIM");
+
+        assert_eq!(msgs.len(), 3);
+        assert!(!msgs.iter().any(|m| m.content.iter().any(is_moim)));
     }
 
     #[tokio::test]
