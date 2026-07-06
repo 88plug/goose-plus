@@ -104,14 +104,24 @@
     "id": "browserbase-mcp",
     "name": "Browserbase",
     "description": "Browser automation and web scraping",
-    "command": "npx -y @browserbasehq/mcp-server-browserbase",
+    "command": "npx -y @browserbasehq/mcp",
     "link": "https://github.com/browserbase/mcp-server-browserbase",
     "installation_notes": "Install using npx package manager.",
     "is_builtin": false,
     "endorsed": true,
     "environmentVariables": [
       {
+        "name": "BROWSERBASE_PROJECT_ID",
+        "description": "Required environment variable",
+        "required": true
+      },
+      {
         "name": "BROWSERBASE_API_KEY",
+        "description": "Required environment variable",
+        "required": true
+      },
+      {
+        "name": "GEMINI_API_KEY",
         "description": "Required environment variable",
         "required": true
       }
