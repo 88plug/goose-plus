@@ -402,16 +402,22 @@ which lines up with the corrected total below — the earlier undercounted figur
     zero-engagement issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a
     second look before they're triaged either way.
   - **Spot-check finding: the raw 164-branch figure was mostly an overcount.** Deep-read (full
-    diff + current-codebase comparison, not just log/file-list) 13 of the smallest, highest-
-    confidence PROMISING branches across different subsystems. **7 were already independently
+    diff + current-codebase comparison, not just log/file-list) 15 of the smallest, highest-
+    confidence PROMISING branches across different subsystems. **9 were already independently
     covered**, several by strictly more sophisticated fixes than the upstream branch proposed
     (e.g. this fork's `AgentManager::get_or_create_agent` race fix adds lock-leak pruning on error
     exit and cites a *different* issue, #9031, that upstream's #9181 branch never mentions — an
-    independently-found instance of the same bug class). **3 didn't apply at all**: two branches'
-    files (`scripts/test_providers.sh`, `scripts/clean-gh-pages.sh` — upstream's own CI/Pages
-    tooling) don't exist in this fork, and one (`goose/issue-7134`, a deprecated "skills" extension
-    filter) addresses a builtin extension this fork never shipped, so there's nothing stale to
-    filter. **1 was deferred, not ported**: `jackamadeo/revert-expensive-tool-list` proposes
+    independently-found instance of the same bug class; `goose/issue-6236`'s session-resume
+    working-directory prompt is already gated behind `session_config.interactive`, and its other
+    half — a missing-extensions restore confirm — doesn't exist in this fork's resume path at all;
+    `best/builtin-extensions-fix`'s "fresh install shows no extensions" concern was empirically
+    disproven by writing a throwaway test against a genuinely empty config — a "read-migration"
+    layer in this fork's config system already synthesizes the full platform-extension default set
+    regardless of what's on disk). **3 didn't apply at all**: two branches' files
+    (`scripts/test_providers.sh`, `scripts/clean-gh-pages.sh` — upstream's own CI/Pages tooling)
+    don't exist in this fork, and one (`goose/issue-7134`, a deprecated "skills" extension filter)
+    addresses a builtin extension this fork never shipped, so there's nothing stale to filter.
+    **1 was deferred, not ported**: `jackamadeo/revert-expensive-tool-list` proposes
     reverting this fork's existing `coerce_value`/schema-aware numeric coercion, but the revert's
     own upstream PR (#5817) was itself closed without merging — no confirmed evidence the original
     fix (#5478, merged) was actually wrong, so reverting a currently-working feature on an
@@ -426,7 +432,7 @@ which lines up with the corrected total below — the earlier undercounted figur
     by a citable graveyard port. This means the true "still needs porting" count inside the
     remaining 162 is smaller still, likely substantially so, but confirming the exact number
     requires the same deep-read for all 162 — not yet done, flagged honestly rather than
-    extrapolated from a 13-branch sample into a false-precision estimate.
+    extrapolated from a 15-branch sample into a false-precision estimate.
     Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or
     extend this; `promising_absolute_final.json` is the list to work through.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
