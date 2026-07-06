@@ -769,25 +769,26 @@ impl SummonClient {
     }
 
     async fn build_subrecipe_description(&self, sr: &crate::recipe::SubRecipe) -> String {
-        if let Some(desc) = &sr.description {
-            return desc.clone();
-        }
+        let recipe = load_local_recipe_file(&sr.path)
+            .ok()
+            .and_then(|recipe_file| Recipe::from_content(&recipe_file.content).ok());
 
-        if let Ok(recipe_file) = load_local_recipe_file(&sr.path) {
-            if let Ok(recipe) = Recipe::from_content(&recipe_file.content) {
-                let mut desc = recipe.description.clone();
+        let mut desc = match (&sr.description, &recipe) {
+            (Some(desc), _) => desc.clone(),
+            (None, Some(recipe)) => recipe.description.clone(),
+            (None, None) => return format!("Subrecipe from {}", sr.path),
+        };
 
-                if let Some(params) = &recipe.parameters {
-                    if !params.is_empty() {
-                        desc = format!("{}\n{}", desc, Self::format_parameters(params));
-                    }
-                }
-
-                return desc;
+        if let Some(params) = recipe
+            .as_ref()
+            .and_then(|recipe| recipe.parameters.as_ref())
+        {
+            if !params.is_empty() {
+                desc = format!("{}\n{}", desc, Self::format_parameters(params));
             }
         }
 
-        format!("Subrecipe from {}", sr.path)
+        desc
     }
 
     fn format_parameters(params: &[RecipeParameter]) -> String {
@@ -2270,6 +2271,58 @@ You review code."#;
 
         let deploys: Vec<_> = sources.iter().filter(|s| s.name == "deploy").collect();
         assert_eq!(deploys.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_build_subrecipe_description_appends_params_even_with_explicit_description() {
+        let temp_dir = TempDir::new().unwrap();
+        let recipe_path = temp_dir.path().join("sub.yaml");
+        fs::write(
+            &recipe_path,
+            "title: Sub\ndescription: Recipe file description\ninstructions: do work\nparameters:\n  - key: target\n    input_type: string\n    requirement: required\n    description: What to target",
+        )
+        .unwrap();
+
+        let client = SummonClient::new(create_test_context()).unwrap();
+        let sr = crate::recipe::SubRecipe {
+            name: "sub".to_string(),
+            path: recipe_path.to_string_lossy().to_string(),
+            values: None,
+            sequential_when_repeated: false,
+            description: Some("Explicit subrecipe description".to_string()),
+        };
+
+        let desc = client.build_subrecipe_description(&sr).await;
+
+        assert!(desc.starts_with("Explicit subrecipe description"));
+        assert!(
+            desc.contains("target"),
+            "expected params to be appended even though an explicit description was set: {desc}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_subrecipe_description_no_params_when_recipe_has_none() {
+        let temp_dir = TempDir::new().unwrap();
+        let recipe_path = temp_dir.path().join("sub.yaml");
+        fs::write(
+            &recipe_path,
+            "title: Sub\ndescription: Recipe file description\ninstructions: do work",
+        )
+        .unwrap();
+
+        let client = SummonClient::new(create_test_context()).unwrap();
+        let sr = crate::recipe::SubRecipe {
+            name: "sub".to_string(),
+            path: recipe_path.to_string_lossy().to_string(),
+            values: None,
+            sequential_when_repeated: false,
+            description: Some("Explicit subrecipe description".to_string()),
+        };
+
+        let desc = client.build_subrecipe_description(&sr).await;
+
+        assert_eq!(desc, "Explicit subrecipe description");
     }
 
     #[tokio::test]
