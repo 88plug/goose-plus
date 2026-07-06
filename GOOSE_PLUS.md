@@ -224,6 +224,11 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Developer tools | [PR #9748](https://github.com/aaif-goose/goose/pull/9748) (adapted; ported only the process-group-kill fix, not the PR's larger environment-capture/working-dir-requirement changes, which are already handled differently or out of scope here) | The developer shell tool's timeout/cancellation path only called `child.start_kill()`, signaling the tracked child alone — but `configure_subprocess` already places every shell command in its own process group, so a script backgrounding a long-lived job (e.g. `sleep 100 &`) left it running, orphaned, after the tool call returned. Now sends `SIGKILL` to the whole process group first, falling back to `start_kill()` |
 | Providers | [PR #9832](https://github.com/aaif-goose/goose/pull/9832) (ported) | Weak/cheap models occasionally emit tool-call arguments that are valid JSON but not an object (a bare array, string, or number). Both the OpenAI/OpenRouter and Databricks response decoders (streaming and non-streaming) passed the parsed value straight to rmcp's `object()`, whose `debug_assert!(value.is_object())` panics the process in debug builds and silently discards arguments in release. Now guards both decoder sites and returns an `INVALID_PARAMS` tool error instead, so the model gets feedback and can retry |
 | Desktop | [PR #5349](https://github.com/aaif-goose/goose/pull/5349) (ported) | `goosed`'s startup healthcheck poll budget had regressed from a merged 120s back down to 30s in a later refactor — not enough time to enter a keychain password when running `goose ui` from source, leaving the app stuck |
+| Providers | [PR #10000](https://github.com/aaif-goose/goose/pull/10000) (adapted; the PR's own diagnosed root cause — an SSE 8KiB line-buffering limit — was refuted, but the same investigation surfaced a real, different gap) | A `response.completed` stream event whose `response` object was missing an `id` field (e.g. from a non-conformant proxy) failed `serde_json::from_value` outright and was silently dropped — including its final usage stats and any output only present in that event — instead of degrading gracefully. Made `id` optional (`#[serde(default)]`) on `ResponseMetadata` and `ResponseOutputItemInfo::Reasoning` |
+| Providers/Bedrock | [#2150](https://github.com/aaif-goose/goose/issues/2150) | `to_bedrock_tool` never stripped top-level `oneOf`/`allOf`/`anyOf` keys from a tool's `input_schema`, which Bedrock's Converse API rejects outright ("input_schema does not support oneOf, allOf, or anyOf at the top level") — breaking any Claude-on-Bedrock session as soon as an MCP tool with a union-typed schema (common with Pydantic-generated schemas) was in play. Now strips them before sending, since the model can still respect the alternatives via property descriptions |
+| Agent | [#2885](https://github.com/aaif-goose/goose/issues/2885) | Stdio extension `args` were passed straight to `Command::args()` with no shell involved, so a leading `~` in an arg (e.g. `--prefix ~/my-server`, a common pattern in copy-pasted MCP server setup commands) was never expanded to the user's home directory the way running the same command line in an actual shell would. Now expands tildes in each arg before launch |
+| Desktop | [PR #4626](https://github.com/aaif-goose/goose/pull/4626) (adapted) | The desktop app's CSP blocked MCP-UI webviews from loading external stylesheets (`style-src`/`style-src-elem`) and non-`self` media (`media-src`/`media-src-elem`) — common needs for MCP-UI content (e.g. web fonts, blob/data URLs). Relaxed both directives to allow `https:`/`blob:`/`data:` sources, matching the merged upstream PR |
+| Providers | [#4540](https://github.com/aaif-goose/goose/issues/4540) | The cursor-agent provider piped the CLI's stderr but never read it, so any command failure only reported a bare exit code with no indication of what actually went wrong (auth errors, invalid model names, etc. were all swallowed). Now drains stderr concurrently with stdout and surfaces it in the error message |
 
 ### Fixed without an upstream ticket
 
@@ -336,8 +341,8 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~217-227 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  150 individually-cited issues/PRs/branches (112 issues/PRs + 38 branches) — this figure is
+- **~222-232 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  155 individually-cited issues/PRs/branches (117 issues/PRs + 38 branches) — this figure is
   mechanically regenerated from the doc itself
   (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
@@ -710,11 +715,77 @@ which lines up with the corrected total below — the earlier undercounted figur
     triage output, are in `scratchpad/graveyard-data-v2/closed_pass/{chunk,result}_*.json` and
     `all_merged.json` for whoever picks up the next tier.
   - **Citation count after this batch: 112 issues/PRs + 38 branches = 150** (mechanically
-    regenerated, up from 148). **Remaining pool, still the dominant untouched figure: ~6,241
-    closed issues/PRs with real engagement below the score-20 cutoff** — this tier-based approach
-    means the next step (if continued) is either lowering the score cutoff (e.g. `score >= 10` is
-    ~1,047 items) or accepting a coarser, cheaper triage pass for the long tail the way the branch
-    graveyard's small tier was first triaged by log/file-list alone before any deep read.
+    regenerated, up from 148).
+- **Second engagement tier of the closed pool resolved (this stretch)**: continued down the same
+  score ladder, this time `score in [14, 20)` (the band immediately below the first tier, so no
+  overlap) — **306 items (151 issues + 155 PRs)**, split into 16 chunks of ~20 for the same
+  deep-read triage discipline. Two chunk agents hit context-thrashing failures mid-run trying to
+  pull full diffs on unusually large PRs (one was an auto-generated release-train PR); one had
+  actually already written its result file before erroring (used it as-is after confirming it was
+  complete and well-formed), the other was relaunched with explicit guidance to check PR size
+  before pulling a full diff, which resolved cleanly.
+  - Mechanically aggregated (306/306, zero duplicates): **190 ALREADY_COVERED, 74 NOT_APPLICABLE,
+    19 NEW_CAPABILITY, 14 BUG_FIX_CANDIDATE, 9 UNCERTAIN.**
+  - Independently re-verified all 14 candidates before deciding what to port. One, **#5336**, is
+    the same trailing-newline gap in `edit.rs` already catalogued as **#2825** from the first tier
+    — same deferred rationale (an existing test asserts the current no-normalization behavior).
+  - **5 ported this stretch**, each independently re-verified and mutation-tested:
+    - **PR #10000** — the PR's own diagnosed root cause (an 8KiB SSE line-buffering limit) was
+      refuted (the actual `LinesCodec` has no such limit), but the same investigation surfaced a
+      real, different gap: a `response.completed` stream event missing an `id` field failed
+      `serde_json::from_value` outright and was silently dropped (losing final usage/output)
+      instead of degrading gracefully. Made `id` optional via `#[serde(default)]`.
+    - **#2150** — `to_bedrock_tool` never stripped top-level `oneOf`/`allOf`/`anyOf` from a tool's
+      `input_schema`, which Bedrock's Converse API rejects outright, breaking any Claude-on-Bedrock
+      session using an MCP tool with a union-typed schema.
+    - **#2885** — stdio extension `args` had no tilde-expansion before being passed to
+      `Command::args()`, so `--prefix ~/my-server`-style args (common in copy-pasted MCP setup
+      commands) failed silently. First independently traced the issue's exact reported symptom
+      (literal embedded quote characters in an arg) to confirm it was already fixed elsewhere — the
+      CLI's `split_command_args` already strips quotes correctly (verified via its own existing
+      tests) — narrowing the real remaining gap to tilde-expansion alone before fixing it.
+    - **PR #4626** — the desktop CSP blocked MCP-UI webviews from loading external stylesheets and
+      non-`self` media; relaxed `style-src`/`media-src` (plus explicit `style-src-elem`/
+      `media-src-elem`) to match the merged upstream PR.
+    - **#4540** — cursor-agent's CLI stderr was piped but never read, so failures only reported a
+      bare exit code; now drains stderr concurrently with stdout and surfaces it in the error.
+  - 3 verdicts were corrected during independent re-verification for other candidates before
+    settling on the port list — not overturned to ALREADY_COVERED this time, but narrowed in scope
+    (e.g. #7620's fix target turned out to be `config::base::get_secrets`'s `?`-short-circuit
+    behavior specifically, not a broader provider rewrite) during investigation; those remain
+    catalogued below rather than ported, since the narrower fix still touches a shared function
+    used by other config keys and deserves its own dedicated verification pass.
+  - **9 remaining candidates catalogued, not ported this stretch**: **#9583** (image content isn't
+    forwarded to delegated subagents — confirmed via zero `image`/`Image` matches in
+    `subagent_handler.rs`/`summon.rs` — a real but feature-sized gap, not a one-line fix),
+    **#8780** (`CustomProviderForm.tsx` has no UI field for overriding a custom provider's context
+    limit, even though the underlying `Model` type already supports `context_limit` — needs a new
+    form field and wiring, not just a backend change), **#5812** (the `summon` extension is always
+    enabled regardless of whether any other extension exists for a delegate to usefully act on —
+    the actual upstream fix landed in a separate PR, #5825, not fetched or verified this stretch),
+    **#7427** (Azure AI Foundry's `/models`-less v1/deployment-scoped endpoints have no static-list
+    fallback when the generic `fetch_models_json()` 404s — spans `openai_compatible.rs`,
+    `azure.rs`, and a server route, more than a single-function fix), **#7620** (`OPENAI_CUSTOM_HEADERS`
+    is silently dropped whenever `OPENAI_API_KEY` is unset, because `config::base::get_secrets`'s
+    `?`-based primary-key lookup short-circuits before the secondary key is ever fetched — real, but
+    `get_secrets` is a shared function and needs checking every other caller before changing its
+    semantics), **#4843** (recipe YAML with multi-line values still requires manually applying a
+    Jinja `indent` filter — a UI auto-indent feature, not a narrow fix), **#4600** (OAuth
+    401/reconnect detection only fires on initial connection, not on a token expiring mid-session —
+    a state-machine change in the MCP client's reconnect path, higher regression risk), **#1095**
+    (429 rate-limit errors carry a `retry_delay` hint that nothing in the core reply loop actually
+    consumes for automatic backoff — a real robustness gap, but changing the core reply loop's
+    retry behavior needs its own careful design and testing), **#5336** (duplicate of #2825, see
+    above).
+  - Full 306-item raw output: `scratchpad/graveyard-data-v2/closed_pass_tier2/{chunk,result}_*.json`
+    and `all_merged_tier2.json`.
+  - **Citation count after this batch: 117 issues/PRs + 38 branches = 155** (mechanically
+    regenerated, up from 150). **Remaining pool, still the dominant untouched figure: ~5,935
+    closed issues/PRs with real engagement below the score-14 cutoff used across both tiers so
+    far** — the next step, if continued, is either lowering the score cutoff further (e.g.
+    `score >= 10` covers ~1,047 items total, meaning ~768 more beyond what's been triaged) or
+    accepting a coarser, cheaper triage pass for the long tail, the way the branch graveyard's small
+    tier was first triaged by log/file-list alone before any deep read.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
