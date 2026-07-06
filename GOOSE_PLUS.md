@@ -337,17 +337,37 @@ a broken earlier data-extraction pass (one of its intermediate cache files was f
 GitHub search API and cross-checked against the repo's actual highest issue/PR number (10282,
 which lines up with the corrected total below — the earlier undercounted figures did not):
 
-- **2,269 closed issues, 184 open issues, 7,408 closed PRs, 96 open PRs, 619 upstream branches**
-  = **10,576 total**, of which only 3 branches are mechanically already-merged into
-  `upstream/main`. The previous "68 mechanically confirmed zero-engagement" and "~1354 genuinely
-  un-triaged" figures were downstream of the same broken pipeline and are not trustworthy at any
-  scale — that filtering pass needs to be redone from scratch against the corrected totals above,
-  which has not happened yet. Of the corrected 10,576, roughly 20 items have been individually,
-  manually resolved across recent sessions (13 landed as real fixes with full build+test+clippy+
-  mutation verification, the rest confirmed already-covered/superseded/architecture-mismatched/
-  unreproducible — see `scratchpad/remaining.txt` for the itemized reasoning on each). At this
-  scale, that is a rounding error, not meaningful progress against the total — be explicit about
-  that rather than implying otherwise.
+- **2,269 closed issues, 184 open issues, 7,408 closed PRs, 97 open PRs, 617 upstream branches**
+  = **10,575 total** (re-measured; drifts by a handful day to day as upstream stays active), of
+  which only 3 branches are mechanically already-merged into `upstream/main`. Of the corrected
+  10,576/10,575, roughly 20 items have been individually, manually resolved across recent sessions
+  (13 landed as real fixes with full build+test+clippy+mutation verification, the rest confirmed
+  already-covered/superseded/architecture-mismatched/unreproducible — see
+  `scratchpad/remaining.txt` for the itemized reasoning on each). At this scale, that is a rounding
+  error, not meaningful progress against the total — be explicit about that rather than implying
+  otherwise.
+- **The zero-engagement filter has now been redone against the corrected totals** (previously
+  flagged untrustworthy — it was computed against the corrupted 579/519-item pool). Fetched every
+  closed issue and closed PR fresh via the GitHub REST issues-list endpoint (not the search API,
+  which caps at 1,000 results — too small for this dataset), paginated with per-page retries;
+  fetched counts matched the API's live `total_count` exactly (2,269 / 7,408) confirming no
+  corruption this time. "Zero-engagement" = 0 comments AND 0 reactions, checked against the pool
+  with already-cited numbers excluded:
+  - **Closed issues**: 2,249 not-yet-cited candidates → **318 zero-engagement (14.1%)**, 1,931 with
+    real engagement (comments or reactions) still sitting un-triaged.
+  - **Closed PRs**: 7,387 not-yet-cited candidates → **2,786 zero-engagement (37.7%)**, 4,601 with
+    real engagement still un-triaged.
+  - Combined: **3,104 zero-engagement** (truly no signal — lowest priority to mine) vs.
+    **6,532 with real engagement** (comments and/or reactions — the actual high-value triage pool
+    for closed issues/PRs). Open issues (184) and open PRs (97) aren't zero-engagement-filtered —
+    being open is itself a live signal. Branches (617, only 35 individually cited) aren't
+    comment/reaction-scored the same way; they get the merged/closed-PR/no-PR classification from
+    the branch-mining method instead, and that pass hasn't been re-run against the full 617 yet.
+  - So the honest "genuinely worth a human/agent triage pass" pool, replacing the old untrustworthy
+    "~1354" figure: **~6,532 closed issues/PRs with real engagement + 281 open issues/PRs + up to
+    ~582 untriaged branches ≈ 7,395**, not counting the 3,104 zero-engagement items that are real
+    but lowest-priority. Raw data + the analysis script are in `scratchpad/graveyard-data-v2/` for
+    anyone who wants to re-run or extend this.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
