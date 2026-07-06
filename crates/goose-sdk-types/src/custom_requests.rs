@@ -126,6 +126,12 @@ pub enum SessionSystemPromptMode {
 /// `mode: "set"` replaces Goose's base system prompt. `mode: "append"` adds an
 /// instruction under "Additional Instructions". Reusing a key replaces the
 /// previous value for that mode/key; sending empty text clears it.
+///
+/// `mode: "set"` always persists across a daemon restart or session resume.
+/// For `mode: "append"`, only keys prefixed `client_` are persisted — other
+/// keys are reserved for server-managed prompt sections (recipe
+/// instructions, final-output guidance, etc.) that are rebuilt from other
+/// session state and would otherwise be duplicated.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(
     method = "_goose/unstable/session/system-prompt/set",

@@ -86,6 +86,20 @@ export type CheckProviderRequest = {
     provider: string;
 };
 
+/**
+ * Client-authored system prompt state persisted with a session.
+ *
+ * Populated via the ACP session/system-prompt setter. `override_text` mirrors
+ * `PromptManager::system_prompt_override` (Set mode); `extras` mirrors
+ * `PromptManager::system_prompt_extras` (Append mode).
+ */
+export type ClientSystemPrompt = {
+    extras?: {
+        [key: string]: string;
+    };
+    overrideText?: string | null;
+};
+
 export type CommandType = 'Builtin' | 'Recipe' | 'Skill' | 'Agent';
 
 /**
@@ -1373,6 +1387,7 @@ export type Session = {
     accumulated_cost?: number | null;
     accumulated_usage?: Usage;
     archived_at?: string | null;
+    client_system_prompt?: ClientSystemPrompt | null;
     conversation?: Conversation | null;
     created_at: string;
     extension_data: ExtensionData;

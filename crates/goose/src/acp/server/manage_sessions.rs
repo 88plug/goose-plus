@@ -1,5 +1,22 @@
 use super::*;
 
+/// Returns true if `key` (used with `SessionSystemPromptMode::Append`) is
+/// considered client-authored and should be persisted to the session record.
+///
+/// Server-managed keys (`recipe`, `final_output`, `recipe_instructions`, etc.)
+/// are rebuilt at agent-activation time from other session state, so they
+/// must not be persisted via the client-driven path — clients that want their
+/// append-mode key to survive a restart should prefix it with `client_`.
+fn is_client_authored_key(key: &str) -> bool {
+    key.starts_with("client_")
+}
+
+enum ClientSystemPromptOp {
+    SetOverride(Option<String>),
+    UpsertExtra(String, String),
+    RemoveExtra(String),
+}
+
 impl GooseAcpAgent {
     pub(super) async fn on_update_working_dir(
         &self,
@@ -58,20 +75,22 @@ impl GooseAcpAgent {
         &self,
         req: SetSessionSystemPromptRequest,
     ) -> Result<EmptyResponse, agent_client_protocol::Error> {
-        let session_id = req.session_id.trim();
+        let session_id = req.session_id.trim().to_string();
         if session_id.is_empty() {
             return Err(
                 agent_client_protocol::Error::invalid_params().data("sessionId cannot be empty")
             );
         }
 
-        let agent = self.get_session_agent(session_id).await?;
-        match req.mode {
+        let agent = self.get_session_agent(&session_id).await?;
+        let persist_op = match req.mode {
             SessionSystemPromptMode::Set => {
                 if req.text.trim().is_empty() {
                     agent.clear_system_prompt_override().await;
+                    Some(ClientSystemPromptOp::SetOverride(None))
                 } else {
-                    agent.override_system_prompt(req.text).await;
+                    agent.override_system_prompt(req.text.clone()).await;
+                    Some(ClientSystemPromptOp::SetOverride(Some(req.text)))
                 }
             }
             SessionSystemPromptMode::Append => {
@@ -83,13 +102,48 @@ impl GooseAcpAgent {
                     .ok_or_else(|| {
                         agent_client_protocol::Error::invalid_params()
                             .data("key cannot be empty for append mode")
-                    })?;
-                if req.text.trim().is_empty() {
-                    agent.remove_system_prompt_extra(key).await;
+                    })?
+                    .to_string();
+                let clear = req.text.trim().is_empty();
+                if clear {
+                    agent.remove_system_prompt_extra(&key).await;
                 } else {
-                    agent.extend_system_prompt(key.to_string(), req.text).await;
+                    agent
+                        .extend_system_prompt(key.clone(), req.text.clone())
+                        .await;
+                }
+                let op = if clear {
+                    ClientSystemPromptOp::RemoveExtra(key.clone())
+                } else {
+                    ClientSystemPromptOp::UpsertExtra(key.clone(), req.text)
+                };
+                is_client_authored_key(&key).then_some(op)
+            }
+        };
+
+        if let Some(op) = persist_op {
+            let session = self
+                .session_manager
+                .get_session(&session_id, false)
+                .await
+                .internal_err()?;
+            let mut state = session.client_system_prompt.unwrap_or_default();
+            match op {
+                ClientSystemPromptOp::SetOverride(value) => state.override_text = value,
+                ClientSystemPromptOp::UpsertExtra(key, text) => {
+                    state.extras.insert(key, text);
+                }
+                ClientSystemPromptOp::RemoveExtra(key) => {
+                    state.extras.remove(&key);
                 }
             }
+            let next = (!state.is_empty()).then_some(state);
+            self.session_manager
+                .update(&session_id)
+                .client_system_prompt(next)
+                .apply()
+                .await
+                .internal_err()?;
         }
 
         Ok(EmptyResponse {})
@@ -235,5 +289,24 @@ impl GooseAcpAgent {
             .await
             .internal_err()?;
         Ok(EmptyResponse {})
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_client_authored_key_accepts_client_prefixed_keys() {
+        assert!(is_client_authored_key("client_persona"));
+        assert!(is_client_authored_key("client_"));
+    }
+
+    #[test]
+    fn is_client_authored_key_rejects_server_managed_keys() {
+        assert!(!is_client_authored_key("recipe"));
+        assert!(!is_client_authored_key("final_output"));
+        assert!(!is_client_authored_key("recipe_instructions"));
+        assert!(!is_client_authored_key(""));
     }
 }

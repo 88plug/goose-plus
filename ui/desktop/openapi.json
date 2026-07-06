@@ -4118,6 +4118,22 @@
           }
         }
       },
+      "ClientSystemPrompt": {
+        "type": "object",
+        "description": "Client-authored system prompt state persisted with a session.\n\nPopulated via the ACP session/system-prompt setter. `override_text` mirrors\n`PromptManager::system_prompt_override` (Set mode); `extras` mirrors\n`PromptManager::system_prompt_extras` (Append mode).",
+        "properties": {
+          "extras": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "overrideText": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "CommandType": {
         "type": "string",
         "enum": [
@@ -8034,6 +8050,14 @@
           "archived_at": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          },
+          "client_system_prompt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientSystemPrompt"
+              }
+            ],
             "nullable": true
           },
           "conversation": {

@@ -63,6 +63,8 @@ import type {
   GooseSessionNotification_unstable,
   GooseToolCallRequest_unstable,
   GooseToolCallResponse_unstable,
+  HealthRequest_unstable,
+  HealthResponse_unstable,
   ImportSessionRequest_unstable,
   ImportSessionResponse_unstable,
   ImportSourcesRequest_unstable,
@@ -149,6 +151,7 @@ import {
   zGetToolsResponse_unstable,
   zGooseSessionNotification_unstable,
   zGooseToolCallResponse_unstable,
+  zHealthResponse_unstable,
   zImportSessionResponse_unstable,
   zImportSourcesResponse_unstable,
   zListProvidersResponse_unstable,
@@ -253,6 +256,13 @@ export class GooseExtClient {
 
   async sessionDelete(params: DeleteSessionRequest): Promise<void> {
     await this.conn.extMethod("session/delete", params);
+  }
+
+  async health_unstable(
+    params: HealthRequest_unstable,
+  ): Promise<HealthResponse_unstable> {
+    const raw = await this.conn.extMethod("_goose/unstable/health", params);
+    return zHealthResponse_unstable.parse(raw) as HealthResponse_unstable;
   }
 
   async configExtensionsList_unstable(

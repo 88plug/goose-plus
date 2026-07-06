@@ -234,6 +234,12 @@ export const zSessionSystemPromptMode = z.union([
  * `mode: "set"` replaces Goose's base system prompt. `mode: "append"` adds an
  * instruction under "Additional Instructions". Reusing a key replaces the
  * previous value for that mode/key; sending empty text clears it.
+ *
+ * `mode: "set"` always persists across a daemon restart or session resume.
+ * For `mode: "append"`, only keys prefixed `client_` are persisted — other
+ * keys are reserved for server-managed prompt sections (recipe
+ * instructions, final-output guidance, etc.) that are rebuilt from other
+ * session state and would otherwise be duplicated.
  */
 export const zSetSessionSystemPromptRequest_unstable = z.object({
     sessionId: z.string(),
@@ -466,6 +472,17 @@ export const zDeleteSessionRequest = z.object({
 });
 
 /**
+ * List Goose-owned extension definitions available to configure or enable.
+ * Startup health check, for programmatic clients that poll before sending
+ * traffic to a freshly-launched goosed.
+ */
+export const zHealthRequest_unstable = z.record(z.unknown());
+
+export const zHealthResponse_unstable = z.object({
+    status: z.string()
+});
+
+/**
  * List configured extensions and any warnings.
  */
 export const zGetConfigExtensionsRequest_unstable = z.record(z.unknown());
@@ -487,9 +504,6 @@ export const zGetConfigExtensionsResponse_unstable = z.object({
     warnings: z.array(z.string()).optional().default([])
 });
 
-/**
- * List Goose-owned extension definitions available to configure or enable.
- */
 export const zGetAvailableExtensionsRequest_unstable = z.record(z.unknown());
 
 export const zGetAvailableExtensionsResponse_unstable = z.object({
@@ -1922,6 +1936,7 @@ export const zExtRequest = z.object({
             zSetSessionSystemPromptRequest_unstable,
             zSteerSessionRequest_unstable,
             zDeleteSessionRequest,
+            zHealthRequest_unstable,
             zGetConfigExtensionsRequest_unstable,
             zGetAvailableExtensionsRequest_unstable,
             zAddConfigExtensionRequest_unstable,
@@ -2002,6 +2017,7 @@ export const zExtResponse = z.union([
                 zGooseToolCallResponse_unstable,
                 zReadResourceResponse_unstable,
                 zSteerSessionResponse_unstable,
+                zHealthResponse_unstable,
                 zGetConfigExtensionsResponse_unstable,
                 zGetAvailableExtensionsResponse_unstable,
                 zGetSessionExtensionsResponse_unstable,

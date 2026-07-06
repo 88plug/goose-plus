@@ -8,7 +8,10 @@ use agent_client_protocol::schema::{
 };
 use agent_client_protocol::ErrorCode;
 use common_tests::fixtures::server::AcpServerConnection;
-use common_tests::fixtures::{run_test, Connection, OpenAiFixture, Session, TestConnectionConfig};
+use common_tests::fixtures::{
+    run_test, Connection, OpenAiFixture, PermissionDecision, Session, SessionData,
+    TestConnectionConfig,
+};
 #[cfg(feature = "code-mode")]
 use common_tests::run_prompt_codemode;
 use common_tests::{
@@ -25,7 +28,10 @@ use common_tests::{
 };
 use goose::config::GooseMode;
 use goose::conversation::message::{Message, MessageMetadata};
-use goose::custom_requests::{GetSessionInfoRequest, GetSessionInfoResponse};
+use goose::custom_requests::{
+    GetSessionInfoRequest, GetSessionInfoResponse, SessionSystemPromptMode,
+    SetSessionSystemPromptRequest,
+};
 use goose::recipe::{Recipe, Settings};
 use goose::recipe_deeplink;
 use goose::session::{SessionManager, SessionType};
@@ -689,6 +695,49 @@ fn test_model_set() {
 #[test]
 fn test_model_set_error_session_not_found() {
     run_test(async { run_model_set_error_session_not_found::<AcpServerConnection>().await });
+}
+
+#[test]
+fn test_client_system_prompt_persists_across_session_reload() {
+    run_test(async {
+        let expected_session_id = <AcpServerConnection as Connection>::expected_session_id();
+        let override_text = "You are a pirate. Arr!";
+        let openai = OpenAiFixture::new(
+            vec![(
+                override_text.to_string(),
+                include_str!("acp_test_data/openai_basic.txt"),
+            )],
+            expected_session_id.clone(),
+        )
+        .await;
+
+        let mut conn =
+            <AcpServerConnection as Connection>::new(TestConnectionConfig::default(), openai).await;
+        let SessionData { session, .. } = conn.new_session().await.unwrap();
+        expected_session_id.set(&session.session_id().0);
+        let session_id = session.session_id().0.to_string();
+
+        conn.cx()
+            .send_request(SetSessionSystemPromptRequest {
+                session_id: session_id.clone(),
+                mode: SessionSystemPromptMode::Set,
+                key: None,
+                text: override_text.to_string(),
+            })
+            .block_task()
+            .await
+            .unwrap();
+
+        // Simulate a daemon restart / session resume: loading the session
+        // discards the in-memory Agent and rebuilds one from persisted state.
+        let SessionData { mut session, .. } = conn.load_session(&session_id, vec![]).await.unwrap();
+
+        let output = session
+            .prompt("what is 1+1", PermissionDecision::Cancel)
+            .await
+            .unwrap();
+        assert_eq!(output.text, "2");
+    });
 }
 
 #[test]

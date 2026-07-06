@@ -46,6 +46,11 @@
       "responseType": "EmptyResponse"
     },
     {
+      "method": "_goose/unstable/health",
+      "requestType": "HealthRequest_unstable",
+      "responseType": "HealthResponse_unstable"
+    },
+    {
       "method": "_goose/unstable/config/extensions/list",
       "requestType": "GetConfigExtensionsRequest_unstable",
       "responseType": "GetConfigExtensionsResponse_unstable"

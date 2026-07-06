@@ -7,7 +7,7 @@ use goose::conversation::token_usage::Usage;
 use goose::conversation::Conversation;
 use goose::download_manager::{DownloadProgress, DownloadStatus};
 use goose::providers::base::{ConfigKey, ModelInfo, ProviderMetadata, ProviderType};
-use goose::session::{Session, SessionType, SystemInfo};
+use goose::session::{ClientSystemPrompt, Session, SessionType, SystemInfo};
 use goose_providers::model::ModelConfig;
 use goose_providers::permission::Permission;
 use goose_providers::permission::PrincipalType;
@@ -580,6 +580,7 @@ derive_utoipa!(IconTheme as IconThemeSchema);
         ThinkingEffort,
         super::routes::config_management::ProviderModelInfoQuery,
         Session,
+        ClientSystemPrompt,
         goose_providers::goose_mode::GooseMode,
         SessionType,
         SystemInfo,

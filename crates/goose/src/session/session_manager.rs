@@ -17,14 +17,14 @@ use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::AssertSqlSafe;
 use sqlx::{Pool, Sqlite};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use tracing::{info, warn};
 use utoipa::ToSchema;
 
-pub const CURRENT_SCHEMA_VERSION: i32 = 14;
+pub const CURRENT_SCHEMA_VERSION: i32 = 15;
 pub const SESSIONS_FOLDER: &str = "sessions";
 pub const DB_NAME: &str = "sessions.db";
 
@@ -38,7 +38,7 @@ accumulated_cache_read_tokens, accumulated_cache_write_tokens, \
 accumulated_cost, \
 schedule_id, recipe_json, user_recipe_values_json, \
 provider_name, model_config_json, goose_mode, \
-archived_at, project_id";
+archived_at, project_id, client_system_prompt_json";
 
 #[derive(
     Debug,
@@ -103,6 +103,28 @@ pub struct Session {
     pub project_id: Option<String>,
     #[serde(default)]
     pub last_message_snippet: Option<String>,
+    #[serde(default)]
+    pub client_system_prompt: Option<ClientSystemPrompt>,
+}
+
+/// Client-authored system prompt state persisted with a session.
+///
+/// Populated via the ACP session/system-prompt setter. `override_text` mirrors
+/// `PromptManager::system_prompt_override` (Set mode); `extras` mirrors
+/// `PromptManager::system_prompt_extras` (Append mode).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientSystemPrompt {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub override_text: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extras: BTreeMap<String, String>,
+}
+
+impl ClientSystemPrompt {
+    pub fn is_empty(&self) -> bool {
+        self.override_text.is_none() && self.extras.is_empty()
+    }
 }
 
 impl From<&Session> for TokenState {
@@ -149,6 +171,7 @@ pub struct SessionUpdateBuilder<'a> {
     archived_at: Option<Option<DateTime<Utc>>>,
 
     project_id: Option<Option<String>>,
+    client_system_prompt: Option<Option<ClientSystemPrompt>>,
 }
 
 #[derive(Serialize, ToSchema, Debug)]
@@ -179,6 +202,7 @@ impl<'a> SessionUpdateBuilder<'a> {
             goose_mode: None,
             archived_at: None,
             project_id: None,
+            client_system_prompt: None,
         }
     }
 
@@ -279,6 +303,11 @@ impl<'a> SessionUpdateBuilder<'a> {
 
     pub fn project_id(mut self, project_id: Option<String>) -> Self {
         self.project_id = Some(project_id);
+        self
+    }
+
+    pub fn client_system_prompt(mut self, value: Option<ClientSystemPrompt>) -> Self {
+        self.client_system_prompt = Some(value);
         self
     }
 }
@@ -688,6 +717,7 @@ impl Default for Session {
             archived_at: None,
             project_id: None,
             last_message_snippet: None,
+            client_system_prompt: None,
         }
     }
 }
@@ -712,6 +742,18 @@ impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for Session {
 
         let model_config_json: Option<String> = row.try_get("model_config_json").ok().flatten();
         let model_config = model_config_json.and_then(|json| serde_json::from_str(&json).ok());
+
+        let client_system_prompt: Option<ClientSystemPrompt> = row
+            .try_get::<Option<String>, _>("client_system_prompt_json")
+            .ok()
+            .flatten()
+            .and_then(|json| match serde_json::from_str::<ClientSystemPrompt>(&json) {
+                Ok(value) => Some(value),
+                Err(err) => {
+                    warn!(error = %err, "failed to parse client_system_prompt_json; treating as None");
+                    None
+                }
+            });
 
         let name: String = {
             let name_val: String = row.try_get("name").unwrap_or_default();
@@ -775,6 +817,7 @@ impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for Session {
             archived_at: row.try_get("archived_at").ok(),
             project_id: row.try_get("project_id").ok().flatten(),
             last_message_snippet: None,
+            client_system_prompt,
         })
     }
 }
@@ -910,7 +953,8 @@ impl SessionStorage {
                 model_config_json TEXT,
                 goose_mode TEXT NOT NULL DEFAULT 'auto',
                 archived_at TIMESTAMP,
-                project_id TEXT
+                project_id TEXT,
+                client_system_prompt_json TEXT
             )
         "#,
         )
@@ -1389,6 +1433,19 @@ impl SessionStorage {
                     }
                 }
             }
+            15 => {
+                let has_col = sqlx::query_scalar::<_, i32>(
+                    "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'client_system_prompt_json'",
+                )
+                .fetch_one(&mut **tx)
+                .await?
+                    > 0;
+                if !has_col {
+                    sqlx::query("ALTER TABLE sessions ADD COLUMN client_system_prompt_json TEXT")
+                        .execute(&mut **tx)
+                        .await?;
+                }
+            }
             _ => {
                 anyhow::bail!("Unknown migration version: {}", version);
             }
@@ -1533,6 +1590,7 @@ impl SessionStorage {
         add_update!(builder.archived_at, "archived_at");
 
         add_update!(builder.project_id, "project_id");
+        add_update!(builder.client_system_prompt, "client_system_prompt_json");
 
         if updates.is_empty() {
             return Ok(());
@@ -1608,6 +1666,12 @@ impl SessionStorage {
 
         if let Some(ref project_id) = builder.project_id {
             q = q.bind(project_id.as_ref());
+        }
+        if let Some(client_system_prompt) = builder.client_system_prompt {
+            let json = client_system_prompt
+                .map(|csp| serde_json::to_string(&csp))
+                .transpose()?;
+            q = q.bind(json);
         }
 
         let pool = self.pool().await?;
@@ -3737,6 +3801,74 @@ mod tests {
         let loaded = sm.get_session("cache_id", false).await.unwrap();
         assert_eq!(loaded.usage, usage);
         assert_eq!(loaded.accumulated_usage, accumulated_usage);
+    }
+
+    #[tokio::test]
+    async fn test_client_system_prompt_column_migration_and_round_trip() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join(SESSIONS_FOLDER).join(DB_NAME);
+
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        let pool = SqlitePoolOptions::new()
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .create_if_missing(true),
+            )
+            .await
+            .unwrap();
+
+        SessionStorage::create_schema(&pool).await.unwrap();
+
+        // Recreate a v14-shaped database without client_system_prompt_json.
+        sqlx::query("ALTER TABLE sessions DROP COLUMN client_system_prompt_json")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE schema_version SET version = 14")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("csp_id")
+        .bind("CSP Session")
+        .bind(false)
+        .bind("user")
+        .bind("/tmp")
+        .bind("{}")
+        .bind("auto")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        pool.close().await;
+
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+        sm.storage().pool().await.unwrap(); // Triggers migration
+
+        let mut prompt = ClientSystemPrompt {
+            override_text: Some("You are a pirate.".to_string()),
+            ..Default::default()
+        };
+        prompt
+            .extras
+            .insert("client_persona".to_string(), "arr".to_string());
+
+        sm.update("csp_id")
+            .client_system_prompt(Some(prompt.clone()))
+            .apply()
+            .await
+            .unwrap();
+
+        let loaded = sm.get_session("csp_id", false).await.unwrap();
+        assert_eq!(loaded.client_system_prompt, Some(prompt));
     }
 
     #[tokio::test]

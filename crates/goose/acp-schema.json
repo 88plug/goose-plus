@@ -526,7 +526,7 @@
         "sessionId",
         "text"
       ],
-      "description": "Set, append, or clear system prompt text for a session.\n\n`mode: \"set\"` replaces Goose's base system prompt. `mode: \"append\"` adds an\ninstruction under \"Additional Instructions\". Reusing a key replaces the\nprevious value for that mode/key; sending empty text clears it.",
+      "description": "Set, append, or clear system prompt text for a session.\n\n`mode: \"set\"` replaces Goose's base system prompt. `mode: \"append\"` adds an\ninstruction under \"Additional Instructions\". Reusing a key replaces the\nprevious value for that mode/key; sending empty text clears it.\n\n`mode: \"set\"` always persists across a daemon restart or session resume.\nFor `mode: \"append\"`, only keys prefixed `client_` are persisted — other\nkeys are reserved for server-managed prompt sections (recipe\ninstructions, final-output guidance, etc.) that are rebuilt from other\nsession state and would otherwise be duplicated.",
       "x-side": "agent",
       "x-method": "_goose/unstable/session/system-prompt/set"
     },
@@ -987,6 +987,25 @@
       "x-side": "agent",
       "x-method": "session/delete"
     },
+    "HealthRequest_unstable": {
+      "type": "object",
+      "description": "List Goose-owned extension definitions available to configure or enable.\nStartup health check, for programmatic clients that poll before sending\ntraffic to a freshly-launched goosed.",
+      "x-side": "agent",
+      "x-method": "_goose/unstable/health"
+    },
+    "HealthResponse_unstable": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "x-side": "agent",
+      "x-method": "_goose/unstable/health"
+    },
     "GetConfigExtensionsRequest_unstable": {
       "type": "object",
       "description": "List configured extensions and any warnings.",
@@ -1040,7 +1059,6 @@
     },
     "GetAvailableExtensionsRequest_unstable": {
       "type": "object",
-      "description": "List Goose-owned extension definitions available to configure or enable.",
       "x-side": "agent",
       "x-method": "_goose/unstable/extensions/available"
     },
@@ -4625,6 +4643,15 @@
                 {
                   "allOf": [
                     {
+                      "$ref": "#/$defs/HealthRequest_unstable"
+                    }
+                  ],
+                  "description": "Params for _goose/unstable/health",
+                  "title": "HealthRequest_unstable"
+                },
+                {
+                  "allOf": [
+                    {
                       "$ref": "#/$defs/GetConfigExtensionsRequest_unstable"
                     }
                   ],
@@ -5249,6 +5276,14 @@
                         }
                       ],
                       "title": "SteerSessionResponse_unstable"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/$defs/HealthResponse_unstable"
+                        }
+                      ],
+                      "title": "HealthResponse_unstable"
                     },
                     {
                       "allOf": [

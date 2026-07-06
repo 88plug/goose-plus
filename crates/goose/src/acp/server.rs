@@ -1141,8 +1141,25 @@ impl GooseAcpAgent {
             .await;
         self.maybe_refresh_provider_inventory_with_agent(session, &agent)
             .await;
+        Self::apply_client_system_prompt(&agent, session).await;
 
         Ok((agent, agent_result.extension_results))
+    }
+
+    /// Re-apply a session's persisted client-authored system prompt overrides
+    /// (set via `_goose/unstable/session/system-prompt/set`) to a freshly
+    /// activated agent — the agent's in-memory PromptManager state does not
+    /// otherwise survive a restart or session resume.
+    async fn apply_client_system_prompt(agent: &Agent, session: &Session) {
+        let Some(client_system_prompt) = session.client_system_prompt.as_ref() else {
+            return;
+        };
+        if let Some(ref override_text) = client_system_prompt.override_text {
+            agent.override_system_prompt(override_text.clone()).await;
+        }
+        for (key, text) in &client_system_prompt.extras {
+            agent.extend_system_prompt(key.clone(), text.clone()).await;
+        }
     }
 
     async fn prepare_session_for_activation(
