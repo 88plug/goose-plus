@@ -19,7 +19,7 @@ use crate::config::base::CONFIG_YAML_NAME;
 use crate::config::extensions::{get_enabled_extensions_with_config, is_builtin_disabled_by_user};
 use crate::config::paths::Paths;
 use crate::config::permission::PermissionManager;
-use crate::config::{Config, GooseMode};
+use crate::config::{Config, ConfigHandle, GooseMode};
 use crate::conversation::message::{
     ActionRequiredData, Message, MessageContent, SystemNotificationContent, SystemNotificationType,
     ToolRequest,
@@ -222,6 +222,7 @@ pub struct GooseAcpAgent {
     use_login_shell_path: OnceCell<bool>,
     client_cx: OnceCell<ConnectionTo<Client>>,
     config_dir: std::path::PathBuf,
+    config: ConfigHandle,
     session_manager: Arc<SessionManager>,
     permission_manager: Arc<PermissionManager>,
     disable_session_naming: bool,
@@ -912,6 +913,7 @@ impl GooseAcpAgent {
 
     // TODO: goose reads Paths::in_state_dir globally (e.g. RequestLog), ignoring this data_dir.
     pub async fn new(options: GooseAcpAgentOptions) -> Result<Self> {
+        let config = Config::for_config_dir(options.config_dir.clone())?;
         let session_manager = Arc::new(SessionManager::new(options.data_dir));
 
         // Eagerly initialize the SQLite pool so it's ready when providers/sessions need it.
@@ -949,6 +951,7 @@ impl GooseAcpAgent {
             use_login_shell_path: OnceCell::new(),
             client_cx: OnceCell::new(),
             config_dir: options.config_dir,
+            config,
             session_manager,
             permission_manager,
             disable_session_naming: options.disable_session_naming,
@@ -958,8 +961,8 @@ impl GooseAcpAgent {
         })
     }
 
-    fn config(&self) -> Result<&'static Config, agent_client_protocol::Error> {
-        Ok(Config::global())
+    fn config(&self) -> Result<&Config, agent_client_protocol::Error> {
+        Ok(self.config.as_ref())
     }
 
     async fn create_provider(

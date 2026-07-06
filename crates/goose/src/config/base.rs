@@ -13,7 +13,7 @@ use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use thiserror::Error;
 
 fn write_secrets_file(path: &Path, content: &str) -> std::io::Result<()> {
@@ -147,6 +147,41 @@ enum SecretStorage {
 
 // Global instance
 static GLOBAL_CONFIG: OnceCell<Config> = OnceCell::new();
+static CONFIG_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Config>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// A reference to either the global `Config` singleton or a cached, directory-scoped instance.
+///
+/// Returned by [`Config::for_config_dir`]. Derefs to [`Config`], so it can be used
+/// anywhere a `&Config` is expected.
+#[derive(Clone)]
+pub enum ConfigHandle {
+    Global,
+    Cached(Arc<Config>),
+}
+
+impl AsRef<Config> for ConfigHandle {
+    fn as_ref(&self) -> &Config {
+        match self {
+            Self::Global => Config::global(),
+            Self::Cached(config) => config.as_ref(),
+        }
+    }
+}
+
+impl std::ops::Deref for ConfigHandle {
+    type Target = Config;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
+fn normalize_config_dir(config_dir: &Path) -> PathBuf {
+    config_dir
+        .canonicalize()
+        .unwrap_or_else(|_| config_dir.to_path_buf())
+}
 
 fn system_config_path() -> PathBuf {
     #[cfg(unix)]
@@ -167,9 +202,8 @@ fn additional_config_paths_from_env() -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        let config_dir = Paths::config_dir();
+impl Config {
+    fn with_config_dir(config_dir: PathBuf) -> Self {
         let user_config_path = config_dir.join(CONFIG_YAML_NAME);
 
         let mut config_paths = vec![system_config_path()];
@@ -196,6 +230,12 @@ impl Default for Config {
             guard: Mutex::new(()),
             secrets_cache: Arc::new(Mutex::new(None)),
         }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::with_config_dir(Paths::config_dir())
     }
 }
 
@@ -393,6 +433,47 @@ impl Config {
     /// if it hasn't been initialized yet.
     pub fn global() -> &'static Config {
         GLOBAL_CONFIG.get_or_init(Config::default)
+    }
+
+    /// Return a config handle for the given config directory.
+    ///
+    /// If `config_dir` resolves to the default goose config directory, this
+    /// returns [`ConfigHandle::Global`] backed by the process-wide singleton.
+    /// Otherwise it returns a [`ConfigHandle::Cached`] instance keyed by the
+    /// normalized directory path — repeated calls with an equivalent path
+    /// share one `Config` (and its mutex/secrets cache).
+    ///
+    /// Non-default config directories use a single-file config
+    /// (`config_dir/config.yaml`) and do not layer system or bundled
+    /// defaults the way [`Config::global`] does.
+    pub fn for_config_dir(config_dir: PathBuf) -> Result<ConfigHandle, ConfigError> {
+        let cache_key = normalize_config_dir(&config_dir);
+        let default_key = normalize_config_dir(&Paths::config_dir());
+
+        if cache_key == default_key {
+            return Ok(ConfigHandle::Global);
+        }
+
+        let mut cache = CONFIG_CACHE.lock().unwrap();
+        if let Some(config) = cache.get(&cache_key) {
+            return Ok(ConfigHandle::Cached(Arc::clone(config)));
+        }
+
+        let config = Arc::new(Self::new(
+            config_dir.join(CONFIG_YAML_NAME),
+            default_keyring_service(),
+        )?);
+        cache.insert(cache_key, Arc::clone(&config));
+        Ok(ConfigHandle::Cached(config))
+    }
+
+    /// Remove all entries from the config directory cache.
+    ///
+    /// Intended for tests, to prevent leaked temp-dir entries from
+    /// accumulating across test cases in the same process.
+    #[doc(hidden)]
+    pub fn clear_config_cache() {
+        CONFIG_CACHE.lock().unwrap().clear();
     }
 
     /// Create a new configuration instance with custom paths
@@ -2656,5 +2737,58 @@ extensions:
             Some(ThinkingEffort::High)
         );
         assert_eq!(Config::legacy_gemini3_thinking_effort("auto"), None);
+    }
+
+    #[test]
+    fn for_config_dir_returns_global_handle_for_the_default_config_dir() {
+        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", None::<&str>)]);
+        let path_root = TempDir::new().unwrap();
+        std::env::set_var("GOOSE_PATH_ROOT", path_root.path());
+        Config::clear_config_cache();
+
+        let handle = Config::for_config_dir(Paths::config_dir()).unwrap();
+        assert!(matches!(handle, ConfigHandle::Global));
+    }
+
+    #[test]
+    fn for_config_dir_returns_a_distinct_cached_handle_for_a_custom_dir() {
+        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", None::<&str>)]);
+        let path_root = TempDir::new().unwrap();
+        std::env::set_var("GOOSE_PATH_ROOT", path_root.path());
+        Config::clear_config_cache();
+
+        let custom_dir = TempDir::new().unwrap();
+        let handle = Config::for_config_dir(custom_dir.path().to_path_buf()).unwrap();
+        let ConfigHandle::Cached(config) = handle else {
+            panic!("expected a Cached handle for a non-default config dir");
+        };
+
+        config.set_param("custom_only_key", "custom_value").unwrap();
+        assert_eq!(
+            config.get_param::<String>("custom_only_key").unwrap(),
+            "custom_value"
+        );
+    }
+
+    #[test]
+    fn for_config_dir_caches_and_reuses_the_same_instance_per_directory() {
+        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", None::<&str>)]);
+        let path_root = TempDir::new().unwrap();
+        std::env::set_var("GOOSE_PATH_ROOT", path_root.path());
+        Config::clear_config_cache();
+
+        let custom_dir = TempDir::new().unwrap();
+        let ConfigHandle::Cached(first) =
+            Config::for_config_dir(custom_dir.path().to_path_buf()).unwrap()
+        else {
+            panic!("expected a Cached handle for a non-default config dir");
+        };
+        let ConfigHandle::Cached(second) =
+            Config::for_config_dir(custom_dir.path().to_path_buf()).unwrap()
+        else {
+            panic!("expected a Cached handle for a non-default config dir");
+        };
+
+        assert!(Arc::ptr_eq(&first, &second));
     }
 }

@@ -13,7 +13,7 @@ pub mod signup_tetrate;
 pub mod tls;
 
 pub use crate::agents::ExtensionConfig;
-pub use base::{merge_config_values, Config, ConfigError};
+pub use base::{merge_config_values, Config, ConfigError, ConfigHandle};
 pub use declarative_providers::DeclarativeProviderConfig;
 pub use experiments::ExperimentManager;
 pub use extensions::{
