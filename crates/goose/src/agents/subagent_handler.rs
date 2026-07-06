@@ -114,7 +114,7 @@ async fn roll_up_usage_to_parent(
 fn extract_response_text(messages: &Conversation, return_last_only: bool) -> String {
     if return_last_only {
         messages
-            .messages()
+            .agent_visible_messages()
             .last()
             .and_then(|message| {
                 message.content.iter().find_map(|content| match content {
@@ -392,5 +392,20 @@ mod tests {
     fn create_tool_notification_ignores_non_tool_request() {
         let content = MessageContent::text("hello");
         assert!(create_tool_notification(&content, "session_1").is_none());
+    }
+
+    #[test]
+    fn extract_response_text_last_only_skips_trailing_invisible_message() {
+        let messages = crate::conversation::Conversation::new_unvalidated(vec![
+            crate::conversation::message::Message::assistant().with_text("final visible reply"),
+            crate::conversation::message::Message::assistant()
+                .with_text("internal note")
+                .with_visibility(true, false),
+        ]);
+
+        assert_eq!(
+            super::extract_response_text(&messages, true),
+            "final visible reply"
+        );
     }
 }
