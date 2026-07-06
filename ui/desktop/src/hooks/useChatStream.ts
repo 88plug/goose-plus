@@ -441,9 +441,11 @@ export function useChatStream({
   const pendingReattachBufferRef = useRef<SessionEvent[]>([]);
   const namePollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Ref to access latest state in callbacks (avoids stale closures)
+  // Ref to access latest state/sessionId in callbacks (avoids stale closures)
   const stateRef = useRef(state);
   stateRef.current = state;
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
   const doReattachRef = useRef<((requestId: string, messages: Message[]) => void) | null>(null);
 
   useEffect(() => {
@@ -550,11 +552,18 @@ export function useChatStream({
   // Reload the full conversation from the server, e.g. after the SSE
   // stream indicates the client fell too far behind the replay buffer.
   const reloadConversation = useCallback(() => {
+    // Capture the session ID so we can guard against a session switch that
+    // happens while getSession is in flight -- otherwise a stale response
+    // for the previous session can overwrite the new session's messages.
+    const reloadSessionId = sessionId;
+
     getSession({
-      path: { session_id: sessionId },
+      path: { session_id: reloadSessionId },
       throwOnError: true,
     })
       .then((response) => {
+        if (reloadSessionId !== sessionIdRef.current) return;
+
         const session = response.data as Session;
         if (session?.conversation) {
           dispatch({ type: 'SET_MESSAGES', payload: session.conversation });
