@@ -229,6 +229,9 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Agent | [#2885](https://github.com/aaif-goose/goose/issues/2885) | Stdio extension `args` were passed straight to `Command::args()` with no shell involved, so a leading `~` in an arg (e.g. `--prefix ~/my-server`, a common pattern in copy-pasted MCP server setup commands) was never expanded to the user's home directory the way running the same command line in an actual shell would. Now expands tildes in each arg before launch |
 | Desktop | [PR #4626](https://github.com/aaif-goose/goose/pull/4626) (adapted) | The desktop app's CSP blocked MCP-UI webviews from loading external stylesheets (`style-src`/`style-src-elem`) and non-`self` media (`media-src`/`media-src-elem`) — common needs for MCP-UI content (e.g. web fonts, blob/data URLs). Relaxed both directives to allow `https:`/`blob:`/`data:` sources, matching the merged upstream PR |
 | Providers | [#4540](https://github.com/aaif-goose/goose/issues/4540) | The cursor-agent provider piped the CLI's stderr but never read it, so any command failure only reported a bare exit code with no indication of what actually went wrong (auth errors, invalid model names, etc. were all swallowed). Now drains stderr concurrently with stdout and surfaces it in the error message |
+| Providers/GCP | [#1807](https://github.com/aaif-goose/goose/issues/1807) | `GcpVertexAIProvider::from_env` accepted a `TlsConfig` parameter but discarded it entirely (`_tls_config`), unlike sibling providers (avian, databricks_v2, sagemaker_tgi) that already thread `GOOSE_CA_CERT_PATH`-backed TLS config into their HTTP clients — corporate-proxy/Zscaler TLS interception broke Vertex AI auth with no way to configure a trusted CA cert. Made `ApiClient::configure_tls` public and wired it into the client builder |
+| Providers | [PR #10039](https://github.com/aaif-goose/goose/pull/10039) (adapted; data-only, applied verbatim) | The canonical model registry's Cortecs entries were stuck at 56 (this fork never absorbed the fix) — 34 live models had no canonical mapping at all and 21 more were mislabeled under other providers' pricing/context metadata. All fields sourced from the live Cortecs API in the original PR; now 108 entries, matching the PR's own verified before/after counts |
+| Docs | [PR #9913](https://github.com/aaif-goose/goose/pull/9913) (adapted) | The hooks guide's "Hook Payload" section never named the `message` field that `UserPromptSubmit`/`AfterAgentResponse` hooks actually carry the prompt/response text in — hook script authors had to guess or read the source. Added an explicit example payload |
 
 ### Fixed without an upstream ticket
 
@@ -341,8 +344,8 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~222-232 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  155 individually-cited issues/PRs/branches (117 issues/PRs + 38 branches) — this figure is
+- **~225-235 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  158 individually-cited issues/PRs/branches (120 issues/PRs + 38 branches) — this figure is
   mechanically regenerated from the doc itself
   (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
@@ -780,12 +783,69 @@ which lines up with the corrected total below — the earlier undercounted figur
   - Full 306-item raw output: `scratchpad/graveyard-data-v2/closed_pass_tier2/{chunk,result}_*.json`
     and `all_merged_tier2.json`.
   - **Citation count after this batch: 117 issues/PRs + 38 branches = 155** (mechanically
-    regenerated, up from 150). **Remaining pool, still the dominant untouched figure: ~5,935
-    closed issues/PRs with real engagement below the score-14 cutoff used across both tiers so
-    far** — the next step, if continued, is either lowering the score cutoff further (e.g.
-    `score >= 10` covers ~1,047 items total, meaning ~768 more beyond what's been triaged) or
-    accepting a coarser, cheaper triage pass for the long tail, the way the branch graveyard's small
-    tier was first triaged by log/file-list alone before any deep read.
+    regenerated, up from 150).
+- **Third engagement tier of the closed pool resolved (this stretch)**: `score in [11, 14)`, the
+  band just below the second tier — **240 items (118 issues + 122 PRs)**, 12 chunks of ~20. One
+  chunk's agent ran long enough to warrant a live status check (`TaskOutput` with `block=false`)
+  rather than assuming it had stalled; confirmed it was still actively investigating (not stuck)
+  and let it finish normally rather than killing/relaunching prematurely.
+  - Mechanically aggregated (240/240, zero duplicates): **144 ALREADY_COVERED, 42 NOT_APPLICABLE,
+    30 NEW_CAPABILITY, 14 UNCERTAIN, 10 BUG_FIX_CANDIDATE.**
+  - Independent re-verification caught two things worth calling out specifically:
+    - **#5408** is the same trailing-newline gap in `edit.rs` as tier-1's **#2825** and tier-2's
+      **#5336** — the third tier in a row to independently rediscover this exact issue. Still
+      deferred for the same reason (an existing test asserts the current no-normalization
+      behavior — a design decision, not an oversight, needs resolving first), but three
+      independent findings of the same gap is a stronger signal this is worth a dedicated look.
+    - **#9281** (Anthropic adaptive-thinking "max" effort not mapped to a literal "xhigh" string,
+      unlike `codex.rs`/`openrouter.rs`/`chatgpt_codex.rs`'s explicit `Max => "xhigh"` arms) does
+      **not hold up as characterized** — a web search against Anthropic's actual adaptive-thinking
+      API docs confirms `"xhigh"` and `"max"` are two **distinct, separate** effort levels (xhigh
+      sits between high and max, introduced with Opus 4.7), not a naming inconsistency. This
+      fork's `ThinkingEffort` enum has no separate `XHigh` variant at all — `FromStr` collapses
+      both `"max"` and `"xhigh"` into the same `Max` value, so a user who explicitly selects
+      xhigh silently gets max's literal string sent to Anthropic instead. The real fix (widening
+      a shared enum consumed by every provider format with a new variant) is a bigger, riskier
+      change than the one-line rename the triage agent proposed — correcting the characterization
+      here rather than porting the wrong fix.
+  - **3 ported this stretch**, each independently re-verified:
+    - **#1807** — `GcpVertexAIProvider::from_env` accepted a `TlsConfig` parameter but discarded
+      it entirely (`_tls_config`), unlike sibling providers that already thread
+      `GOOSE_CA_CERT_PATH`-backed TLS config into their clients — a real gap for anyone behind a
+      corporate TLS-intercepting proxy. Made `ApiClient::configure_tls` public (previously
+      private to the `ApiClient` builder flow) so the raw `reqwest::Client` this provider builds
+      can reuse it without duplicating cert-loading logic; extracted a small `build_gcp_client`
+      helper so the wiring is independently unit-testable without touching global config.
+    - **PR #10039** — before porting, independently confirmed the fork's canonical registry was
+      still stuck at exactly 56 Cortecs entries (the PR's own stated "before" count) — not
+      absorbed by any later sync. The diff applied cleanly (`git apply --check`); verified after
+      applying that all 108 resulting entries have unique IDs and `provider_metadata.json`'s
+      `model_count` matches, exactly reproducing the PR's claimed before/after (56→108).
+    - **PR #9913** — added the missing `message` field to the hooks guide's payload example,
+      independently confirming the actual serialized field name (no `#[serde(rename)]`) and which
+      two events (`UserPromptSubmit`, `AfterAgentResponse`) populate it — and catching that the
+      triage agent's proposed example payload incorrectly included `working_dir`, which neither
+      event's hook-emission call site actually sets.
+  - **7 remaining candidates catalogued, not ported this stretch**: **#6688** (JSON repair
+    handles truncation/control-chars but not trailing commas, unescaped quotes, or markdown-fence
+    stripping — broadening a repair heuristic risks new false-positive "repairs" of otherwise-valid
+    content, needs careful scoping), **#5567** (extension config persists raw HTTP header values
+    in plaintext `config.yaml` instead of the keyring-backed secret storage already used for env
+    vars — real, but needs a design decision on how to distinguish "this header looks like a
+    secret" from an ordinary header), **#8191** (LM Studio provider settings UI doesn't reliably
+    save/update an API key field — frontend work, not verified this stretch), **#7065**
+    (`configure.rs`/`config_management.rs` hard-abort on a dynamic model-listing error instead of
+    falling back to a static list — real but touches the CLI configure flow, needs care), **#1405**
+    (desktop drag/drop file-attach has no file-type validation — a real but frontend-sized gap),
+    **#9281** and **#5408** (see above — both need dedicated follow-up, not a quick port).
+  - Full 240-item raw output: `scratchpad/graveyard-data-v2/closed_pass_tier3/{chunk,result}_*.json`
+    and `all_merged_tier3.json`.
+  - **Citation count after this batch: 120 issues/PRs + 38 branches = 158** (mechanically
+    regenerated, up from 155). **Remaining pool, still the dominant untouched figure: ~5,695
+    closed issues/PRs with real engagement below the score-11 cutoff used across all three tiers
+    so far** — the next step, if continued, is either lowering the score cutoff further or
+    accepting a coarser, cheaper triage pass for the long tail, the way the branch graveyard's
+    small tier was first triaged by log/file-list alone before any deep read.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
