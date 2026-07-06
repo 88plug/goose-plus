@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 133 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 135 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -209,6 +209,8 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Local inference | [PR #9666](https://github.com/aaif-goose/goose/pull/9666) (ported) | Some GGUF models (observed with Qwen2.5-Coder-32B) sample a ChatML turn delimiter like `<|im_start|>` mid-generation instead of stopping — not an EOG token, so nothing caught it, and the model rolled into a fabricated new turn (dozens of extra tool calls in one runaway response) while the delimiter leaked into streamed content verbatim. Now stops on any non-EOG `Control`-attribute token (except tool-call boundary markers, which must still reach the streaming parser) |
 | Agent/Summon | [#7288](https://github.com/aaif-goose/goose/issues/7288), [PR #7297](https://github.com/aaif-goose/goose/pull/7297) (adapted) | `build_subrecipe_description` returned a subrecipe's explicit `description` immediately, skipping the recipe-file parameter lookup entirely — so any subrecipe with an explicit description (the common case for well-documented recipes) never told the delegating LLM what parameters it accepts. Now always loads the recipe file and appends its parameter list regardless of whether an explicit description was set — found via the branch graveyard's spot-check pass below, first genuinely new fix out of 9 candidates deep-read |
 | CLI/Scheduler | [#6405](https://github.com/aaif-goose/goose/issues/6405), [PR #6416](https://github.com/aaif-goose/goose/pull/6416) (adapted) | `build_session` (the CLI's headless/interactive session entry point) never wired a scheduler into the agent — `Agent::new()`'s bare constructor leaves `scheduler_service: None`, unlike the ACP/desktop path via `AgentManager::instance()`. Any recipe or session calling the schedule-management tool from the CLI failed with "Scheduler not available" on every platform, not just the AARCH64 case upstream reported. Extracted `build_cli_scheduler_service`, mirroring the working ACP/desktop wiring |
+| Scheduler | [PR #6096](https://github.com/aaif-goose/goose/pull/6096) (adapted) | `execute_job`'s prompt-text resolution silently discarded a scheduled recipe's `instructions` field whenever `prompt` was also set (an `.or()` chain only ever picks one) — the same class of bug `subagent_handler.rs`'s `get_agent_messages` already avoids for delegated subagents by treating `instructions` as system guidance and `prompt` as the user task, separately. Scheduled jobs had no equivalent split; only `prompt` ever reached the model. Now applies `instructions` via `agent.extend_system_prompt` when both fields are set, matching the existing subagent semantics — found via the exhaustive branch-graveyard verification pass below |
+| Docs/MCP | [PR #10204](https://github.com/aaif-goose/goose/pull/10204) (ported) | The Browserbase MCP install docs were stale: `@browserbasehq/mcp`'s default (Gemini-backed Stagehand) configuration requires `GEMINI_API_KEY` alongside `BROWSERBASE_PROJECT_ID`/`BROWSERBASE_API_KEY` (confirmed against current npm/Browserbase docs), and the install command needs `npx -y`, not a bare `npx`. `documentation/static/servers.json` also still referenced the renamed `mcp-server-browserbase` package and was missing the `BROWSERBASE_PROJECT_ID` entry |
 
 ### Fixed without an upstream ticket
 
@@ -321,7 +323,7 @@ worth stating plainly, found by going past this doc's own citations to the real 
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
 - **~205-215 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  133 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
+  135 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
   doc itself (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
   time while landing 13 fixes in one stretch, which undercounted: most of those rows cite *both*
@@ -395,11 +397,11 @@ which lines up with the corrected total below — the earlier undercounted figur
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
     self-correcting). All 164 of these branches have since been individually deep-read and
     verified (not just triaged) — see the finding directly below, which replaces the raw 164
-    figure with a real breakdown (103 already covered, 27 not applicable, 30 genuinely new and
-    queued, 2 already ported, 1 deferred, 1 uncertain). So the honest "genuinely worth a
+    figure with a real breakdown (103 already covered, 27 not applicable, 28 genuinely new and
+    still queued, 4 already ported, 1 deferred, 1 uncertain). So the honest "genuinely worth a
     human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
-    issues/PRs with real engagement + 281 open issues/PRs + 30 verified-genuinely-new small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,047** (medium/large tiers haven't had
+    issues/PRs with real engagement + 281 open issues/PRs + 28 verified-genuinely-new small-tier
+    branches + 134 medium-tier + 70 large-tier branches ≈ 7,045** (medium/large tiers haven't had
     this same exhaustive per-branch verification yet, so those two counts are still raw, not
     net-of-already-covered), not counting 3,104 zero-engagement issues/PRs, 43 SKIP-experiment
     branches, or the 51 UNCLEAR branches needing a second look before they're triaged either way.
@@ -416,10 +418,12 @@ which lines up with the corrected total below — the earlier undercounted figur
     (`jhugo/fix-hermit-cmake-linux-arm64` — the literal proposed fix isn't present, but confirming
     whether it's actually needed requires live access to hermit's package repo, out of scope for
     this pass), and **30 GENUINELY_NEW** — real, currently-open gaps with concrete file:line
-    evidence, not yet ported. Combined with the 15-branch spot-check (9 covered, 3 not applicable,
-    1 deferred, 2 already ported — see the two bug-matrix rows above), across the full 164-branch
-    pool: **103 already covered, 27 not applicable, 1 deferred, 1 uncertain, 2 ported, 30 queued as
-    genuinely new** (164 = 103+27+1+1+2+30). The 30 genuinely-new candidates, with the exact
+    evidence. Two of those 30 have since been ported (`dkatz/subagent-instructions-fix` → PR #6096,
+    `codex/browserbase-gemini-key` → PR #10204, both now in the bug matrix above), leaving 28
+    still queued. Combined with the 15-branch spot-check (9 covered, 3 not applicable, 1 deferred,
+    2 already ported — see the bug-matrix rows above), across the full 164-branch pool: **103
+    already covered, 27 not applicable, 1 deferred, 1 uncertain, 4 ported, 28 queued as genuinely
+    new** (164 = 103+27+1+1+4+28). The 28 remaining genuinely-new candidates, with the exact
     file/function each touches, are listed in
     `scratchpad/graveyard-data-v2/verify_chunks/all_verified.json` — a ready-to-work queue, not a
     vague "check this branch" pointer. None of the 103 already-covered branches' fixes were cited
