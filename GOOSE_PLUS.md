@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 131 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 133 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -208,6 +208,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Local inference | [#10073](https://github.com/aaif-goose/goose/issues/10073), [PR #10105](https://github.com/aaif-goose/goose/pull/10105) (ported) | `goosed` crashed with `SIGILL` on x86_64 CPUs predating Haswell (no FMA) — the bundled llama.cpp CPU backend ran an FMA instruction unconditionally on init, taking down every backend-dependent feature. Now precheck the CPU's instruction sets (FMA/AVX2/F16C/BMI2/SSE4.2) before initializing and fail cleanly with an actionable error instead |
 | Local inference | [PR #9666](https://github.com/aaif-goose/goose/pull/9666) (ported) | Some GGUF models (observed with Qwen2.5-Coder-32B) sample a ChatML turn delimiter like `<|im_start|>` mid-generation instead of stopping — not an EOG token, so nothing caught it, and the model rolled into a fabricated new turn (dozens of extra tool calls in one runaway response) while the delimiter leaked into streamed content verbatim. Now stops on any non-EOG `Control`-attribute token (except tool-call boundary markers, which must still reach the streaming parser) |
 | Agent/Summon | [#7288](https://github.com/aaif-goose/goose/issues/7288), [PR #7297](https://github.com/aaif-goose/goose/pull/7297) (adapted) | `build_subrecipe_description` returned a subrecipe's explicit `description` immediately, skipping the recipe-file parameter lookup entirely — so any subrecipe with an explicit description (the common case for well-documented recipes) never told the delegating LLM what parameters it accepts. Now always loads the recipe file and appends its parameter list regardless of whether an explicit description was set — found via the branch graveyard's spot-check pass below, first genuinely new fix out of 9 candidates deep-read |
+| CLI/Scheduler | [#6405](https://github.com/aaif-goose/goose/issues/6405), [PR #6416](https://github.com/aaif-goose/goose/pull/6416) (adapted) | `build_session` (the CLI's headless/interactive session entry point) never wired a scheduler into the agent — `Agent::new()`'s bare constructor leaves `scheduler_service: None`, unlike the ACP/desktop path via `AgentManager::instance()`. Any recipe or session calling the schedule-management tool from the CLI failed with "Scheduler not available" on every platform, not just the AARCH64 case upstream reported. Extracted `build_cli_scheduler_service`, mirroring the working ACP/desktop wiring |
 
 ### Fixed without an upstream ticket
 
@@ -320,7 +321,7 @@ worth stating plainly, found by going past this doc's own citations to the real 
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
 - **~205-215 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  131 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
+  133 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
   doc itself (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
   time while landing 13 fixes in one stretch, which undercounted: most of those rows cite *both*
@@ -394,28 +395,38 @@ which lines up with the corrected total below — the earlier undercounted figur
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
     self-correcting). **This is still a first-pass triage, not a verification pass** — the 164
     PROMISING branches still need the same deep-read-diff-and-port treatment every landed fix in
-    the matrices above got; only 1 has been ported so far (see below). So the honest "genuinely
+    the matrices above got; 2 have been ported so far (see below). So the honest "genuinely
     worth a human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532
-    closed issues/PRs with real engagement + 281 open issues/PRs + 163 promising small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,180**, not counting 3,104
+    closed issues/PRs with real engagement + 281 open issues/PRs + 162 promising small-tier
+    branches + 134 medium-tier + 70 large-tier branches ≈ 7,179**, not counting 3,104
     zero-engagement issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a
     second look before they're triaged either way.
   - **Spot-check finding: the raw 164-branch figure was mostly an overcount.** Deep-read (full
-    diff + current-codebase comparison, not just log/file-list) 9 of the smallest, highest-
+    diff + current-codebase comparison, not just log/file-list) 13 of the smallest, highest-
     confidence PROMISING branches across different subsystems. **7 were already independently
     covered**, several by strictly more sophisticated fixes than the upstream branch proposed
     (e.g. this fork's `AgentManager::get_or_create_agent` race fix adds lock-leak pruning on error
     exit and cites a *different* issue, #9031, that upstream's #9181 branch never mentions — an
-    independently-found instance of the same bug class). **1 didn't apply at all** — the branch's
-    file (`scripts/clean-gh-pages.sh`, upstream's own GitHub Pages preview-cleanup tooling) doesn't
-    exist in this fork. **1 was genuinely new and got ported** — `upstream/fix-7288` → issue #7288
-    / PR #7297, now in the bug matrix above. None of the 7 already-covered branches' fixes were
-    cited anywhere in this doc by number or name before this pass, so the mechanical exclusion
-    above correctly couldn't have caught them — they were absorbed by the 4 internal audit sweeps
-    or an earlier untracked session, not by a citable graveyard port. This means the true "still
-    needs porting" count inside the remaining 163 is smaller still, likely substantially so, but
-    confirming the exact number requires the same deep-read for all 163 — not yet done, flagged
-    honestly rather than extrapolated from a 9-branch sample into a false-precision estimate.
+    independently-found instance of the same bug class). **3 didn't apply at all**: two branches'
+    files (`scripts/test_providers.sh`, `scripts/clean-gh-pages.sh` — upstream's own CI/Pages
+    tooling) don't exist in this fork, and one (`goose/issue-7134`, a deprecated "skills" extension
+    filter) addresses a builtin extension this fork never shipped, so there's nothing stale to
+    filter. **1 was deferred, not ported**: `jackamadeo/revert-expensive-tool-list` proposes
+    reverting this fork's existing `coerce_value`/schema-aware numeric coercion, but the revert's
+    own upstream PR (#5817) was itself closed without merging — no confirmed evidence the original
+    fix (#5478, merged) was actually wrong, so reverting a currently-working feature on an
+    abandoned revert attempt isn't justified without more signal. **2 were genuinely new and got
+    ported**: `upstream/fix-7288` → issue #7288/PR #7297 (Summon subrecipe parameters), and
+    `upstream/goose/issue-6405` → issue #6405/PR #6416 (CLI never wired a scheduler into
+    `build_session`'s agent, so the schedule-management tool failed with "Scheduler not available"
+    on every platform, not just the AARCH64 case upstream reported — both now in the bug matrix
+    above). None of the 7 already-covered branches' fixes were cited anywhere in this doc by number
+    or name before this pass, so the mechanical exclusion above correctly couldn't have caught
+    them — they were absorbed by the 4 internal audit sweeps or an earlier untracked session, not
+    by a citable graveyard port. This means the true "still needs porting" count inside the
+    remaining 162 is smaller still, likely substantially so, but confirming the exact number
+    requires the same deep-read for all 162 — not yet done, flagged honestly rather than
+    extrapolated from a 13-branch sample into a false-precision estimate.
     Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or
     extend this; `promising_absolute_final.json` is the list to work through.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
