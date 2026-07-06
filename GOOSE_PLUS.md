@@ -360,14 +360,32 @@ which lines up with the corrected total below — the earlier undercounted figur
   - Combined: **3,104 zero-engagement** (truly no signal — lowest priority to mine) vs.
     **6,532 with real engagement** (comments and/or reactions — the actual high-value triage pool
     for closed issues/PRs). Open issues (184) and open PRs (97) aren't zero-engagement-filtered —
-    being open is itself a live signal. Branches (617, only 35 individually cited) aren't
-    comment/reaction-scored the same way; they get the merged/closed-PR/no-PR classification from
-    the branch-mining method instead, and that pass hasn't been re-run against the full 617 yet.
-  - So the honest "genuinely worth a human/agent triage pass" pool, replacing the old untrustworthy
-    "~1354" figure: **~6,532 closed issues/PRs with real engagement + 281 open issues/PRs + up to
-    ~582 untriaged branches ≈ 7,395**, not counting the 3,104 zero-engagement items that are real
-    but lowest-priority. Raw data + the analysis script are in `scratchpad/graveyard-data-v2/` for
-    anyone who wants to re-run or extend this.
+    being open is itself a live signal.
+  - **Branch classification, also now done** (was the last open item): 619 upstream branches, of
+    which 2 are housekeeping refs (`HEAD`, `main` itself) and 1 (`micn/testing-live`) is already
+    merged, leaving 616 real candidates. Bulk-joined against a single `gh pr list --state all
+    --limit 8000` call (not per-branch lookups) by `headRefName`: **6 MERGED** (squash-merged, so
+    git ancestry missed them but the content already landed — excluded), **396 CLOSED** (a PR
+    existed and was explicitly not merged — classic graveyard), **42 OPEN** (already covered by
+    normal PR mining, deprioritized for this sub-pass), **172 none** (pushed, no PR ever opened).
+    Size-tiered the CLOSED+none pool (568) by files-changed vs. `upstream/main`: 56
+    release/version-snapshot branches excluded, 0 zero-diff, **307 small (≤10 files)**, 135 medium
+    (11–30), 70 large (30+) — medium/large deprioritized for this pass, named not dropped.
+  - Fanned out 12 haiku agents (one per ~27-branch chunk) across the **entire** small tier — not a
+    sample — classifying each from its `git log -3`/changed-file list alone (no full diffs at this
+    stage): **210 PROMISING**, 53 UNCLEAR, 43 SKIP-experiment (wip/tmp/poc/"vibecoded" branches),
+    1 SKIP-superseded. Counts re-verified mechanically from the 12 result files, not from the
+    agents' own self-reported summaries (two of which arithmetic-drifted mid-response before
+    self-correcting — a live example of why every count in this doc is regenerated from source,
+    never trusted from a narrative claim). **This is a first-pass triage, not a verification pass**
+    — the 210 PROMISING branches still need the same deep-read-diff-and-port treatment every landed
+    fix in the matrices above got; none of them are ported yet. So the honest "genuinely worth a
+    human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
+    issues/PRs with real engagement + 281 open issues/PRs + 210 promising small-tier branches +
+    135 medium-tier + 70 large-tier branches ≈ 7,228**, not counting 3,104 zero-engagement
+    issues/PRs, 43 SKIP-experiment branches, or the 53 UNCLEAR branches needing a second look before
+    they're triaged either way. Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone
+    who wants to re-run or extend this.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
