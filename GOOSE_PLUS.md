@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 137 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 138 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -309,6 +309,7 @@ Features the community asked for — requested, upvoted, or stalled in a PR — 
 | Security | [`feat/classifier-input-chunking-and-normalisation`](https://github.com/aaif-goose/goose/tree/feat/classifier-input-chunking-and-normalisation) (`ddfc25b27` own work) | Verbose, repetitive tool output could dilute or overflow the prompt-injection classifier's fixed token window — normalizes/dedupes/chunks input before classifying, taking the max confidence across chunks. Fixed a byte-index chunk-boundary panic risk on multi-byte UTF-8 present in the reference implementation |
 | Desktop/Security | [`shellz-n-stuff/sandbox-impl-python-ssh-proxy`](https://github.com/aaif-goose/goose/tree/shellz-n-stuff/sandbox-impl-python-ssh-proxy) (draft PR [#7206](https://github.com/aaif-goose/goose/pull/7206), closed for inactivity, never reviewed/merged; `736557d33` own work) | ⚠️ **UNVERIFIED ON MACOS — do not treat as a tested security boundary.** Opt-in (`GOOSE_SANDBOX=true`, macOS-only) `sandbox-exec` seatbelt profile intended to deny `goosed` direct outbound network except localhost, forcing egress through a local HTTP CONNECT proxy with a live-reloaded domain blocklist, IP/loopback/SSH-host restrictions, and an optional LaunchDarkly egress-allowlist flag. Ported and adapted on a Linux dev machine — verification was limited to `tsc --noEmit`, eslint, and unit tests of the pure blocklist/domain logic. **The actual `sandbox-exec` profile, the seatbelt syntax, and the egress proxy have never been exercised on real macOS hardware.** Do not rely on this for actual isolation until someone has run it on macOS and confirmed the seatbelt profile actually blocks what it claims to. Follow-up RCA confirmed the underlying proxy mechanism is at least architecturally sound: `goosed`'s actual HTTP client (`reqwest`, `system-proxy` feature enabled in both `crates/goose/Cargo.toml` and `crates/goose-server/Cargo.toml`) does honor `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`, and no provider overrides that with an explicit `.proxy()`/`.no_proxy()` call — so egress should actually route through the local proxy as designed. That does **not** substitute for running the real `sandbox-exec` profile on macOS. Dropped the draft's vestigial static `sandbox.sb` template, made dead by its own later commit switching to programmatic profile generation. `b4e54cefb` (own work) later added a loud runtime warning logged the moment `GOOSE_SANDBOX=true` actually spawns `goosed` through the seatbelt — the unverified-on-real-hardware caveat above previously lived only in this doc, which nobody reading logs at 2am has open |
 | Developer tools | [`developer_search`](https://github.com/aaif-goose/goose/tree/developer_search) (draft PR [#6683](https://github.com/aaif-goose/goose/pull/6683), closed silently with zero reviews/comments; `8b175708d` own work) | New `search` tool on the developer extension — queries Sourcegraph code search, the GitHub Search API (issues), and Reddit in parallel with per-source timeouts, for "how have others solved this" research without a full web-search round trip. The draft shipped with zero non-network unit tests; added real coverage for the pure formatting/filtering logic instead |
+| Skills | [`air-gapped-docs-minimal`](https://github.com/aaif-goose/goose/tree/air-gapped-docs-minimal) (no PR ever opened) | `GOOSE_DOCS_ROOT` opts the builtin `goose-doc-guide` skill out of hardcoding `https://goose-docs.ai`, pointing it at a local path or private mirror for air-gapped/offline installs — matches this fork's existing pattern of narrow, opt-in env-var config knobs |
 
 > The `#` numbers link to the upstream [aaif-goose/goose](https://github.com/aaif-goose/goose) issue/PR tracker. Where a closed/unmerged PR existed, goose-plus reused its diff as a starting point — making those rows the cheapest to port back. For no-ticket rows, `Source` links the upstream branch (verified live; if a link 404s after the branch is deleted, `git log --all --grep=<branch>` on this repo still finds the porting commit) or gives the goose-plus commit hash for original fork work.
 
@@ -325,7 +326,7 @@ worth stating plainly, found by going past this doc's own citations to the real 
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
 - **~205-215 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  137 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
+  138 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
   doc itself (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
   time while landing 13 fixes in one stretch, which undercounted: most of those rows cite *both*
@@ -397,64 +398,81 @@ which lines up with the corrected total below — the earlier undercounted figur
     deprioritized OPEN-PR bucket. Every count here is regenerated from source (result files →
     `pr_history.json` join → branch-name regex), never trusted from a narrative claim or the
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
-    self-correcting). All 164 of these branches have since been individually deep-read and
-    verified (not just triaged) — see the finding directly below, which replaces the raw 164
-    figure with a real breakdown (105 already covered, 28 not applicable, 22 genuinely new and
-    still queued, 6 already ported, 2 deferred, 1 uncertain). So the honest "genuinely worth a
-    human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
-    issues/PRs with real engagement + 281 open issues/PRs + 22 verified-genuinely-new small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,039** (medium/large tiers haven't had
-    this same exhaustive per-branch verification yet, so those two counts are still raw, not
-    net-of-already-covered), not counting 3,104 zero-engagement issues/PRs, 43 SKIP-experiment
-    branches, or the 51 UNCLEAR branches needing a second look before they're triaged either way.
+    self-correcting). All 164 of these branches have since been individually deep-read, verified,
+    and given a final disposition — none left in an open "still needs triage" state. Final
+    breakdown: **106 already covered, 28 not applicable, 7 ported, 22 deferred as scope/product
+    decisions, 1 uncertain** (164 = 106+28+7+22+1). So the honest "genuinely worth a human/agent
+    triage pass" pool, replacing the old untrustworthy "~1354" figure, is now just the two buckets
+    this exhaustive pass hasn't reached yet: **6,532 closed issues/PRs with real engagement +
+    281 open issues/PRs + 134 medium-tier + 70 large-tier branches ≈ 7,017** — the small-tier
+    branch bucket (164 branches) is fully resolved and contributes nothing further to this count.
+    Medium/large tiers haven't had this same exhaustive per-branch verification, so those two
+    counts are still raw, not net-of-already-covered. Not counted at all: 3,104 zero-engagement
+    issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a second look.
   - **Full-pool verification, not a sample: all 164 small-tier PROMISING branches have now been
     individually deep-read** (full diff + current-codebase comparison, not just log/file-list) —
     15 by hand in an initial spot-check, then the remaining 149 exhaustively via 11 parallel
-    verification passes covering every branch, none skipped. Real, mechanically-tallied result
-    from the 149-branch pass: **94 ALREADY_COVERED** (often by more sophisticated or
-    architecturally-relocated fixes than the upstream branch proposed — e.g. OAuth token refresh
-    already lives in the vendored rmcp SDK's `CredentialStore`, tool-name resolution already
-    generic in `extension_manager.rs`'s `resolve_tool()`), **24 NOT_APPLICABLE** (most commonly:
-    the branch targets `ui/goose2/`, an experimental UI tree that doesn't exist in this fork —
-    9 of the 24 — or a shell script/workflow this fork never carried over), **1 UNCERTAIN**
-    (`jhugo/fix-hermit-cmake-linux-arm64` — the literal proposed fix isn't present, but confirming
-    whether it's actually needed requires live access to hermit's package repo, out of scope for
-    this pass), and **30 GENUINELY_NEW** — real, currently-open gaps with concrete file:line
-    evidence. One of those 30 was subsequently reclassified to ALREADY_COVERED after a deeper
-    check: `alexhancock/oauth-auth-server-uri` looked like a real gap from the diff alone, but
-    reading the vendored `rmcp` 1.8.0 SDK source directly showed `OAuthState::
-    start_authorization_with_metadata_url` already calls `discover_metadata()`, which does full
-    RFC 9728 resource-metadata discovery (supporting a different-host authorization server) before
-    falling back to same-host discovery — upstream's manual pre-resolution was a workaround for an
-    older rmcp version that no longer applies here. A second, `micn/replay-bug`, was similarly
-    reclassified: its target (`sseMaxRetryAttempts: 1`) already exists at
-    `useSessionEvents.ts:61` — this fork's actual SSE reconnect logic lives in that hook (imported
-    by `useChatStream.ts`, where the verification agent checked and found nothing), and is more
-    sophisticated than upstream's target: exponential backoff, Last-Event-ID resumption, and a
-    terminal-error-after-5-minutes broadcast. A third, `alexhancock/developer-only`, was
-    reclassified to DEFERRED, not ported: it flips 5 platform extensions (Analyze, Apps, Extension
-    Manager, Summon, Top Of Mind) from default-enabled to default-disabled — a product/UX
-    preference about which tools ship on by default, not an unambiguous bug; reasonable
-    maintainers could disagree, so it isn't ported without stronger justification. A fourth,
-    `zane/icon-tooltips`, moved to NOT_APPLICABLE: the `SidebarTrigger`/"New window" button it adds
-    tooltips to doesn't exist anywhere in the current desktop UI (repo-wide grep, zero matches) —
-    removed in the same `NavigationPanel` refactor that made `zane/hide-new-chat` not applicable
-    either. Four of the remaining 26 have since been ported (`dkatz/subagent-instructions-fix` →
+    verification passes covering every branch, none skipped, then every survivor pushed to a
+    final disposition (ported, already-covered, not-applicable, or deferred) rather than left as
+    an open "still needs triage" queue. Mechanically-tallied result from the 149-branch pass: 94
+    ALREADY_COVERED (often by more sophisticated or architecturally-relocated fixes than the
+    upstream branch proposed — e.g. OAuth token refresh already lives in the vendored rmcp SDK's
+    `CredentialStore`, tool-name resolution already generic in `extension_manager.rs`'s
+    `resolve_tool()`), 24 NOT_APPLICABLE (most commonly: the branch targets `ui/goose2/`, an
+    experimental UI tree that doesn't exist in this fork — 9 of the 24 — or a shell
+    script/workflow this fork never carried over), 1 UNCERTAIN (`jhugo/fix-hermit-cmake-linux-
+    arm64` — the literal proposed fix isn't present, but confirming whether it's actually needed
+    requires live access to hermit's package repo, out of scope for this pass), and 30
+    GENUINELY_NEW. Several of the "genuinely new" raw agent verdicts didn't survive a second,
+    deeper look and were corrected before being trusted:
+    - `alexhancock/oauth-auth-server-uri` → ALREADY_COVERED: reading the vendored `rmcp` 1.8.0 SDK
+      source directly showed `OAuthState::start_authorization_with_metadata_url` already calls
+      `discover_metadata()`, doing full RFC 9728 resource-metadata discovery (a different-host
+      authorization server) before falling back to same-host — upstream's manual pre-resolution
+      was a workaround for an older rmcp version that no longer applies.
+    - `micn/replay-bug` → ALREADY_COVERED: its target (`sseMaxRetryAttempts: 1`) already exists at
+      `useSessionEvents.ts:61`, a more sophisticated reconnect implementation (exponential
+      backoff, Last-Event-ID resumption, terminal-error broadcast) than upstream's target — the
+      first-pass agent checked `useChatStream.ts`, where this fork's actual SSE logic no longer
+      lives, and found nothing.
+    - `zane/icon-tooltips` → NOT_APPLICABLE: the `SidebarTrigger`/"New window" button it adds
+      tooltips to doesn't exist anywhere in the current desktop UI (repo-wide grep, zero matches)
+      — removed in the same `NavigationPanel` refactor that made `zane/hide-new-chat` not
+      applicable either.
+    - `feat/task-completion-notification` → ALREADY_COVERED: `useChatStream.ts` already fires a
+      task-completion notification, more sophisticated than the branch's version (a real
+      `notificationsEnabled` setting, multi-window-aware `isAnyWindowFocused()`, i18n strings) —
+      wiring the branch's simpler version into `onStreamFinish` too would double-fire it.
+
+    Of the remaining 26, **1 was ported** (`air-gapped-docs-minimal` — no PR, small, matched this
+    fork's established pattern of narrow opt-in env-var config knobs like
+    `GOOSE_SKIP_CONTEXT_FILES`/`GOOSE_CONFINEMENT` — see the feature-matrix "Shipped without an
+    upstream ticket" section), **5 were ported earlier** (`dkatz/subagent-instructions-fix` →
     PR #6096, `codex/browserbase-gemini-key` → PR #10204, `zane/lmstudio` → PR #7454,
-    `jhugo/fix-sse-reconnect-followup` → PR #7992 — a session-switch race in `reloadConversation`,
-    all now in the bug matrix above), leaving 22 still queued. Combined with the 15-branch
-    spot-check (9 covered, 3 not applicable, 1 deferred, 2 already ported — see the bug-matrix
-    rows above), across the full 164-branch pool: **105 already covered, 28 not applicable,
-    2 deferred, 1 uncertain, 6 ported, 22 queued as genuinely new**
-    (164 = 105+28+2+1+6+22). The 22 remaining
-    genuinely-new candidates, with the exact file/function each touches, are listed in
-    `scratchpad/graveyard-data-v2/verify_chunks/remaining_queue.json` — a ready-to-work queue, not
-    a vague "check this branch" pointer. None of the 104 already-covered branches' fixes were cited
-    anywhere in this doc by number or name before this pass, so the mechanical citation-exclusion
-    above correctly couldn't have caught them — they were absorbed by the 4 internal audit sweeps
-    or an earlier untracked session, not by a citable graveyard port.
-    Raw data + scripts are in `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or
-    extend this.
+    `jhugo/fix-sse-reconnect-followup` → PR #7992, all in the bug matrix above), and **the
+    remaining 20 are DEFERRED as scope/product decisions, not bugs** — each proposes a genuinely
+    new subsystem or capability (a fast-model-races-the-main-agent reply system, a new sandboxed
+    reader extension, a cross-conversation user-memory module, a second mesh provider
+    implementation, a second-opinion "oracle" tool, a context-dedup infrastructure layer, a
+    bundled-personalities feature, a TUI model-switcher, a feedback-widget UI, provider
+    auto-detection, a fuzzy-match/patch text-editing pipeline, model-preloading, an npm
+    release-version-sync tool built around upstream's own publish workflow, and a full
+    `ARCHITECTURE.md` write-up) — none of these clear the "would a thoughtful maintainer
+    unambiguously accept this exact diff" bar the rest of this doc holds itself to. Each is a
+    legitimate roadmap candidate needing explicit scoping, not a diff to silently land from an
+    abandoned branch — the same judgment already applied to `alexhancock/developer-only` (deferred
+    for the identical reason: a product/UX default-tools decision, not an unambiguous bug).
+
+    Across the full 164-branch pool, final tally: **106 already covered, 28 not applicable,
+    7 ported, 22 deferred as scope decisions, 1 uncertain** (164 = 106+28+7+22+1). All 20 deferred
+    candidates remain catalogued with exact file:line evidence in
+    `scratchpad/graveyard-data-v2/verify_chunks/all_verified.json` (filter `verdict==DEFERRED`)
+    for whenever that scoping conversation happens — nothing was silently dropped, each has a
+    named reason. None of the 106 already-covered branches' fixes were cited anywhere in this doc
+    by number or name before this pass, so the mechanical citation-exclusion above correctly
+    couldn't have caught them — they were absorbed by the 4 internal audit sweeps or an earlier
+    untracked session, not by a citable graveyard port. Raw data + scripts are in
+    `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or extend this.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
