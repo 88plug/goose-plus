@@ -811,6 +811,31 @@ impl Scheduler {
     }
 }
 
+/// Resolves a scheduled recipe's `instructions`/`prompt` fields into (system instructions to
+/// apply, the user-facing prompt text). When both are set, `instructions` is applied as system
+/// guidance separately so it isn't silently discarded in favor of `prompt` -- matching how
+/// `subagent_handler.rs`'s `get_agent_messages` already treats the same two fields for delegated
+/// subagents. When only one is set, it's used as the prompt text and no system instructions are
+/// added (avoiding duplicating the same content as both system prompt and user message).
+fn resolve_scheduled_job_instructions_and_prompt(
+    recipe: &Recipe,
+) -> (Option<String>, Option<String>) {
+    let instructions = recipe
+        .instructions
+        .as_deref()
+        .filter(|s| !s.trim().is_empty());
+    let recipe_prompt = recipe.prompt.as_deref().filter(|s| !s.trim().is_empty());
+
+    match (instructions, recipe_prompt) {
+        (Some(instructions), Some(prompt)) => {
+            (Some(instructions.to_string()), Some(prompt.to_string()))
+        }
+        (Some(instructions), None) => (None, Some(instructions.to_string())),
+        (None, Some(prompt)) => (None, Some(prompt.to_string())),
+        (None, None) => (None, None),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 async fn execute_job(
     job: ScheduledJob,
@@ -948,17 +973,17 @@ async fn execute_job(
         }
     });
 
-    let prompt_text = recipe
-        .prompt
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .or_else(|| {
-            recipe
-                .instructions
-                .as_deref()
-                .filter(|s| !s.trim().is_empty())
-        })
-        .map(str::to_string);
+    let (system_instructions, prompt_text) = resolve_scheduled_job_instructions_and_prompt(&recipe);
+
+    // When a recipe sets both fields, `instructions` is meant as system-level guidance
+    // and `prompt` as the task to execute -- applying only one silently discarded the
+    // other. When `prompt` is absent, `instructions` already becomes the user message
+    // below via the fallback, so it isn't also applied as a system prompt here.
+    if let Some(system_instructions) = system_instructions {
+        agent
+            .extend_system_prompt("recipe_instructions".to_string(), system_instructions)
+            .await;
+    }
 
     let Some(prompt_text) = prompt_text else {
         let error_message = Message::assistant().with_text(
@@ -1188,6 +1213,59 @@ mod tests {
         let recipe_path = dir.join(format!("{}.yaml", name));
         fs::write(&recipe_path, "prompt: test\n").unwrap();
         recipe_path
+    }
+
+    fn test_recipe(instructions: Option<&str>, prompt: Option<&str>) -> Recipe {
+        let mut builder = Recipe::builder().title("test").description("test");
+        if let Some(instructions) = instructions {
+            builder = builder.instructions(instructions);
+        }
+        if let Some(prompt) = prompt {
+            builder = builder.prompt(prompt);
+        }
+        builder.build().unwrap()
+    }
+
+    #[test]
+    fn test_resolve_scheduled_job_instructions_and_prompt_both_set() {
+        let recipe = test_recipe(Some("be careful"), Some("do the thing"));
+        let (system_instructions, prompt_text) =
+            resolve_scheduled_job_instructions_and_prompt(&recipe);
+        assert_eq!(system_instructions, Some("be careful".to_string()));
+        assert_eq!(prompt_text, Some("do the thing".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_scheduled_job_instructions_and_prompt_only_instructions() {
+        let recipe = test_recipe(Some("be careful"), None);
+        let (system_instructions, prompt_text) =
+            resolve_scheduled_job_instructions_and_prompt(&recipe);
+        assert_eq!(
+            system_instructions, None,
+            "instructions shouldn't be duplicated as both system prompt and user message"
+        );
+        assert_eq!(prompt_text, Some("be careful".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_scheduled_job_instructions_and_prompt_only_prompt() {
+        let recipe = test_recipe(None, Some("do the thing"));
+        let (system_instructions, prompt_text) =
+            resolve_scheduled_job_instructions_and_prompt(&recipe);
+        assert_eq!(system_instructions, None);
+        assert_eq!(prompt_text, Some("do the thing".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_scheduled_job_instructions_and_prompt_blank_prompt_falls_back() {
+        let recipe = test_recipe(Some("be careful"), Some("   "));
+        let (system_instructions, prompt_text) =
+            resolve_scheduled_job_instructions_and_prompt(&recipe);
+        assert_eq!(
+            system_instructions, None,
+            "a blank prompt means instructions is really the only content, not extra guidance"
+        );
+        assert_eq!(prompt_text, Some("be careful".to_string()));
     }
 
     #[tokio::test]
