@@ -213,6 +213,12 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Docs/MCP | [PR #10204](https://github.com/aaif-goose/goose/pull/10204) (ported) | The Browserbase MCP install docs were stale: `@browserbasehq/mcp`'s default (Gemini-backed Stagehand) configuration requires `GEMINI_API_KEY` alongside `BROWSERBASE_PROJECT_ID`/`BROWSERBASE_API_KEY` (confirmed against current npm/Browserbase docs), and the install command needs `npx -y`, not a bare `npx`. `documentation/static/servers.json` also still referenced the renamed `mcp-server-browserbase` package and was missing the `BROWSERBASE_PROJECT_ID` entry |
 | Session storage | [PR #7454](https://github.com/aaif-goose/goose/pull/7454) (adapted; one rough-edge fix out of a larger "add lmstudio declarative provider" branch, the rest out of scope here) | `strip_xml_tags` (used to build session titles) only stripped balanced `<tag>...</tag>` pairs — a local model whose chat template already consumes the opening `<think>` tag left its raw reasoning text (ending in a bare `</think>`) completely unstripped, contaminating generated session names. Now also strips an orphan closing tag and everything before it |
 | Desktop | [PR #7992](https://github.com/aaif-goose/goose/pull/7992) (adapted; ported the session-switch race guard, not the full multi-part branch) | `reloadConversation` (triggered when the SSE replay buffer overflows) had no guard against the user switching sessions while its `getSession` call was in flight — a stale response for the previous session could overwrite the newly-active session's messages. Now captures the session ID at call time and discards the response if the current session has since changed |
+| Security/Apps | [PR #8010](https://github.com/aaif-goose/goose/pull/8010) (adapted; ported the path-sanitization fix, not the branch's UI-ordering changes, already covered here separately) | `load_app`/`save_app`/`delete_app` joined an LLM-tool-supplied app name directly into a filesystem path under the apps data dir with zero sanitization — a name containing `../` or a path separator could read, overwrite, or delete files outside the apps directory. Now validates the name against an allowlist charset before building any path |
+| Agent | [PR #7492](https://github.com/aaif-goose/goose/pull/7492) (adapted; found via the medium/large-tier branch-graveyard pass, shared by [`baxen/develop2-testing`](https://github.com/aaif-goose/goose/tree/baxen/develop2-testing), never opened as a PR) | `moim.rs` had an auto-skip token threshold and env-var content overrides but no full on/off switch, unlike the existing `GOOSE_DISABLE_SESSION_NAMING`/`GOOSE_DISABLE_TOOL_CALL_SUMMARY` pattern. Adds `GOOSE_DISABLE_MOIM` |
+| Agent/Subagents | [`dkatz/visibility-fixes`](https://github.com/aaif-goose/goose/tree/dkatz/visibility-fixes), never opened as a PR | `extract_response_text`'s `return_last_only` branch took the literal last message in a subagent's conversation instead of the last agent-visible one, so a trailing internal/invisible message could shadow the actual final reply reported back to the delegating agent |
+| Observability | [PR #5590](https://github.com/aaif-goose/goose/pull/5590) (adapted; ported only the input/output span-capture concept onto this fork's already-centralized instrumentation, not the branch's per-provider duplication removal, which doesn't apply here) | `Provider::complete()`'s tracing span recorded `session.id` and the model name but never the actual request/response content, so an opt-in observability layer (e.g. Langfuse) attached to that span had nothing to show beyond timing. Now records truncated input/output, but only when the span is actually enabled, so there's no cost when nothing is subscribed |
+| ACP/Config | [PR #8893](https://github.com/aaif-goose/goose/pull/8893) (adapted to this fork's config internals, which have diverged substantially since the branch was written) | `GooseAcpAgent` stores a per-instance `config_dir` (correctly used by `PermissionManager`), but `self.config()` always returned `Config::global()`, so ACP preferences/dictation/onboarding reads and writes silently used the process-wide config instead of the session's own directory whenever `config_dir` differed from the default — a real bug for concurrent per-directory ACP sessions |
+| ACP/Session | [PR #9483](https://github.com/aaif-goose/goose/pull/9483) (adapted) | `on_set_session_system_prompt` only mutated the in-memory `PromptManager`, so a client-set persona/system-prompt override was silently lost whenever the agent was rebuilt (daemon restart, LRU eviction, session resume). Persists `Set`-mode overrides and `client_`-prefixed `Append`-mode extras to the session record and re-applies them whenever a session's agent is (re)activated; server-managed append keys (`recipe`, `final_output`, `recipe_instructions`) are intentionally excluded since they're rebuilt from other session state |
 
 ### Fixed without an upstream ticket
 
@@ -325,9 +331,10 @@ worth stating plainly, found by going past this doc's own citations to the real 
   `git fetch --unshallow upstream`. If a fresh clone or CI checkout of this repo ever needs
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
-- **~205-215 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  138 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
-  doc itself (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
+- **~212-222 distinct improvements have actually landed**, not the ~128 an earlier count implied.
+  145 individually-cited issues/PRs/branches (107 issues/PRs + 38 branches) — this figure is
+  mechanically regenerated from the doc itself
+  (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
   time while landing 13 fixes in one stretch, which undercounted: most of those rows cite *both*
   an issue number and a PR number, so 13 new rows added 21 new distinct citations, not 13. Lesson
@@ -401,14 +408,15 @@ which lines up with the corrected total below — the earlier undercounted figur
     self-correcting). All 164 of these branches have since been individually deep-read, verified,
     and given a final disposition — none left in an open "still needs triage" state. Final
     breakdown: **106 already covered, 28 not applicable, 7 ported, 22 deferred as scope/product
-    decisions, 1 uncertain** (164 = 106+28+7+22+1). So the honest "genuinely worth a human/agent
-    triage pass" pool, replacing the old untrustworthy "~1354" figure, is now just the two buckets
-    this exhaustive pass hasn't reached yet: **6,532 closed issues/PRs with real engagement +
-    281 open issues/PRs + 134 medium-tier + 70 large-tier branches ≈ 7,017** — the small-tier
-    branch bucket (164 branches) is fully resolved and contributes nothing further to this count.
-    Medium/large tiers haven't had this same exhaustive per-branch verification, so those two
-    counts are still raw, not net-of-already-covered. Not counted at all: 3,104 zero-engagement
-    issues/PRs, 43 SKIP-experiment branches, or the 51 UNCLEAR branches needing a second look.
+    decisions, 1 uncertain** (164 = 106+28+7+22+1). The medium-tier (134) and large-tier (70)
+    branch buckets — 204 more — have since had this same exhaustive treatment too (see below), so
+    across all three size tiers **368 branches (164 small + 204 medium/large) have now been
+    individually deep-read and given a terminal disposition** — none left open. The honest
+    "genuinely worth a human/agent triage pass" pool, replacing the old untrustworthy "~1354"
+    figure, is now down to **6,532 closed issues/PRs with real engagement + 281 open issues/PRs
+    ≈ 6,813**, plus the 51 small-tier UNCLEAR branches this pass didn't reach (a second look, not
+    a full re-triage). Not counted at all: 3,104 zero-engagement issues/PRs, or 43 SKIP-experiment
+    branches.
   - **Full-pool verification, not a sample: all 164 small-tier PROMISING branches have now been
     individually deep-read** (full diff + current-codebase comparison, not just log/file-list) —
     15 by hand in an initial spot-check, then the remaining 149 exhaustively via 11 parallel
@@ -473,6 +481,51 @@ which lines up with the corrected total below — the earlier undercounted figur
     couldn't have caught them — they were absorbed by the 4 internal audit sweeps or an earlier
     untracked session, not by a citable graveyard port. Raw data + scripts are in
     `scratchpad/graveyard-data-v2/` for anyone who wants to re-run or extend this.
+- **The medium-tier (134) and large-tier (70) branch buckets — 204 total — have now had the
+  same exhaustive, per-branch deep-read treatment as the small tier**, closing the gap the small-tier
+  pass explicitly left open. Fanned out 21 parallel verification agents (~10 branches each, sorted
+  by files-changed ascending) with a five-way classification taxonomy refined from the small tier's
+  three-way one specifically to avoid re-litigating "is this a bug or a new subsystem" after the
+  fact: ALREADY_COVERED, NOT_APPLICABLE, BUG_FIX_CANDIDATE (a narrow, scoped correctness gap in
+  existing functionality — port it), NEW_CAPABILITY (a genuinely new subsystem/feature — defer, never
+  silently build), UNCERTAIN. Results were aggregated mechanically (read every `mlresult_NN.json`,
+  `Counter()` the verdicts — never trusted a chunk agent's own self-reported tally) into
+  `scratchpad/graveyard-data-v2/ml_all_verified.json`. Mechanical tally across all 204 branches: **84
+  ALREADY_COVERED, 59 NEW_CAPABILITY, 48 NOT_APPLICABLE, 9 BUG_FIX_CANDIDATE, 4 UNCERTAIN**
+  (84+59+48+9+4 = 204, no duplicates).
+  - The 9 BUG_FIX_CANDIDATE findings collapse to **8 distinct fixes** — `baxen/develop2-testing` and
+    `alexhancock/develop2-test-fixes` both surfaced the identical MOIM-disable gap (same 3-commit
+    core; the second branch is a test-fixes-only follow-up on the first). Each of the 8 was
+    independently re-verified against the current codebase (not just the chunk agent's one-line
+    summary) before any porting decision, per this session's standing practice that a first-pass
+    agent verdict on "is this a small fix or a new subsystem" is not trustworthy without a second,
+    deeper look.
+  - **6 ported** with the full rigor cycle (tests, mutation-testing, clippy, fmt, baseline-comparison,
+    docs) — see the bug matrix above: the apps.rs path-traversal fix (PR #8010), `GOOSE_DISABLE_MOIM`
+    (PR #7492 / `baxen/develop2-testing`), the subagent visibility-filter fix
+    (`dkatz/visibility-fixes`), the `complete()` tracing input/output capture (PR #5590), the ACP
+    per-directory config cache (PR #8893), and session system-prompt persistence (PR #9483).
+  - **2 deferred**, both requiring explicit operator/maintainer judgment rather than a silent port:
+    - `alexhancock+aharvard/app-csp-permissions` — the underlying data model
+      (`CspMetadata`/`PermissionsMetadata`/`UiMetadata`) and the desktop renderer that consumes it
+      already exist in this fork; what's missing is parsing an app's `_meta.ui` JSON-LD block on the
+      `create_app`/`iterate_app` path. But completing that means letting **LLM-generated app content
+      declare camera/microphone/geolocation/clipboard-write permissions with no human review step** —
+      a real product/security decision about what an LLM-authored web app should be allowed to
+      request, not a narrow correctness gap. Needs explicit scoping before implementation.
+    - `fix/9113-restore-gemini-acp` — upstream's own maintainer (`DOsinga`) publicly confirmed the
+      currently-shipping `gemini_oauth.rs` provider "reuses Gemini CLI's OAuth credentials to hit
+      Google's Code Assist API directly, which violates Google's TOS for third-party tools and can
+      lead to account suspension" (issue #9113), wrote a replacement (`gemini_acp.rs`, built on the
+      same shared `AcpProvider` infrastructure this fork's `claude-acp`/`codex-acp`/etc. already use),
+      kept the PR (#9309) rebased through ~110 commits of drift over six weeks — then closed it
+      himself without merging, for reasons not stated in any visible comment (a community reply on
+      the issue objected to the specific "spawn `gemini --acp` over stdio" approach). Upstream `main`
+      still ships the flagged provider unchanged and issue #9113 remains open, unresolved. This is a
+      real, live TOS/account-suspension risk in currently-shipping code — but silently replacing or
+      removing a shipping provider that users depend on, over an approach the original maintainer
+      himself walked back, is a product decision this fork should make deliberately, not one to
+      silently inherit from an abandoned branch.
 - **Upstream `main` has moved ~125 commits past this fork's last sync point** (re-measured fresh;
   was ~119 at an earlier count). This is
   informational, not a backlog: goose-plus has diverged too far architecturally (native Rust TUI,
