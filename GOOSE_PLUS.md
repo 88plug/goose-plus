@@ -35,7 +35,7 @@ So goose-plus is two things at once:
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
 | **Release/CI** | Upstream signed releases | Self-maintaining `plus-v*` releases + keyless build-provenance, upstream `main` mirror, one-command upstream ports; `goose update` tracks goose-plus's own releases |
 | **Internal security audits** | — | 4 independent code-first sweeps across the whole workspace: ~70 fixes (path-traversal guards, constant-time secret comparisons, resource leaks, TOCTOU races) |
-| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 136 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
+| **Graveyard** | Open by definition | ~205-215 distinct improvements landed: 137 individually-cited closed/rejected issues & PRs & branches (mechanically counted via `grep -oE "issues/[0-9]+\|pull/[0-9]+\|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md \| sort -u`, not hand-tallied — many rows cite both an issue and a PR number), ~70 fixes from the internal audit sweeps above, 15 headline own-work features |
 
 Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/compare/main...goose-plus)**.
 
@@ -212,6 +212,7 @@ Real upstream issues/PRs that were closed-without-fix, rejected, or never got to
 | Scheduler | [PR #6096](https://github.com/aaif-goose/goose/pull/6096) (adapted) | `execute_job`'s prompt-text resolution silently discarded a scheduled recipe's `instructions` field whenever `prompt` was also set (an `.or()` chain only ever picks one) — the same class of bug `subagent_handler.rs`'s `get_agent_messages` already avoids for delegated subagents by treating `instructions` as system guidance and `prompt` as the user task, separately. Scheduled jobs had no equivalent split; only `prompt` ever reached the model. Now applies `instructions` via `agent.extend_system_prompt` when both fields are set, matching the existing subagent semantics — found via the exhaustive branch-graveyard verification pass below |
 | Docs/MCP | [PR #10204](https://github.com/aaif-goose/goose/pull/10204) (ported) | The Browserbase MCP install docs were stale: `@browserbasehq/mcp`'s default (Gemini-backed Stagehand) configuration requires `GEMINI_API_KEY` alongside `BROWSERBASE_PROJECT_ID`/`BROWSERBASE_API_KEY` (confirmed against current npm/Browserbase docs), and the install command needs `npx -y`, not a bare `npx`. `documentation/static/servers.json` also still referenced the renamed `mcp-server-browserbase` package and was missing the `BROWSERBASE_PROJECT_ID` entry |
 | Session storage | [PR #7454](https://github.com/aaif-goose/goose/pull/7454) (adapted; one rough-edge fix out of a larger "add lmstudio declarative provider" branch, the rest out of scope here) | `strip_xml_tags` (used to build session titles) only stripped balanced `<tag>...</tag>` pairs — a local model whose chat template already consumes the opening `<think>` tag left its raw reasoning text (ending in a bare `</think>`) completely unstripped, contaminating generated session names. Now also strips an orphan closing tag and everything before it |
+| Desktop | [PR #7992](https://github.com/aaif-goose/goose/pull/7992) (adapted; ported the session-switch race guard, not the full multi-part branch) | `reloadConversation` (triggered when the SSE replay buffer overflows) had no guard against the user switching sessions while its `getSession` call was in flight — a stale response for the previous session could overwrite the newly-active session's messages. Now captures the session ID at call time and discards the response if the current session has since changed |
 
 ### Fixed without an upstream ticket
 
@@ -324,7 +325,7 @@ worth stating plainly, found by going past this doc's own citations to the real 
   accurate ahead/behind numbers against `aaif-goose/goose`, unshallow first
   (`git fetch --unshallow upstream`) or the numbers will be nonsense.
 - **~205-215 distinct improvements have actually landed**, not the ~128 an earlier count implied.
-  136 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
+  137 individually-cited issues/PRs/branches — this figure is mechanically regenerated from the
   doc itself (`grep -oE "issues/[0-9]+|pull/[0-9]+|tree/[A-Za-z0-9_./-]+\)" GOOSE_PLUS.md | sort -u`),
   never hand-incremented. An earlier version of this line hand-tallied "108 → 121" one row at a
   time while landing 13 fixes in one stretch, which undercounted: most of those rows cite *both*
@@ -398,11 +399,11 @@ which lines up with the corrected total below — the earlier undercounted figur
     agents' own self-reported sums (two of which arithmetic-drifted mid-response before
     self-correcting). All 164 of these branches have since been individually deep-read and
     verified (not just triaged) — see the finding directly below, which replaces the raw 164
-    figure with a real breakdown (104 already covered, 27 not applicable, 25 genuinely new and
-    still queued, 5 already ported, 2 deferred, 1 uncertain). So the honest "genuinely worth a
+    figure with a real breakdown (105 already covered, 27 not applicable, 23 genuinely new and
+    still queued, 6 already ported, 2 deferred, 1 uncertain). So the honest "genuinely worth a
     human/agent triage pass" pool, replacing the old untrustworthy "~1354" figure: **6,532 closed
-    issues/PRs with real engagement + 281 open issues/PRs + 25 verified-genuinely-new small-tier
-    branches + 134 medium-tier + 70 large-tier branches ≈ 7,042** (medium/large tiers haven't had
+    issues/PRs with real engagement + 281 open issues/PRs + 23 verified-genuinely-new small-tier
+    branches + 134 medium-tier + 70 large-tier branches ≈ 7,040** (medium/large tiers haven't had
     this same exhaustive per-branch verification yet, so those two counts are still raw, not
     net-of-already-covered), not counting 3,104 zero-engagement issues/PRs, 43 SKIP-experiment
     branches, or the 51 UNCLEAR branches needing a second look before they're triaged either way.
@@ -425,17 +426,24 @@ which lines up with the corrected total below — the earlier undercounted figur
     start_authorization_with_metadata_url` already calls `discover_metadata()`, which does full
     RFC 9728 resource-metadata discovery (supporting a different-host authorization server) before
     falling back to same-host discovery — upstream's manual pre-resolution was a workaround for an
-    older rmcp version that no longer applies here. A second was reclassified to DEFERRED, not
-    ported: `alexhancock/developer-only` flips 5 platform extensions (Analyze, Apps, Extension
+    older rmcp version that no longer applies here. A second, `micn/replay-bug`, was similarly
+    reclassified: its target (`sseMaxRetryAttempts: 1`) already exists at
+    `useSessionEvents.ts:61` — this fork's actual SSE reconnect logic lives in that hook (imported
+    by `useChatStream.ts`, where the verification agent checked and found nothing), and is more
+    sophisticated than upstream's target: exponential backoff, Last-Event-ID resumption, and a
+    terminal-error-after-5-minutes broadcast. A third, `alexhancock/developer-only`, was
+    reclassified to DEFERRED, not ported: it flips 5 platform extensions (Analyze, Apps, Extension
     Manager, Summon, Top Of Mind) from default-enabled to default-disabled — a product/UX
     preference about which tools ship on by default, not an unambiguous bug; reasonable
-    maintainers could disagree, so it isn't ported without stronger justification. Three of the
-    remaining 28 have since been ported (`dkatz/subagent-instructions-fix` → PR #6096,
-    `codex/browserbase-gemini-key` → PR #10204, `zane/lmstudio` → PR #7454, all now in the bug
-    matrix above), leaving 25 still queued. Combined with the 15-branch spot-check (9 covered,
-    3 not applicable, 1 deferred, 2 already ported — see the bug-matrix rows above), across the
-    full 164-branch pool: **104 already covered, 27 not applicable, 2 deferred, 1 uncertain,
-    5 ported, 25 queued as genuinely new** (164 = 104+27+2+1+5+25). The 25 remaining
+    maintainers could disagree, so it isn't ported without stronger justification. Four of the
+    remaining 27 have since been ported (`dkatz/subagent-instructions-fix` → PR #6096,
+    `codex/browserbase-gemini-key` → PR #10204, `zane/lmstudio` → PR #7454,
+    `jhugo/fix-sse-reconnect-followup` → PR #7992 — a session-switch race in `reloadConversation`,
+    all now in the bug matrix above), leaving 23 still queued. Combined with the 15-branch
+    spot-check (9 covered, 3 not applicable, 1 deferred, 2 already ported — see the bug-matrix
+    rows above), across the full 164-branch pool: **105 already covered, 27 not applicable,
+    2 deferred, 1 uncertain, 6 ported, 23 queued as genuinely new**
+    (164 = 105+27+2+1+6+23). The 23 remaining
     genuinely-new candidates, with the exact file/function each touches, are listed in
     `scratchpad/graveyard-data-v2/verify_chunks/remaining_queue.json` — a ready-to-work queue, not
     a vague "check this branch" pointer. None of the 104 already-covered branches' fixes were cited
