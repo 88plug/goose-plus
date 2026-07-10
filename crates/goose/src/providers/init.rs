@@ -410,7 +410,7 @@ mod tests {
         assert_eq!(nebius.provider_type(), ProviderType::Declarative);
         assert!(nebius.supports_inventory_refresh());
         assert_eq!(meta.display_name, "Nebius Token Factory");
-        assert_eq!(meta.default_model, "Qwen/Qwen3.5-397B-A17B");
+        assert_eq!(meta.default_model, "deepseek-ai/DeepSeek-V4-Pro");
         assert_eq!(meta.model_doc_link, "https://docs.tokenfactory.nebius.com/");
         assert!(!meta.setup_steps.is_empty());
 

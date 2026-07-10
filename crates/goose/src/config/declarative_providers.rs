@@ -1029,7 +1029,7 @@ mod tests {
             config.model_doc_link,
             Some("https://docs.tokenfactory.nebius.com/".to_string())
         );
-        assert_eq!(config.models[0].name, "Qwen/Qwen3.5-397B-A17B");
+        assert_eq!(config.models[0].name, "deepseek-ai/DeepSeek-V4-Pro");
         assert!(config.models[0].reasoning);
     }
 
