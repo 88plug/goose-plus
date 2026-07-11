@@ -33,7 +33,8 @@ function parseArgs(argv) {
     process.exit(1);
   }
 
-  args.version = args.version.replace(/^v/, '');
+  // Accept plus-v1.39.24 / v1.39.24 / 1.39.24 — stamp bare semver into latest-mac.yml.
+  args.version = args.version.replace(/^plus-v/, '').replace(/^v/, '');
   args.directory = path.resolve(args.directory);
   return args;
 }
