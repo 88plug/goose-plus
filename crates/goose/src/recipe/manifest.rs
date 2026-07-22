@@ -36,7 +36,13 @@ pub fn list_recipe_file_manifests() -> Result<Vec<RecipeFileManifest>> {
             continue;
         };
 
-        resolve_recipe_sub_recipe_paths(&mut recipe, &file_path);
+        if let Err(err) = resolve_recipe_sub_recipe_paths(&mut recipe, &file_path) {
+            tracing::warn!(
+                "Recipe {} references an unresolvable sub-recipe path ({}); listing it with unresolved paths",
+                file_path.display(),
+                err
+            );
+        }
 
         manifests.push(RecipeFileManifest {
             id: short_id_from_path(file_path.to_string_lossy().as_ref()),
@@ -66,24 +72,24 @@ pub fn load_recipe_by_id(id: &str) -> Result<Recipe> {
 
 pub fn load_recipe_from_path(path: &Path) -> Result<Recipe> {
     let mut recipe = Recipe::from_file_path(path)?;
-    resolve_recipe_sub_recipe_paths(&mut recipe, path);
+    resolve_recipe_sub_recipe_paths(&mut recipe, path)?;
     Ok(recipe)
 }
 
-fn resolve_recipe_sub_recipe_paths(recipe: &mut Recipe, recipe_path: &Path) {
+fn resolve_recipe_sub_recipe_paths(recipe: &mut Recipe, recipe_path: &Path) -> Result<()> {
     let Some(recipe_dir) = recipe_path.parent() else {
-        return;
+        return Ok(());
     };
 
     let Some(ref mut sub_recipes) = recipe.sub_recipes else {
-        return;
+        return Ok(());
     };
 
     for sub_recipe in sub_recipes.iter_mut() {
-        if let Ok(resolved) = resolve_sub_recipe_path(&sub_recipe.path, recipe_dir) {
-            sub_recipe.path = resolved;
-        }
+        sub_recipe.path = resolve_sub_recipe_path(&sub_recipe.path, recipe_dir)?;
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -136,5 +142,45 @@ sub_recipes:
             fs::canonicalize(sub_recipes[0].path.clone()).unwrap(),
             fs::canonicalize(child_path.to_string_lossy().to_string()).unwrap()
         );
+    }
+
+    #[test]
+    fn load_recipe_from_path_errors_on_missing_sub_recipe() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let parent_path = temp_dir.path().join("parent.yaml");
+        fs::write(
+            &parent_path,
+            r#"
+title: Parent
+description: Parent recipe
+instructions: Parent instructions
+sub_recipes:
+  - name: child
+    path: does_not_exist.yaml
+"#,
+        )
+        .unwrap();
+
+        let err = load_recipe_from_path(&parent_path).unwrap_err();
+        assert!(err.to_string().contains("does_not_exist.yaml"));
+    }
+
+    #[test]
+    fn resolve_recipe_sub_recipe_paths_errors_on_missing_sub_recipe() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let parent_path = temp_dir.path().join("parent.yaml");
+        let mut recipe = Recipe::from_content(
+            r#"
+title: Parent
+description: Parent recipe
+instructions: Parent instructions
+sub_recipes:
+  - name: child
+    path: does_not_exist.yaml
+"#,
+        )
+        .unwrap();
+
+        assert!(resolve_recipe_sub_recipe_paths(&mut recipe, &parent_path).is_err());
     }
 }

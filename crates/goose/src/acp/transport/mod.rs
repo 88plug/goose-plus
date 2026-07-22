@@ -6,15 +6,15 @@ pub mod websocket;
 use std::sync::Arc;
 
 use axum::{
-    Router,
     body::Body,
     extract::{
+        ws::{rejection::WebSocketUpgradeRejection, WebSocketUpgrade},
         State,
-        ws::{WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
     },
-    http::{HeaderName, HeaderValue, Method, Request, header},
+    http::{header, HeaderName, HeaderValue, Method, Request},
     response::Response,
     routing::{delete, get, post},
+    Router,
 };
 use serde_json::Value;
 use tower_http::cors::CorsLayer;

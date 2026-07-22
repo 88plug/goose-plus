@@ -1,5 +1,5 @@
 use crate::recipe::build_recipe::{
-    RecipeError, build_recipe_from_template, resolve_sub_recipe_path,
+    build_recipe_from_template, resolve_sub_recipe_path, RecipeError,
 };
 use crate::recipe::read_recipe_file_content::RecipeFile;
 use crate::recipe::{RecipeParameterInputType, RecipeParameterRequirement};
@@ -684,11 +684,9 @@ parameters:
 
         assert!(result.is_err());
         if let Err(RecipeError::Invalid { source }) = result {
-            assert!(
-                source
-                    .to_string()
-                    .contains("File parameters cannot have default values")
-            );
+            assert!(source
+                .to_string()
+                .contains("File parameters cannot have default values"));
         } else {
             panic!("Expected Invalid error for file parameter with default");
         }

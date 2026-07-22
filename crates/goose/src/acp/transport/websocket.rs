@@ -9,8 +9,8 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use tracing::{debug, error, info, trace, warn};
 
-use super::HEADER_CONNECTION_ID;
 use super::connection::ConnectionRegistry;
+use super::HEADER_CONNECTION_ID;
 
 pub(crate) fn origin_is_local(origin: &str) -> bool {
     matches!(

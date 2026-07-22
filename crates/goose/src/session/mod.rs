@@ -1,5 +1,5 @@
 mod chat_history_search;
-mod diagnostics;
+pub(crate) mod diagnostics;
 pub mod extension_data;
 pub mod import_formats;
 mod last_message_snippet;
