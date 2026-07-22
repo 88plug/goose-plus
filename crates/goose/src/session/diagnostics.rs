@@ -11,8 +11,8 @@ use std::io::Cursor;
 use std::io::Write;
 use std::path::PathBuf;
 use utoipa::ToSchema;
-use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
+use zip::ZipWriter;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SystemInfo {
@@ -213,7 +213,7 @@ fn looks_like_secret(token: &str) -> bool {
 /// words within it. For JSON, checks quoted string values. Key names are always
 /// preserved for debugging.
 #[allow(clippy::string_slice)] // All splits are on ASCII delimiters ('"', ": ") — safe.
-fn redact_secrets(text: &str) -> String {
+pub(crate) fn redact_secrets(text: &str) -> String {
     text.lines()
         .map(|line| {
             // YAML-style "KEY: value" — check the value and its individual words

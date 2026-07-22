@@ -9,11 +9,21 @@ pub mod text_normalizer;
 use crate::config::Config;
 use crate::conversation::message::{Message, ToolRequest};
 use crate::permission::permission_judge::PermissionCheckResult;
+use crate::session::diagnostics::redact_secrets;
 use anyhow::Result;
 use scanner::PromptInjectionScanner;
 use std::env;
 use std::sync::OnceLock;
 use uuid::Uuid;
+
+fn redacted_tool_call_json(tool_call: &rmcp::model::CallToolRequestParams) -> String {
+    // Pretty-print before redacting: redact_secrets is line-oriented and isolates
+    // one `"key": "value"` per line. On compact single-line JSON a stray `": "`
+    // inside one argument hijacks the scan (early-returning past an earlier
+    // secret), and space-bearing values like `"Bearer <token>"` never match.
+    // One field per line closes both gaps.
+    redact_secrets(&serde_json::to_string_pretty(tool_call).unwrap_or_else(|_| "{}".to_string()))
+}
 
 pub(crate) fn get_override(env_key: &str) -> Option<bool> {
     env::var(env_key).ok().and_then(|v| match v.as_str() {
@@ -160,8 +170,7 @@ impl SecurityManager {
                     let above_threshold = analysis_result.confidence > config_threshold;
                     let finding_id = format!("SEC-{}", Uuid::new_v4().simple());
 
-                    let tool_call_json =
-                        serde_json::to_string(&tool_call).unwrap_or_else(|_| "{}".to_string());
+                    let tool_call_json = redacted_tool_call_json(tool_call);
 
                     let action = if above_threshold { "BLOCK" } else { "LOG" };
 
@@ -196,8 +205,7 @@ impl SecurityManager {
                         });
                     }
                 } else if analysis_result.scanned {
-                    let tool_call_json =
-                        serde_json::to_string(&tool_call).unwrap_or_else(|_| "{}".to_string());
+                    let tool_call_json = redacted_tool_call_json(tool_call);
 
                     tracing::info!(
                         monotonic_counter.goose.prompt_injection_tool_call_passed = 1,
@@ -244,5 +252,82 @@ impl SecurityManager {
 impl Default for SecurityManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::model::CallToolRequestParams;
+    use rmcp::object;
+
+    #[test]
+    fn redacted_tool_call_json_redacts_high_entropy_secrets() {
+        let tool_call = CallToolRequestParams::new("shell").with_arguments(object!({
+            "command": "curl -H 'Authorization: Bearer sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' https://example.com"
+        }));
+
+        let json = redacted_tool_call_json(&tool_call);
+
+        assert!(
+            !json.contains("sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
+            "logged tool_call_json should not contain the raw secret: {json}"
+        );
+        assert!(
+            json.contains("[REDACTED]"),
+            "expected a redaction marker: {json}"
+        );
+        assert!(
+            json.contains("shell"),
+            "tool name should still be visible for audit: {json}"
+        );
+    }
+
+    #[test]
+    fn redacted_tool_call_json_leaves_ordinary_arguments_intact() {
+        let tool_call = CallToolRequestParams::new("developer__text_editor")
+            .with_arguments(object!({"path": "/tmp/example.txt", "command": "view"}));
+
+        let json = redacted_tool_call_json(&tool_call);
+
+        assert!(json.contains("/tmp/example.txt"));
+        assert!(!json.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn redacted_tool_call_json_redacts_secret_before_a_stray_colon_space() {
+        let tool_call = CallToolRequestParams::new("shell").with_arguments(object!({
+            "api_key": "AKIAABCDEFGHIJKLMNOP1234567890ABCDEF",
+            "command": "run: fetch RANDOMSECRETVALUEXYZ987654321 done"
+        }));
+
+        let json = redacted_tool_call_json(&tool_call);
+
+        assert!(
+            !json.contains("AKIAABCDEFGHIJKLMNOP1234567890ABCDEF"),
+            "a secret positioned before a stray ': ' must still be redacted: {json}"
+        );
+        assert!(
+            json.contains("[REDACTED]"),
+            "expected a redaction marker: {json}"
+        );
+    }
+
+    #[test]
+    fn redacted_tool_call_json_redacts_bearer_header_value() {
+        let tool_call = CallToolRequestParams::new("http_request").with_arguments(object!({
+            "Authorization": "Bearer sk-live-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        }));
+
+        let json = redacted_tool_call_json(&tool_call);
+
+        assert!(
+            !json.contains("sk-live-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
+            "a 'Bearer <token>' header value must be redacted: {json}"
+        );
+        assert!(
+            json.contains("[REDACTED]"),
+            "expected a redaction marker: {json}"
+        );
     }
 }
