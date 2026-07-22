@@ -23,6 +23,9 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function getSystemTheme(): ResolvedTheme {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light';
+  }
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -48,9 +51,15 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  // Start with light theme to avoid flash, will update once settings load
-  const [userThemePreference, setUserThemePreferenceState] = useState<ThemePreference>('light');
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('light');
+  // Default both states to "follow the OS theme" to avoid a flash while the
+  // async settings IPC round-trip is in flight (settings default to following
+  // the system theme, so this guesses right for the common case). The load
+  // effect below overwrites both once the saved preference resolves. Seeding
+  // the preference to 'system' too keeps it consistent with resolvedTheme, so a
+  // preference selector rendered before settings load doesn't show the wrong
+  // option highlighted.
+  const [userThemePreference, setUserThemePreferenceState] = useState<ThemePreference>('system');
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => getSystemTheme());
   const [fontScale, setFontScaleState] = useState<FontScale>(() => getFontScale());
 
   useEffect(() => {
@@ -107,6 +116,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   // Listen for system theme changes when preference is 'system'
   useEffect(() => {
     if (userThemePreference !== 'system') return;
+    if (typeof window.matchMedia !== 'function') return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
