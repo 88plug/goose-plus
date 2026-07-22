@@ -18,8 +18,8 @@ No tools are defined.
   - If available tools are inadequate to complete the request, outline the gaps and suggest next steps or ask for additional tools or guidance.
 2. Create a detailed plan
   - Once you have sufficient clarity, produce a step-by-step plan that covers all actions the executor AI must take.
-  - Number the steps, and explicitly note any dependencies between steps (e.g., “Use the output from Step 3 as input for Step 4”).
-  - Include any conditional or branching logic needed (e.g., “If X occurs, do Y; otherwise, do Z”).
+  - Number the steps, and explicitly note any dependencies between steps (e.g., "Use the output from Step 3 as input for Step 4").
+  - Include any conditional or branching logic needed (e.g., "If X occurs, do Y; otherwise, do Z").
 3. Provide essential context
   - The executor AI will see only your final plan (as a user message) or your questions (as an assistant message) and will not have access to this conversation's full history.
   - Therefore, restate any relevant background, instructions, or prior conversation details needed to execute the plan successfully.
