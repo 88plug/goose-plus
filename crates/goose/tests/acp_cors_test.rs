@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
-    Router,
     body::Body,
     http::{Method, Request},
     response::Response,
+    Router,
 };
 use goose::acp::server_factory::{AcpServer, AcpServerFactoryConfig};
 use goose::acp::transport::create_acp_router;
