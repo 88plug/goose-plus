@@ -108,7 +108,7 @@ impl From<RecipeSettingsDto> for Settings {
             goose_model: dto.goose_model,
             temperature: dto.temperature,
             max_turns: dto.max_turns,
-            request_params: None,
+            request_params: dto.request_params,
         }
     }
 }
@@ -120,6 +120,7 @@ impl From<Settings> for RecipeSettingsDto {
             goose_model: settings.goose_model,
             temperature: settings.temperature,
             max_turns: settings.max_turns,
+            request_params: settings.request_params,
         }
     }
 }
@@ -518,6 +519,10 @@ mod tests {
                 goose_model: Some("gpt-5".to_string()),
                 temperature: Some(0.2),
                 max_turns: Some(4),
+                request_params: Some(HashMap::from([(
+                    "top_p".to_string(),
+                    serde_json::json!(0.9),
+                )])),
             }),
             activities: Some(vec!["plan".to_string(), "build".to_string()]),
             author: Some(RecipeAuthorDto {

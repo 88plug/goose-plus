@@ -3063,6 +3063,13 @@
             "null"
           ],
           "minimum": 0
+        },
+        "request_params": {
+          "additionalProperties": {},
+          "type": [
+            "object",
+            "null"
+          ]
         }
       }
     },
