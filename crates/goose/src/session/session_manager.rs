@@ -488,18 +488,21 @@ impl SessionManager {
     }
 
     pub async fn add_message(&self, id: &str, message: &Message) -> Result<()> {
+        self.storage.add_message(id, message).await?;
         crate::nats::publish_message(id, message);
-        self.storage.add_message(id, message).await
+        Ok(())
     }
 
     /// Persists multiple messages in a single transaction (see
     /// `SessionStorage::add_messages`). Each message is still published to
-    /// NATS individually so subscribers see one event per message.
+    /// NATS individually so subscribers see one event per message, and only
+    /// after the transaction commits so no subscriber sees a phantom message.
     pub async fn add_messages(&self, id: &str, messages: &[Message]) -> Result<()> {
+        self.storage.add_messages(id, messages).await?;
         for message in messages {
             crate::nats::publish_message(id, message);
         }
-        self.storage.add_messages(id, messages).await
+        Ok(())
     }
 
     pub async fn replace_conversation(&self, id: &str, conversation: &Conversation) -> Result<()> {
@@ -659,6 +662,17 @@ impl SessionManager {
         Self::instance()
             .storage
             .update_message_metadata(id, message_id, f)
+            .await
+    }
+
+    /// Atomically read-modify-write a session's `client_system_prompt`, so
+    /// concurrent edits to different keys cannot clobber each other.
+    pub async fn update_client_system_prompt<F>(&self, session_id: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(Option<ClientSystemPrompt>) -> Option<ClientSystemPrompt>,
+    {
+        self.storage
+            .update_client_system_prompt(session_id, f)
             .await
     }
 
@@ -2320,6 +2334,42 @@ impl SessionStorage {
         .bind(session_id)
         .execute(&mut *tx)
         .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    /// Read-modify-write `client_system_prompt_json` inside a single
+    /// transaction. Uses `BEGIN IMMEDIATE` so two concurrent callers editing
+    /// different keys serialize instead of each writing back a value built
+    /// from its own stale read (which silently drops one caller's key).
+    async fn update_client_system_prompt<F>(&self, session_id: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(Option<ClientSystemPrompt>) -> Option<ClientSystemPrompt>,
+    {
+        let pool = self.pool().await?;
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+
+        let current_json = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT client_system_prompt_json FROM sessions WHERE id = ?",
+        )
+        .bind(session_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let current: Option<ClientSystemPrompt> = current_json
+            .as_deref()
+            .and_then(|raw| serde_json::from_str(raw).ok());
+
+        let next = f(current);
+        let next_json = next.map(|v| serde_json::to_string(&v)).transpose()?;
+
+        sqlx::query("UPDATE sessions SET client_system_prompt_json = ? WHERE id = ?")
+            .bind(next_json)
+            .bind(session_id)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
 
