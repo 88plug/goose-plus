@@ -221,11 +221,15 @@ async fn run_command_loop(
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
             ClientCommand::CreateSession => {
-                let _ = msg_tx.send(AgentMessage::SessionCreated);
                 cx.build_session_cwd()
                     .map_err(|_| agent_client_protocol::Error::internal_error())?
                     .block_task()
                     .run_until(async |mut session| {
+                        // Announce only once the session actually exists. Sending
+                        // this before `session/new` leaves the TUI in a "ready"
+                        // chat view even when the connection has already torn
+                        // down, silently dropping everything the user types.
+                        let _ = msg_tx.send(AgentMessage::SessionCreated);
                         while let Some(cmd) = cmd_rx.recv().await {
                             match cmd {
                                 ClientCommand::SendPrompt(prompt) => {
