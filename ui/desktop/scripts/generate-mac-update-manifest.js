@@ -45,12 +45,15 @@ function ensureFile(filePath) {
   }
 }
 
-function copyIfDifferent(source, target) {
+// Rename rather than copy: the arch-suffixed name electron-updater needs is
+// also the clearest name for a human to download, so shipping both just
+// uploaded ~430MB of byte-identical duplicates per release.
+function renameIfDifferent(source, target) {
   ensureFile(source);
   if (path.resolve(source) === path.resolve(target)) {
     return;
   }
-  fs.copyFileSync(source, target);
+  fs.renameSync(source, target);
 }
 
 function sha512(filePath) {
@@ -79,7 +82,7 @@ function writeManifest({ directory, version }) {
   const entries = files.map(({ sourceName, updateName }) => {
     const sourcePath = path.join(directory, sourceName);
     const updatePath = path.join(directory, updateName);
-    copyIfDifferent(sourcePath, updatePath);
+    renameIfDifferent(sourcePath, updatePath);
 
     const stats = fs.statSync(updatePath);
     return {
