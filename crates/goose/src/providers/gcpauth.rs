@@ -576,6 +576,7 @@ impl GcpAuth {
 mod tests {
     use super::*;
     use mockall::predicate::eq;
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     use tokio::time::sleep;
     use wiremock::matchers::{header, method, path};
     // Only import what we need
@@ -723,6 +724,10 @@ iXVBc2YmAuU8hiOFUPxtyQfNzG5fQ0rhJSewdtyWxIadJSLj6fsK+AEsNQ==
         assert_eq!(token2.token_value, "cached_token");
     }
 
+    // Signing/verifying a JWT needs exactly one jsonwebtoken crypto backend,
+    // which goose selects via its TLS feature. `default = []` selects neither,
+    // so under a bare `cargo test -p goose` jsonwebtoken panics; skip there.
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     #[tokio::test]
     async fn test_token_expiration() {
         let auth = GcpAuth {
@@ -792,10 +797,24 @@ iXVBc2YmAuU8hiOFUPxtyQfNzG5fQ0rhJSewdtyWxIadJSLj6fsK+AEsNQ==
         }
     }
 
+    // Signing/verifying a JWT needs exactly one jsonwebtoken crypto backend,
+    // which goose selects via its TLS feature. `default = []` selects neither,
+    // so under a bare `cargo test -p goose` jsonwebtoken panics; skip there.
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     #[tokio::test]
     async fn test_token_refresh_race_condition() {
+        // Point the exchange at a closed local port. `mock_service_account`'s
+        // token_uri is the real https://oauth2.googleapis.com/token, and once
+        // the 100ms token expires every task below POSTs to it for real — which
+        // made this test hang for over a minute and then fail whenever the
+        // network was slow or unavailable. What it actually asserts is that
+        // concurrent refreshes are safe, not what Google replies.
+        let creds = ServiceAccountCredentials {
+            token_uri: "http://127.0.0.1:1/token".to_string(),
+            ..mock_service_account()
+        };
         let auth = Arc::new(GcpAuth {
-            credentials: RwLock::new(AdcCredentials::ServiceAccount(mock_service_account())),
+            credentials: RwLock::new(AdcCredentials::ServiceAccount(creds)),
             client: reqwest::Client::new(),
             cached_token: Arc::new(RwLock::new(Some(CachedToken {
                 token: AuthToken {
@@ -822,19 +841,14 @@ iXVBc2YmAuU8hiOFUPxtyQfNzG5fQ0rhJSewdtyWxIadJSLj6fsK+AEsNQ==
                             token.token_value
                         );
                     }
-                    Err(e) => {
-                        match e {
-                            AuthError::TokenExchange(err) => {
-                                // This is expected - we can't actually exchange tokens in tests
-                                assert!(
-                                    err.contains("invalid_scope") || err.contains("400"),
-                                    "Unexpected error message: {}",
-                                    err
-                                );
-                            }
-                            other => panic!("Unexpected error type: {:?}", other),
-                        }
-                    }
+                    Err(e) => match e {
+                        // Expected: the exchange endpoint is unreachable by
+                        // design, so any TokenExchange error is a pass. The
+                        // point is that concurrent refreshes neither deadlock
+                        // nor surface a different error variant.
+                        AuthError::TokenExchange(_) => {}
+                        other => panic!("Unexpected error type: {:?}", other),
+                    },
                 }
             }));
         }
@@ -862,6 +876,10 @@ iXVBc2YmAuU8hiOFUPxtyQfNzG5fQ0rhJSewdtyWxIadJSLj6fsK+AEsNQ==
         }
     }
 
+    // Signing/verifying a JWT needs exactly one jsonwebtoken crypto backend,
+    // which goose selects via its TLS feature. `default = []` selects neither,
+    // so under a bare `cargo test -p goose` jsonwebtoken panics; skip there.
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     #[tokio::test]
     async fn test_service_account_jwt_creation() {
         let auth = GcpAuth {

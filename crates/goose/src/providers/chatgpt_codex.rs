@@ -1069,6 +1069,7 @@ mod tests {
     use super::*;
     use crate::conversation::message::Message;
     use goose_test_support::TEST_IMAGE_B64;
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     use jsonwebtoken::{Algorithm, EncodingKey, Header};
     use rmcp::model::{CallToolRequestParams, CallToolResult, Content, ErrorCode, ErrorData};
     use rmcp::object;
@@ -1363,12 +1364,17 @@ mod tests {
         assert_eq!(tokens.expires_in, Some(1800));
     }
 
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     #[derive(Serialize)]
     struct TestClaims {
         exp: usize,
         chatgpt_account_id: Option<String>,
     }
 
+    // Signing/verifying a JWT needs exactly one jsonwebtoken crypto backend,
+    // which goose selects via its TLS feature. `default = []` selects neither,
+    // so under a bare `cargo test -p goose` jsonwebtoken panics; skip there.
+    #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
     #[tokio::test]
     async fn test_parse_jwt_claims_verified_with_issuer() {
         let server = MockServer::start().await;
