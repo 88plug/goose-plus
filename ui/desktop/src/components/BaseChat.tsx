@@ -148,7 +148,7 @@ export default function BaseChat({
   }, [initialMessage, recipe?.prompt, session?.user_recipe_values]);
 
   // noAutoSubmit only suppresses auto-submitting the initial prompt of a fresh session
-  // (goose://new-session?prompt=...). Once the conversation has messages, later flows
+  // (goose-plus://new-session?prompt=...). Once the conversation has messages, later flows
   // such as forks or resumes should auto-submit normally.
   const suppressInitialAutoSubmit = noAutoSubmit && messages.length === 0;
   const canAutoSubmit =

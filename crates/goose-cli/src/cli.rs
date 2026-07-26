@@ -573,7 +573,7 @@ enum SessionCommand {
     )]
     Import {
         #[arg(
-            help = "Path to a goose session export, a Claude Code, Codex, or Pi .jsonl transcript, or a goose://sessions/nostr share link"
+            help = "Path to a goose session export, a Claude Code, Codex, or Pi .jsonl transcript, or a goose-plus://sessions/nostr share link"
         )]
         input: String,
 

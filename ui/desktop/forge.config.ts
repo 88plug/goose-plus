@@ -21,8 +21,8 @@ let cfg = {
   // Protocol registration
   protocols: [
     {
-      name: 'GooseProtocol',
-      schemes: ['goose'],
+      name: 'GoosePlusProtocol',
+      schemes: ['goose-plus'],
     },
   ],
   // macOS Info.plist extensions for drag-and-drop support

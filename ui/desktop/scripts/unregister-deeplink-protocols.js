@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Script to unregister ALL goose:// protocol handlers
+ * Script to unregister ALL goose-plus:// protocol handlers
  * Usage: node scripts/unregister-deeplink-protocols.js
  */
 
 const { execSync } = require('child_process');
 
-const PROTOCOL = 'goose';
+const PROTOCOL = 'goose-plus';
 
 function unregisterAllProtocolHandlers() {
-  console.log('Unregistering ALL goose:// protocol handlers...');
+  console.log('Unregistering ALL goose-plus:// protocol handlers...');
   
   try {
     // Get all registered Goose apps
@@ -24,7 +24,7 @@ function unregisterAllProtocolHandlers() {
     if (pathMatches) {
       pathMatches.forEach(match => {
         const path = match.replace(/path:\s+/, '').trim();
-        if (path.includes('Goose') || path.includes('goose')) {
+        if (path.includes('goose-plus')) {
           uniquePaths.add(path);
         }
       });
@@ -47,10 +47,11 @@ function unregisterAllProtocolHandlers() {
     
     // Also try to unregister by bundle identifier
     console.log('\nUnregistering by bundle identifier...');
+    // Only this fork's bundles. Unregistering com.block.goose here would
+    // strip protocol handlers from an upstream Goose the user still runs.
     const bundleIds = [
-      'com.electron.goose',
-      'com.block.goose',
-      'com.block.goose.dev'
+      'com.88plug.goose-plus',
+      'com.88plug.goose-plus.dev'
     ];
     
     bundleIds.forEach(bundleId => {
@@ -71,7 +72,7 @@ function unregisterAllProtocolHandlers() {
     }
     
     console.log(`\n✅ Successfully processed ${unregisteredCount} Goose applications`);
-    console.log('All goose:// protocol handlers have been unregistered.');
+    console.log('All goose-plus:// protocol handlers have been unregistered.');
     console.log('\nNote: You may need to restart your system for changes to take full effect.');
     
   } catch (error) {

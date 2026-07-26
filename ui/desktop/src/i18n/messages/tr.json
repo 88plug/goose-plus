@@ -1506,10 +1506,10 @@
     "defaultMessage": "İptal"
   },
   "importRecipeForm.deeplinkHint": {
-    "defaultMessage": "\"goose://recipe?config=\" ile başlayan bir tarif derin bağlantısı yapıştırın"
+    "defaultMessage": "\"goose-plus://recipe?config=\" ile başlayan bir tarif derin bağlantısı yapıştırın"
   },
   "importRecipeForm.deeplinkPlaceholder": {
-    "defaultMessage": "goose://recipe?config=... derin bağlantınızı buraya yapıştırın"
+    "defaultMessage": "goose-plus://recipe?config=... derin bağlantınızı buraya yapıştırın"
   },
   "importRecipeForm.example": {
     "defaultMessage": "örnek"
@@ -3498,7 +3498,7 @@
     "defaultMessage": "Derin bağlantı"
   },
   "scheduleModal.deepLinkPlaceholder": {
-    "defaultMessage": "goose://tarif bağlantısını buraya yapıştırın..."
+    "defaultMessage": "goose-plus://tarif bağlantısını buraya yapıştırın..."
   },
   "scheduleModal.editSchedule": {
     "defaultMessage": "Programı Düzenle"
@@ -3510,7 +3510,7 @@
     "defaultMessage": "Seçilen dosya okunamadı."
   },
   "scheduleModal.invalidDeepLink": {
-    "defaultMessage": "Geçersiz derin bağlantı. Lütfen goose://tarif bağlantısını kullanın."
+    "defaultMessage": "Geçersiz derin bağlantı. Lütfen goose-plus://tarif bağlantısını kullanın."
   },
   "scheduleModal.invalidFileType": {
     "defaultMessage": "Geçersiz dosya türü: Lütfen bir YAML dosyası seçin (.yaml veya.yml)"
@@ -4008,7 +4008,7 @@
     "defaultMessage": "Oturumu almak, şifresini çözmek ve içe aktarmak için bir Goose Nostr paylaşım bağlantısını yapıştırın."
   },
   "sessions.importNostr.placeholder": {
-    "defaultMessage": "goose://sessions/nostr?nevent=...&key=..."
+    "defaultMessage": "goose-plus://sessions/nostr?nevent=...&key=..."
   },
   "sessions.importNostr.title": {
     "defaultMessage": "Nostr Oturumunu İçe Aktar"

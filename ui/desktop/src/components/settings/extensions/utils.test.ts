@@ -380,39 +380,39 @@ describe('Extension Utils', () => {
 
   describe('extractCommand', () => {
     it('should extract command from extension link', () => {
-      const link = 'goose://extension/add?name=Test&cmd=python&arg=script.py&arg=--flag';
+      const link = 'goose-plus://extension/add?name=Test&cmd=python&arg=script.py&arg=--flag';
       expect(extractCommand(link)).toBe('python script.py --flag');
     });
 
     it('should handle encoded arguments', () => {
-      const link = 'goose://extension/add?cmd=echo&arg=hello%20world&arg=--test%3Dvalue';
+      const link = 'goose-plus://extension/add?cmd=echo&arg=hello%20world&arg=--test%3Dvalue';
       expect(extractCommand(link)).toBe('echo hello world --test=value');
     });
 
     it('should handle missing command', () => {
-      const link = 'goose://extension/add?name=Test';
+      const link = 'goose-plus://extension/add?name=Test';
       expect(extractCommand(link)).toBe('Unknown Command');
     });
 
     it('should handle command without arguments', () => {
-      const link = 'goose://extension/add?cmd=python';
+      const link = 'goose-plus://extension/add?cmd=python';
       expect(extractCommand(link)).toBe('python');
     });
   });
 
   describe('extractExtensionName', () => {
     it('should extract extension name from link', () => {
-      const link = 'goose://extension/add?name=Test%20Extension&cmd=python';
+      const link = 'goose-plus://extension/add?name=Test%20Extension&cmd=python';
       expect(extractExtensionName(link)).toBe('Test Extension');
     });
 
     it('should handle missing name', () => {
-      const link = 'goose://extension/add?cmd=python';
+      const link = 'goose-plus://extension/add?cmd=python';
       expect(extractExtensionName(link)).toBe('Unknown Extension');
     });
 
     it('should decode URL encoded names', () => {
-      const link = 'goose://extension/add?name=My%20Special%20Extension%21';
+      const link = 'goose-plus://extension/add?name=My%20Special%20Extension%21';
       expect(extractExtensionName(link)).toBe('My Special Extension!');
     });
   });

@@ -23,11 +23,11 @@ const i18n = defineMessages({
   },
   deeplinkPlaceholder: {
     id: 'importRecipeForm.deeplinkPlaceholder',
-    defaultMessage: 'Paste your goose://recipe?config=... deeplink here',
+    defaultMessage: 'Paste your goose-plus://recipe?config=... deeplink here',
   },
   deeplinkHint: {
     id: 'importRecipeForm.deeplinkHint',
-    defaultMessage: 'Paste a recipe deeplink starting with "goose://recipe?config="',
+    defaultMessage: 'Paste a recipe deeplink starting with "goose-plus://recipe?config="',
   },
   or: {
     id: 'importRecipeForm.or',
@@ -85,8 +85,8 @@ const importRecipeSchema = z
     deeplink: z
       .string()
       .refine(
-        (value) => !value || value.trim().startsWith('goose://recipe?config='),
-        'Invalid deeplink format. Expected: goose://recipe?config=...'
+        (value) => !value || value.trim().startsWith('goose-plus://recipe?config='),
+        'Invalid deeplink format. Expected: goose-plus://recipe?config=...'
       ),
     recipeUploadFile: z
       .instanceof(File)
