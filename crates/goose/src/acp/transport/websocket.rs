@@ -12,20 +12,30 @@ use tracing::{debug, error, info, trace, warn};
 use super::connection::ConnectionRegistry;
 use super::HEADER_CONNECTION_ID;
 
+/// Accept any http(s) origin on a loopback host, whatever port it uses.
+///
+/// The guard exists to keep remote pages out, so the loopback *host* is what
+/// matters; pinning the port to the 3284 default silently broke every client
+/// of a server started on another port (`goose serve --port …`, the compose
+/// web UI) even though such an origin is exactly as local.
 pub(crate) fn origin_is_local(origin: &str) -> bool {
-    matches!(
-        origin,
-        "http://localhost:3284"
-            | "http://127.0.0.1:3284"
-            | "http://localhost"
-            | "http://127.0.0.1"
-            | "http://[::1]"
-            | "https://localhost:3284"
-            | "https://127.0.0.1:3284"
-            | "https://localhost"
-            | "https://127.0.0.1"
-            | "https://[::1]"
-    )
+    let rest = match origin.split_once("://") {
+        Some(("http", rest)) | Some(("https", rest)) => rest,
+        _ => return false,
+    };
+    // Drop a trailing :port. Only split on a colon that is not part of a
+    // bracketed IPv6 literal, and only when what follows is really a port.
+    let host = match rest.rsplit_once(':') {
+        Some((host, port))
+            if !host.ends_with('[')
+                && !port.is_empty()
+                && port.chars().all(|c| c.is_ascii_digit()) =>
+        {
+            host
+        }
+        _ => rest,
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
 pub(crate) async fn handle_ws_upgrade(
@@ -161,5 +171,31 @@ mod tests {
         assert!(origin_is_local("http://[::1]"));
         assert!(!origin_is_local("https://evil.example"));
         assert!(!origin_is_local("http://localhost.evil.example"));
+    }
+
+    #[test]
+    fn origin_allows_loopback_on_any_port() {
+        for origin in [
+            "http://localhost:9000",
+            "http://localhost:8080",
+            "https://127.0.0.1:65535",
+            "http://[::1]:9000",
+        ] {
+            assert!(origin_is_local(origin), "{origin} should be allowed");
+        }
+    }
+
+    #[test]
+    fn origin_rejects_remote_hosts_and_lookalikes() {
+        for origin in [
+            "http://evil.example:9000",
+            "http://127.0.0.1.evil.example",
+            "http://localhost:3284@evil.example",
+            "ftp://localhost",
+            "file://localhost",
+            "localhost:3284",
+        ] {
+            assert!(!origin_is_local(origin), "{origin} should be rejected");
+        }
     }
 }
