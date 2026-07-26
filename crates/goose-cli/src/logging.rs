@@ -52,7 +52,9 @@ mod tests {
         assert!(log_dir.is_dir());
 
         let path_components: Vec<_> = log_dir.components().collect();
-        assert!(path_components.iter().any(|c| c.as_os_str() == "goose"));
+        assert!(path_components
+            .iter()
+            .any(|c| c.as_os_str() == "goose-plus"));
         assert!(path_components.iter().any(|c| c.as_os_str() == "logs"));
         assert!(path_components.iter().any(|c| c.as_os_str() == "cli"));
     }

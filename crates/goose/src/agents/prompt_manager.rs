@@ -410,6 +410,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_basic() {
         let manager = PromptManager::with_timestamp(DateTime::<Utc>::from_timestamp(0, 0).unwrap());
 
@@ -419,6 +420,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_one_extension() {
         let manager = PromptManager::with_timestamp(DateTime::<Utc>::from_timestamp(0, 0).unwrap());
 
@@ -435,6 +437,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_typical_setup() {
         let manager = PromptManager::with_timestamp(DateTime::<Utc>::from_timestamp(0, 0).unwrap());
 
@@ -457,6 +460,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_all_platform_extensions() {
         use crate::agents::platform_extensions::{PlatformExtensionContext, PLATFORM_EXTENSIONS};
         use crate::config::GooseMode;

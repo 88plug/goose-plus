@@ -61,23 +61,18 @@ fn extract_text(msg: &A2aMessage) -> String {
 /// Returns the query string if matched.
 fn parse_searxng_query(text: &str) -> Option<String> {
     let t = text.trim();
-    let lower = t.to_lowercase();
-    if let Some(rest) = lower.strip_prefix("searxng:") {
-        let q = rest.trim();
-        if !q.is_empty() {
-            return Some(q.to_string());
-        }
-    }
-    if let Some(rest) = lower.strip_prefix("searx ") {
-        let q = rest.trim();
-        if !q.is_empty() {
-            return Some(q.to_string());
-        }
-    }
-    if let Some(rest) = lower.strip_prefix("search:") {
-        let q = rest.trim();
-        if !q.is_empty() {
-            return Some(q.to_string());
+    // Match the prefix ASCII-case-insensitively, then slice the query out of
+    // the original text so proper nouns and acronyms reach SearXNG intact.
+    // Comparing raw bytes also guarantees the split lands on a char boundary.
+    for prefix in ["searxng:", "searx ", "search:"] {
+        let Some(head) = t.as_bytes().get(..prefix.len()) else {
+            continue;
+        };
+        if head.eq_ignore_ascii_case(prefix.as_bytes()) {
+            let q = t.get(prefix.len()..).unwrap_or_default().trim();
+            if !q.is_empty() {
+                return Some(q.to_string());
+            }
         }
     }
     None
@@ -407,10 +402,8 @@ async fn check_a2a_bearer(
 /// everything mounts open, as before.
 pub fn router(app: Arc<AppState>, origin: String) -> Router {
     let token = goose::config::Config::global()
-        .get_goose_a2a_token()
-        .ok()
-        .flatten()
-        .filter(|t| !t.is_empty());
+        .get_text_param("GOOSE_A2A_TOKEN")
+        .filter(|t| !t.trim().is_empty());
 
     let handler = Arc::new(DefaultRequestHandler::new(
         GooseExecutor {

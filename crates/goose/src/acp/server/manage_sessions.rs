@@ -122,26 +122,23 @@ impl GooseAcpAgent {
         };
 
         if let Some(op) = persist_op {
-            let session = self
-                .session_manager
-                .get_session(&session_id, false)
-                .await
-                .internal_err()?;
-            let mut state = session.client_system_prompt.unwrap_or_default();
-            match op {
-                ClientSystemPromptOp::SetOverride(value) => state.override_text = value,
-                ClientSystemPromptOp::UpsertExtra(key, text) => {
-                    state.extras.insert(key, text);
-                }
-                ClientSystemPromptOp::RemoveExtra(key) => {
-                    state.extras.remove(&key);
-                }
-            }
-            let next = (!state.is_empty()).then_some(state);
+            // Atomic read-modify-write: a get-then-update here would let two
+            // concurrent append calls each write back a value built from its
+            // own stale read, silently dropping one caller's key.
             self.session_manager
-                .update(&session_id)
-                .client_system_prompt(next)
-                .apply()
+                .update_client_system_prompt(&session_id, move |current| {
+                    let mut state = current.unwrap_or_default();
+                    match op {
+                        ClientSystemPromptOp::SetOverride(value) => state.override_text = value,
+                        ClientSystemPromptOp::UpsertExtra(key, text) => {
+                            state.extras.insert(key, text);
+                        }
+                        ClientSystemPromptOp::RemoveExtra(key) => {
+                            state.extras.remove(&key);
+                        }
+                    }
+                    (!state.is_empty()).then_some(state)
+                })
                 .await
                 .internal_err()?;
         }

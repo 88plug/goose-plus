@@ -928,7 +928,7 @@ impl GooseAcpAgent {
             Arc::clone(&session_manager),
             Arc::clone(&permission_manager),
             Some(options.scheduler),
-            Config::global().get_goose_mode().unwrap_or_default(),
+            config.as_ref().get_goose_mode().unwrap_or_default(),
             options.disable_session_naming,
             options.goose_platform.clone(),
         );
@@ -1169,7 +1169,7 @@ impl GooseAcpAgent {
         mcp_servers: Vec<McpServer>,
         include_messages_on_reload: bool,
     ) -> Result<Session, agent_client_protocol::Error> {
-        let config = Config::global();
+        let config = self.config()?;
         let mut builder = self.session_manager.update(&session.id);
         let mut session_needs_update = false;
 
@@ -1468,7 +1468,8 @@ impl GooseAcpAgent {
             SessionUpdate::ToolCall(initial_tool_call),
         ))?;
 
-        if Config::global()
+        if self
+            .config()?
             .get_goose_disable_tool_call_summary()
             .unwrap_or(false)
         {

@@ -78,6 +78,8 @@ pub struct RecipeSettingsDto {
     pub temperature: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_turns: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_params: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]

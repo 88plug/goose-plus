@@ -330,6 +330,35 @@ else
   fi
 fi
 
+# Install the agent server daemon alongside the CLI. docs/nats.md and
+# docs/a2a.md tell users to run `goosed agent` for the NATS drive loop and the
+# A2A server, so it has to land on PATH too. Tolerate its absence so this
+# script still works against release archives built before goosed was shipped.
+if [ "$OS" = "windows" ]; then
+  DAEMON_OUT="goosed.exe"
+else
+  DAEMON_OUT="goosed"
+fi
+DAEMON_SRC="$EXTRACT_DIR/$DAEMON_OUT"
+
+if [ -f "$DAEMON_SRC" ]; then
+  chmod +x "$DAEMON_SRC"
+  echo "Moving goosed to $GOOSE_BIN_DIR/$DAEMON_OUT"
+  if [ -f "$GOOSE_BIN_DIR/$DAEMON_OUT" ]; then
+    mv "$GOOSE_BIN_DIR/$DAEMON_OUT" "$GOOSE_BIN_DIR/$DAEMON_OUT.old"
+    if ! mv "$DAEMON_SRC" "$GOOSE_BIN_DIR/$DAEMON_OUT"; then
+      echo "Error: failed to install goosed, restoring previous version"
+      mv "$GOOSE_BIN_DIR/$DAEMON_OUT.old" "$GOOSE_BIN_DIR/$DAEMON_OUT"
+      exit 1
+    fi
+    rm -f "$GOOSE_BIN_DIR/$DAEMON_OUT.old"
+  else
+    mv "$DAEMON_SRC" "$GOOSE_BIN_DIR/$DAEMON_OUT"
+  fi
+else
+  echo "Note: goosed is not present in this package; skipping it."
+fi
+
 # Copy Windows runtime DLLs if they exist
 if [ "$OS" = "windows" ]; then
   for dll in "$EXTRACT_DIR"/*.dll; do

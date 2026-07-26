@@ -7,6 +7,7 @@ on:
     tags:
       - 'v*.*.*'
       - 'v*.*.*-*'  # For pre-releases like v1.2.3-beta
+      - 'plus-v*'   # goose-plus fork releases (see release-plus.yml)
     paths-ignore:
       - 'documentation/**'
       - '*.md'
@@ -21,6 +22,20 @@ permissions:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The CLI image.
+          - image: goose
+            dockerfile: Dockerfile
+          # The headless agent server and browser UI referenced by
+          # docker-compose.yml; without these the compose stack can only ever
+          # be built locally, never pulled.
+          - image: goose-plus-goosed
+            dockerfile: Dockerfile.server
+          - image: goose-plus-web
+            dockerfile: Dockerfile.web
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -39,7 +54,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/goose
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             # For main branch: latest, main, and sha
             type=ref,event=branch
@@ -51,22 +66,27 @@ jobs:
             type=semver,pattern={{major}}
             # For pre-release tags: keep the full version
             type=raw,value={{tag}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # plus-v* is not semver-parseable, so tag it verbatim and move
+            # :latest — docker-compose.yml pins the :latest tag.
+            type=raw,value={{tag}},enable=${{ startsWith(github.ref, 'refs/tags/plus-v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/plus-v') }}
       
       - name: Build and push Docker image
         id: docker-push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # pin@v7.2.0
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           platforms: linux/amd64,linux/arm64
 
       - name: Attest Docker image
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32  # v4.1.0
         with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/goose
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           subject-digest: ${{ steps.docker-push.outputs.digest }}
           push-to-registry: true

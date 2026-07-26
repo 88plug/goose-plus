@@ -37,15 +37,25 @@ pub async fn claim_file(path: &str) -> Option<Guard> {
 
 /// Synchronous bridge for the developer tools, which mutate files from sync
 /// functions. Runs the async claim on the current Tokio runtime via
-/// `block_in_place` (the tools execute inside the agent's multi-threaded
-/// runtime). Returns `None` — proceed uncoordinated — when no coordinator is
-/// installed (e.g. the standalone `goose mcp developer` server) or when called
-/// outside a Tokio runtime. The claim is a fast no-op when coordination is
+/// `block_in_place`. Returns `None` — proceed uncoordinated — when no
+/// coordinator is installed (e.g. the standalone `goose mcp developer`
+/// server), when called outside a Tokio runtime, or when the current runtime
+/// is single-threaded. The claim is a fast no-op when coordination is
 /// disabled, so this stays cheap on the common path.
+///
+/// `block_in_place` *panics* on a current-thread runtime, so the flavor must be
+/// checked first: the tools normally run on the agent's multi-threaded runtime,
+/// but an embedder (or a `#[tokio::test]`, which defaults to current-thread)
+/// can drive them from a single-threaded one, and a file write must not panic
+/// there. Coordination is opt-in and best-effort throughout, so degrading to
+/// uncoordinated is the documented behavior for a claim we cannot acquire.
 pub fn claim_file_blocking(path: &str) -> Option<Guard> {
     let f = HOOK.get()?;
     let path = path.to_string();
     let handle = tokio::runtime::Handle::try_current().ok()?;
+    if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::CurrentThread {
+        return None;
+    }
     Some(tokio::task::block_in_place(move || {
         handle.block_on(f(path))
     }))

@@ -4,10 +4,12 @@
 
 use std::{
     collections::{HashMap, VecDeque},
+    num::NonZeroUsize,
     sync::Arc,
 };
 
 use anyhow::Result;
+use lru::LruCache;
 use serde_json::Value;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -23,12 +25,16 @@ const OUTBOUND_BROADCAST_CAPACITY: usize = 1024;
 const PRE_SUBSCRIBE_BUFFER_CAPACITY: usize = 1024;
 
 /// Caps outstanding request→route mappings; an unanswered request would
-/// otherwise leak its entry forever.
-const MAX_PENDING_ROUTES: usize = 4096;
+/// otherwise leak its entry forever. Past the cap the least-recently-used
+/// entry is evicted, so a leaked route never discards routes for requests that
+/// are still in flight.
+const MAX_PENDING_ROUTES: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
 
 /// Caps per-connection session streams; a peer fabricating `Acp-Session-Id`
-/// values could otherwise allocate streams without bound.
-const MAX_SESSION_STREAMS: usize = 4096;
+/// values could otherwise allocate streams without bound. Past the cap the
+/// least-recently-used stream is evicted rather than leaving every subsequent
+/// session permanently unroutable.
+const MAX_SESSION_STREAMS: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
 
 #[derive(Clone, Debug)]
 pub(crate) enum ResponseRoute {
@@ -88,9 +94,9 @@ pub(crate) struct Connection {
     pub router_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 
     connection_stream: Arc<OutboundStream>,
-    session_streams: Arc<RwLock<HashMap<String, Arc<OutboundStream>>>>,
+    session_streams: Arc<RwLock<LruCache<String, Arc<OutboundStream>>>>,
     all_outbound: Arc<OutboundStream>,
-    pending_routes: Arc<Mutex<HashMap<Value, ResponseRoute>>>,
+    pending_routes: Arc<Mutex<LruCache<Value, ResponseRoute>>>,
 }
 
 pub(crate) struct ConnectionRegistry {
@@ -132,9 +138,9 @@ impl ConnectionRegistry {
             agent_handle,
             router_handle: Mutex::new(None),
             connection_stream: Arc::new(OutboundStream::new()),
-            session_streams: Arc::new(RwLock::new(HashMap::new())),
+            session_streams: Arc::new(RwLock::new(LruCache::new(MAX_SESSION_STREAMS))),
             all_outbound: Arc::new(OutboundStream::new()),
-            pending_routes: Arc::new(Mutex::new(HashMap::new())),
+            pending_routes: Arc::new(Mutex::new(LruCache::new(MAX_PENDING_ROUTES))),
         });
 
         self.connections
@@ -211,7 +217,7 @@ impl Connection {
 
         if has_id && has_result_or_error {
             let id = v.get("id").cloned().unwrap_or(Value::Null);
-            let route = self.pending_routes.lock().await.remove(&id);
+            let route = self.pending_routes.lock().await.pop(&id);
             return match route {
                 Some(ResponseRoute::Session(sid)) => Target::Session(sid),
                 Some(ResponseRoute::Connection) | None => Target::Connection,
@@ -226,14 +232,14 @@ impl Connection {
             return;
         }
         let mut routes = self.pending_routes.lock().await;
-        if routes.len() >= MAX_PENDING_ROUTES {
+        // Bounded: inserting past the cap evicts only the least-recently-used
+        // (i.e. most likely leaked) entry, leaving in-flight routes intact.
+        if let Some(evicted) = routes.push(id, route) {
             warn!(
-                "Pending route table full ({} entries); clearing unanswered routes",
-                MAX_PENDING_ROUTES
+                "Pending route table full ({} entries); evicted stale route {}",
+                MAX_PENDING_ROUTES, evicted.0
             );
-            routes.clear();
         }
-        routes.insert(id, route);
     }
 
     pub async fn subscribe_connection_stream(&self) -> (Vec<String>, broadcast::Receiver<String>) {
@@ -244,7 +250,12 @@ impl Connection {
         &self,
         session_id: &str,
     ) -> Option<(Vec<String>, broadcast::Receiver<String>)> {
-        let stream = self.session_streams.read().await.get(session_id).cloned()?;
+        let stream = self
+            .session_streams
+            .read()
+            .await
+            .peek(session_id)
+            .cloned()?;
         Some(stream.subscribe_with_replay().await)
     }
 
@@ -253,19 +264,17 @@ impl Connection {
     }
 
     async fn get_or_create_session_stream(&self, session_id: &str) -> Arc<OutboundStream> {
-        if let Some(s) = self.session_streams.read().await.get(session_id) {
+        // Fast path: `peek` leaves recency untouched but avoids the write lock
+        // on the hot outbound-routing path.
+        if let Some(s) = self.session_streams.read().await.peek(session_id) {
             return s.clone();
         }
-        let mut w = self.session_streams.write().await;
-        if !w.contains_key(session_id) && w.len() >= MAX_SESSION_STREAMS {
-            warn!(
-                "Session stream table full ({} entries); refusing new session id",
-                MAX_SESSION_STREAMS
-            );
-            return Arc::new(OutboundStream::new());
-        }
-        w.entry(session_id.to_string())
-            .or_insert_with(|| Arc::new(OutboundStream::new()))
+        // Past the cap this evicts the least-recently-used stream rather than
+        // handing back an uncached one, which no subscriber could ever reach.
+        self.session_streams
+            .write()
+            .await
+            .get_or_insert(session_id.to_string(), || Arc::new(OutboundStream::new()))
             .clone()
     }
 
@@ -315,9 +324,9 @@ mod tests {
             agent_handle,
             router_handle: Mutex::new(None),
             connection_stream: Arc::new(OutboundStream::new()),
-            session_streams: Arc::new(RwLock::new(HashMap::new())),
+            session_streams: Arc::new(RwLock::new(LruCache::new(MAX_SESSION_STREAMS))),
             all_outbound: Arc::new(OutboundStream::new()),
-            pending_routes: Arc::new(Mutex::new(HashMap::new())),
+            pending_routes: Arc::new(Mutex::new(LruCache::new(MAX_PENDING_ROUTES))),
         });
 
         (connection, from_agent_tx)

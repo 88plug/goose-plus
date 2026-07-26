@@ -18,7 +18,9 @@
 use crate::config::Config;
 use async_nats::jetstream;
 use serde_json::json;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock, Mutex, Weak};
 use std::time::Duration;
 use tokio::sync::OnceCell;
 
@@ -29,32 +31,22 @@ pub const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(60);
 pub const FILE_CLAIM_MAX_WAIT: Duration = Duration::from_secs(5);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Truthy parse for opt-in env flags (`1`/`true`/`yes`/`on`).
-fn truthy(raw: &str) -> bool {
-    matches!(
-        raw.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
-}
+/// Claims currently held by this process, keyed by KV key. A second claim on a
+/// resource this process already holds shares the same [`Active`] (and so the
+/// same KV entry and heartbeat) instead of getting an untracked no-op lease;
+/// the entry is released only when the last holder drops.
+static LOCAL_CLAIMS: LazyLock<Mutex<HashMap<String, Weak<Active>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Coordination is on only when NATS is configured AND `GOOSE_NATS_COORD` is
-/// truthy. Read the env var raw (the shared config parser coerces `"1"` to a
-/// number, which then fails to deserialize as bool/String).
+/// truthy in either the environment or config.yaml.
 fn coord_enabled() -> bool {
     let config = Config::global();
     let url_ok = config
-        .get_param::<String>("GOOSE_NATS_URL")
+        .get_text_param("GOOSE_NATS_URL")
         .map(|u| !u.trim().is_empty())
         .unwrap_or(false);
-    if !url_ok {
-        return false;
-    }
-    if let Ok(raw) = std::env::var("GOOSE_NATS_COORD") {
-        return truthy(&raw);
-    }
-    config
-        .get_param::<bool>("GOOSE_NATS_COORD")
-        .unwrap_or(false)
+    url_ok && config.get_flag("GOOSE_NATS_COORD")
 }
 
 struct Coordinator {
@@ -147,10 +139,11 @@ async fn init_coordinator() -> Option<Arc<Coordinator>> {
     }))
 }
 
-/// A held claim. Dropping (or `release`) frees the resource for other instances.
-/// A no-op lease (coordination off / degraded / re-entrant) does nothing on drop.
+/// A held claim. Dropping (or `release`) frees the resource for other instances
+/// once the last holder in this process is done with it. A no-op lease
+/// (coordination off / degraded) does nothing on drop.
 pub struct Lease {
-    inner: Option<Active>,
+    inner: Option<Arc<Active>>,
 }
 
 struct Active {
@@ -158,6 +151,35 @@ struct Active {
     key: String,
     resource: String,
     heartbeat: tokio::task::JoinHandle<()>,
+    released: AtomicBool,
+}
+
+impl Active {
+    /// Claim the right to release, exactly once across `release()` and `Drop`.
+    /// Returns the pieces needed to delete the KV entry, or `None` if another
+    /// path already took ownership of the release.
+    fn take_release(&self) -> Option<(Arc<Coordinator>, String, String)> {
+        if self.released.swap(true, Ordering::AcqRel) {
+            return None;
+        }
+        self.heartbeat.abort();
+        if let Ok(mut claims) = LOCAL_CLAIMS.lock() {
+            claims.remove(&self.key);
+        }
+        Some((self.coord.clone(), self.key.clone(), self.resource.clone()))
+    }
+}
+
+/// Fires when the *last* holder of a shared claim drops it.
+impl Drop for Active {
+    fn drop(&mut self) {
+        if let Some((coord, key, resource)) = self.take_release() {
+            tokio::spawn(async move {
+                let _ = coord.store.delete(&key).await;
+                coord.publish("coord.release", &resource);
+            });
+        }
+    }
 }
 
 impl Lease {
@@ -165,53 +187,74 @@ impl Lease {
         Lease { inner: None }
     }
 
-    fn active(coord: Arc<Coordinator>, key: String, resource: String) -> Self {
+    fn active(coord: Arc<Coordinator>, key: String, resource: String, revision: u64) -> Self {
         let c = coord.clone();
         let k = key.clone();
         let interval = (coord.ttl / 2).max(Duration::from_secs(1));
         let heartbeat = tokio::spawn(async move {
             let mut tick = tokio::time::interval(interval);
             tick.tick().await; // first tick is immediate
+            let mut revision = revision;
             loop {
                 tick.tick().await;
                 let value =
                     json!({ "instance": c.instance, "ts": chrono::Utc::now().to_rfc3339() });
-                if let Ok(b) = serde_json::to_vec(&value) {
-                    let _ = c.store.put(&k, bytes::Bytes::from(b)).await;
+                let Ok(b) = serde_json::to_vec(&value) else {
+                    continue;
+                };
+                // Renew against the revision we last wrote. A plain `put` would
+                // silently overwrite whoever re-claimed the key after our lease
+                // expired (heartbeat stalled past the TTL); the compare-and-set
+                // fails instead, and we stop renewing a claim we no longer hold.
+                match c.store.update(&k, bytes::Bytes::from(b), revision).await {
+                    Ok(next) => revision = next,
+                    Err(e) => {
+                        tracing::warn!(
+                            "nats coord: lost claim on '{}' ({}); stopping heartbeat",
+                            k,
+                            e
+                        );
+                        return;
+                    }
                 }
             }
         });
-        Lease {
-            inner: Some(Active {
-                coord,
-                key,
-                resource,
-                heartbeat,
-            }),
+        let active = Arc::new(Active {
+            coord,
+            key: key.clone(),
+            resource,
+            heartbeat,
+            released: AtomicBool::new(false),
+        });
+        if let Ok(mut claims) = LOCAL_CLAIMS.lock() {
+            claims.insert(key, Arc::downgrade(&active));
         }
+        Lease {
+            inner: Some(active),
+        }
+    }
+
+    /// Share a claim this process already holds, if it is still live.
+    fn share(key: &str) -> Option<Self> {
+        let claims = LOCAL_CLAIMS.lock().ok()?;
+        let active = claims.get(key)?.upgrade()?;
+        Some(Lease {
+            inner: Some(active),
+        })
     }
 
     /// Explicitly release the claim (also happens on drop, best-effort).
+    /// A no-op while another holder of the same claim is still alive.
     pub async fn release(mut self) {
-        if let Some(a) = self.inner.take() {
-            a.heartbeat.abort();
-            let _ = a.coord.store.delete(&a.key).await;
-            a.coord.publish("coord.release", &a.resource);
+        let Some(active) = self.inner.take() else {
+            return;
+        };
+        if Arc::strong_count(&active) > 1 {
+            return;
         }
-    }
-}
-
-impl Drop for Lease {
-    fn drop(&mut self) {
-        if let Some(a) = self.inner.take() {
-            a.heartbeat.abort();
-            let coord = a.coord;
-            let key = a.key;
-            let resource = a.resource;
-            tokio::spawn(async move {
-                let _ = coord.store.delete(&key).await;
-                coord.publish("coord.release", &resource);
-            });
+        if let Some((coord, key, resource)) = active.take_release() {
+            let _ = coord.store.delete(&key).await;
+            coord.publish("coord.release", &resource);
         }
     }
 }
@@ -237,12 +280,26 @@ pub async fn claim(resource: &str) -> Option<Lease> {
     let body = bytes::Bytes::from(serde_json::to_vec(&value).unwrap_or_default());
 
     match tokio::time::timeout(CONNECT_TIMEOUT, coord.store.create(&key, body)).await {
-        Ok(Ok(_)) => {
+        Ok(Ok(revision)) => {
             coord.publish("coord.claim", resource);
-            Some(Lease::active(coord.clone(), key, resource.to_string()))
+            Some(Lease::active(
+                coord.clone(),
+                key,
+                resource.to_string(),
+                revision,
+            ))
         }
         Ok(Err(_)) => {
-            // Key exists — held. Re-entrant if it's our own instance.
+            // Key exists. If this process still holds it, hand back a share of
+            // that same claim so the KV entry outlives the first holder's drop
+            // — a no-op lease here would let the entry be deleted while this
+            // caller is still mutating the resource.
+            if let Some(shared) = Lease::share(&key) {
+                return Some(shared);
+            }
+            // No live local holder. If the entry is nonetheless ours it is a
+            // stale leftover (e.g. a delete that has not landed yet), so grant
+            // rather than stall the turn on a resource nobody is holding.
             if let Ok(Ok(Some(entry))) =
                 tokio::time::timeout(CONNECT_TIMEOUT, coord.store.get(&key)).await
             {
@@ -304,10 +361,10 @@ mod tests {
     #[test]
     fn truthy_matches_conventional_spellings() {
         for v in ["1", "true", "TRUE", " yes ", "on"] {
-            assert!(truthy(v), "{v:?} should be truthy");
+            assert!(Config::flag_is_truthy(v), "{v:?} should be truthy");
         }
         for v in ["0", "false", "no", "off", "", "2"] {
-            assert!(!truthy(v), "{v:?} should not be truthy");
+            assert!(!Config::flag_is_truthy(v), "{v:?} should not be truthy");
         }
     }
 

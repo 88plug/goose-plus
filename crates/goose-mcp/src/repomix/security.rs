@@ -113,8 +113,8 @@ mod tests {
         // Fake, non-functional key shaped like a real one; split so the contiguous
         // pattern never appears in source (avoids secret-scanner false positives).
         let content = format!(
-            "OPENAI_API_KEY={}\n",
-            format!("sk-proj-{}", "aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890")
+            "OPENAI_API_KEY=sk-proj-{}\n",
+            "aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890"
         );
         assert!(detect_secret(&content).is_some());
     }

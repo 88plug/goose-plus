@@ -1129,19 +1129,24 @@ async fn read_resource(
         .next()
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let (uri, mime_type, text, meta) = match content {
+    // Blob resources carry base64; decode them so clients (e.g. McpAppRenderer,
+    // which renders this field directly) get the real content rather than the
+    // literal base64 string.
+    let text = goose::mcp_utils::extract_text_from_resource(&content);
+
+    let (uri, mime_type, meta) = match content {
         ResourceContents::TextResourceContents {
             uri,
             mime_type,
-            text,
             meta,
-        } => (uri, mime_type, text, meta),
+            ..
+        } => (uri, mime_type, meta),
         ResourceContents::BlobResourceContents {
             uri,
             mime_type,
-            blob,
             meta,
-        } => (uri, mime_type, blob, meta),
+            ..
+        } => (uri, mime_type, meta),
     };
 
     let meta_map = meta.map(|m| m.0);

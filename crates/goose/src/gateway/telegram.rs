@@ -164,7 +164,7 @@ impl TelegramGateway {
                         .post(self.api_url("sendMessage"))
                         .json(&serde_json::json!({
                             "chat_id": chat_id,
-                            "text": chunk,
+                            "text": super::telegram_format::telegram_html_to_plain(&chunk),
                         }))
                         .send()
                         .await?;

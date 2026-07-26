@@ -11,13 +11,13 @@ use axum::{
         ws::{rejection::WebSocketUpgradeRejection, WebSocketUpgrade},
         State,
     },
-    http::{header, HeaderName, HeaderValue, Method, Request},
+    http::{header, HeaderName, Method, Request},
     response::Response,
     routing::{delete, get, post},
     Router,
 };
 use serde_json::Value;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::acp::server_factory::AcpServer;
 
@@ -97,18 +97,11 @@ async fn health() -> &'static str {
 
 fn acp_cors_layer() -> CorsLayer {
     CorsLayer::new()
-        .allow_origin([
-            HeaderValue::from_static("http://localhost:3284"),
-            HeaderValue::from_static("http://127.0.0.1:3284"),
-            HeaderValue::from_static("http://localhost"),
-            HeaderValue::from_static("http://127.0.0.1"),
-            HeaderValue::from_static("http://[::1]"),
-            HeaderValue::from_static("https://localhost:3284"),
-            HeaderValue::from_static("https://127.0.0.1:3284"),
-            HeaderValue::from_static("https://localhost"),
-            HeaderValue::from_static("https://127.0.0.1"),
-            HeaderValue::from_static("https://[::1]"),
-        ])
+        // Same loopback rule as the WebSocket upgrade check, so both transports
+        // agree and neither is pinned to the default port.
+        .allow_origin(AllowOrigin::predicate(|origin, _parts| {
+            origin.to_str().is_ok_and(websocket::origin_is_local)
+        }))
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_headers([
             header::CONTENT_TYPE,

@@ -116,7 +116,7 @@ impl HandleDispatchFrom<Client> for GooseAcpHandler {
                             let t_handler = std::time::Instant::now();
                             match config_id.as_ref() {
                                 "provider" => {
-                                    Config::global().invalidate_secrets_cache();
+                                    agent.config()?.invalidate_secrets_cache();
                                     match agent.update_provider(&session_id.0, &value_id.0, model_name.as_deref(), None, None).await {
                                         Ok(_) => {}
                                         Err(e) => { responder.respond_with_error(e)?; return Ok(()); }
