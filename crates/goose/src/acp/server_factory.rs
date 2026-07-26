@@ -54,8 +54,13 @@ impl AcpServer {
     }
 
     pub async fn create_agent(&self) -> Result<Arc<GooseAcpAgent>> {
-        let config = crate::config::Config::global();
-        let disable_session_naming = config.get_goose_disable_session_naming().unwrap_or(false);
+        // Read from this server's own config dir, matching the agent it builds;
+        // the process-wide config belongs to a different (default) directory.
+        let config = crate::config::Config::for_config_dir(self.config.config_dir.clone())?;
+        let disable_session_naming = config
+            .as_ref()
+            .get_goose_disable_session_naming()
+            .unwrap_or(false);
         let scheduler = self.scheduler().await?;
 
         let provider_factory: AcpProviderFactory = Arc::new(

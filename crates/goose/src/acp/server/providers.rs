@@ -641,7 +641,7 @@ impl GooseAcpAgent {
                 .data(format!("Provider is not editable: {}", req.provider_id)));
         }
 
-        if Config::global().get_goose_provider().ok().as_deref() == Some(req.provider_id.as_str()) {
+        if self.config()?.get_goose_provider().ok().as_deref() == Some(req.provider_id.as_str()) {
             return Err(agent_client_protocol::Error::invalid_params().data(format!(
                 "Cannot delete active provider: {}",
                 req.provider_id
@@ -816,7 +816,7 @@ impl GooseAcpAgent {
         let entry = crate::providers::get_from_registry(&req.provider_id)
             .await
             .invalid_params_err_ctx("Unknown provider")?;
-        let config = Config::global();
+        let config = self.config()?;
         let config_keys = &entry.metadata().config_keys;
         let secrets = if config_keys.iter().any(|key| key.secret) {
             Some(config.all_secrets().internal_err()?)
@@ -849,7 +849,7 @@ impl GooseAcpAgent {
             .await
             .invalid_params_err_ctx("Unknown provider")?;
         let metadata = entry.metadata().clone();
-        let config = Config::global();
+        let config = self.config()?;
         let mut config_updates = Vec::new();
         let mut secret_updates = Vec::new();
 
@@ -904,7 +904,7 @@ impl GooseAcpAgent {
             .await
             .invalid_params_err_ctx("Unknown provider")?;
         let metadata = entry.metadata().clone();
-        let config = Config::global();
+        let config = self.config()?;
         let mut secret_keys = Vec::new();
 
         for config_key in &metadata.config_keys {

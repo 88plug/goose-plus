@@ -74,6 +74,10 @@ impl GooseAcpAgent {
     ) -> Result<EmptyResponse, agent_client_protocol::Error> {
         let conversion = goose_extension_to_config(req.extension)?;
 
+        // NOTE: deliberately the process-wide config, not `self.config()`.
+        // `crate::config::extensions::set_extension` below is global-only, so
+        // writing the secrets per-agent would split an extension entry and its
+        // secrets across two config files. Both move together or neither does.
         Config::global()
             .set_secret_values(&conversion.secret_updates)
             .internal_err_ctx("Failed to save extension env secrets")?;
@@ -119,9 +123,11 @@ impl GooseAcpAgent {
             .await
             .internal_err()?;
 
+        // Global for the same reason as `on_add_config_extension`: the
+        // extension store this reads is written globally.
         let extensions = EnabledExtensionsState::extensions_or_default(
             Some(&session.extension_data),
-            crate::config::Config::global(),
+            Config::global(),
         );
 
         let extensions = extensions

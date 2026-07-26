@@ -28,6 +28,12 @@ impl GooseAcpAgent {
         args: NewSessionRequest,
     ) -> Result<NewSessionResponse, agent_client_protocol::Error> {
         validate_absolute_cwd(&args.cwd)?;
+        // NOTE: deliberately the process-wide config, not `self.config()`.
+        // `run_new_session_uses_current_config_mode` asserts a new session
+        // picks up a GOOSE_MODE written to the global config after this agent
+        // was constructed, so routing this through the per-agent config would
+        // change documented behavior. Left as-is pending a decision on which
+        // config should own session mode.
         let config = Config::global();
         let project_id = meta_string(args.meta.as_ref(), "projectId")?;
         let session_type = match meta_string(args.meta.as_ref(), "client")? {

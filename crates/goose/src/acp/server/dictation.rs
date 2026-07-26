@@ -20,7 +20,7 @@ impl GooseAcpAgent {
         req: DictationTranscribeRequest,
     ) -> Result<DictationTranscribeResponse, agent_client_protocol::Error> {
         use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-        let config = crate::config::Config::global();
+        let config = self.config()?;
 
         #[cfg(not(feature = "local-inference"))]
         if req.provider == "local" {
@@ -85,7 +85,7 @@ impl GooseAcpAgent {
         &self,
         _req: DictationConfigRequest,
     ) -> Result<DictationConfigResponse, agent_client_protocol::Error> {
-        let config = crate::config::Config::global();
+        let config = self.config()?;
         let mut providers = std::collections::HashMap::new();
 
         for def in all_providers() {
@@ -135,7 +135,7 @@ impl GooseAcpAgent {
         let key = dictation_secret_config_key(provider)?;
         let config = self.config()?;
         config.set_secret(key, &req.value).internal_err()?;
-        Config::global().invalidate_secrets_cache();
+        config.invalidate_secrets_cache();
         Ok(EmptyResponse {})
     }
 
@@ -147,7 +147,7 @@ impl GooseAcpAgent {
         let key = dictation_secret_config_key(provider)?;
         let config = self.config()?;
         config.delete_secret(key).internal_err()?;
-        Config::global().invalidate_secrets_cache();
+        config.invalidate_secrets_cache();
         Ok(EmptyResponse {})
     }
 
@@ -195,6 +195,9 @@ impl GooseAcpAgent {
             })?;
             let manager = get_download_manager();
             let model_id_for_config = model.id.to_string();
+            // Clone the handle into the 'static completion callback so it
+            // writes this agent's config rather than the process-wide one.
+            let config_handle = self.config.clone();
 
             manager
                 .download_model(
@@ -202,7 +205,7 @@ impl GooseAcpAgent {
                     model.url.to_string(),
                     model.local_path(),
                     Some(Box::new(move || {
-                        let config = crate::config::Config::global();
+                        let config = config_handle.as_ref();
                         // Only auto-select this model if the user has no model
                         // currently selected. This prevents silently switching
                         // the active model mid-session when a user downloads an
@@ -347,9 +350,7 @@ impl GooseAcpAgent {
             }
         };
 
-        crate::config::Config::global()
-            .set_param(key, req.model_id)
-            .internal_err()?;
+        self.config()?.set_param(key, req.model_id).internal_err()?;
 
         Ok(EmptyResponse {})
     }
