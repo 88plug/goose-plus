@@ -57,7 +57,7 @@ export const findGoosedBinaryPath = (options: FindBinaryOptions = {}): string =>
     }
   }
   const { isPackaged = false, resourcesPath } = options;
-  const binaryName = process.platform === 'win32' ? 'goosed.exe' : 'goosed';
+  const binaryName = process.platform === 'win32' ? 'goosed-plus.exe' : 'goosed-plus';
 
   const possiblePaths: string[] = [];
 

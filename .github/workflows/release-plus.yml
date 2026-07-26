@@ -174,7 +174,7 @@ jobs:
     secrets: inherit
 
   # Browser/web build of the desktop UI (ui/desktop/src/web shim + Vite). Shipped
-  # as goose-web-<tag>.zip so self-hosters can serve it against a goosed backend
+  # as goose-web-<tag>.zip so self-hosters can serve it against a goosed-plus backend
   # (matched by the goose-*.zip release glob below).
   bundle-web:
     needs: [preflight, prepare-version]
@@ -280,11 +280,10 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: |
-            goose-*.tar.bz2
-            goose-*.tar.gz
-            goose-*.zip
-            Goose*.zip
+            goose-plus-*.tar.bz2
+            goose-plus-*.tar.gz
             goose-plus*.zip
+            goose-web-*.zip
             *.deb
             *.rpm
             *.AppImage
@@ -297,11 +296,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: |
-            goose-*.tar.bz2
-            goose-*.tar.gz
-            goose-*.zip
-            Goose*.zip
+            goose-plus-*.tar.bz2
+            goose-plus-*.tar.gz
             goose-plus*.zip
+            goose-web-*.zip
             *.deb
             *.rpm
             *.AppImage
@@ -338,11 +336,10 @@ jobs:
           name: Stable (goose-plus)
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: |
-            goose-*.tar.bz2
-            goose-*.tar.gz
-            goose-*.zip
-            Goose*.zip
+            goose-plus-*.tar.bz2
+            goose-plus-*.tar.gz
             goose-plus*.zip
+            goose-web-*.zip
             *.deb
             *.rpm
             *.AppImage

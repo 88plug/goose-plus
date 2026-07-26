@@ -10,11 +10,11 @@
 # Local model inference is not included in this image (see Dockerfile.server);
 # use a cloud provider via GOOSE_PROVIDER / GOOSE_MODEL.
 services:
-  goosed:
+  goosed-plus:
     build:
       context: .
       dockerfile: Dockerfile.server
-    image: ghcr.io/88plug/goose-plus-goosed:latest
+    image: ghcr.io/88plug/goose-plus-server:latest
     ports:
       - "${GOOSE_PORT:-3000}:3000"
     environment:
@@ -50,5 +50,5 @@ services:
       GOOSE_API_HOST: ${GOOSE_API_HOST:-http://localhost:3000}
       GOOSE_SERVER__SECRET_KEY: "${GOOSE_SERVER__SECRET_KEY:?set GOOSE_SERVER__SECRET_KEY first}"
     depends_on:
-      - goosed
+      - goosed-plus
     restart: unless-stopped

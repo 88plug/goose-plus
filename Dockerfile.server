@@ -30,7 +30,7 @@ COPY . .
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 # rust-toolchain.toml pins the exact channel; no local-inference keeps llama-cpp
 # (and its C++ toolchain + image weight) out of the server image.
-RUN cargo build --release -p goose-server --bin goosed \
+RUN cargo build --release -p goose-server --bin goosed-plus \
     --no-default-features --features rustls-tls
 
 # ---- runtime stage ----------------------------------------------------------
@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/goosed /usr/local/bin/goosed
+COPY --from=builder /build/target/release/goosed-plus /usr/local/bin/goosed-plus
 
 RUN useradd -m -u 1000 -s /bin/bash goose
 USER goose
@@ -56,10 +56,10 @@ ENV GOOSE_HOST=0.0.0.0 \
 EXPOSE 3000
 
 # GOOSE_SERVER__SECRET_KEY must be supplied at runtime (compose generates/forwards one).
-ENTRYPOINT ["goosed"]
+ENTRYPOINT ["goosed-plus"]
 CMD ["agent"]
 
-LABEL org.opencontainers.image.title="goosed" \
+LABEL org.opencontainers.image.title="goosed-plus" \
       org.opencontainers.image.description="goose agent server (headless HTTP API)" \
       org.opencontainers.image.vendor="88plug" \
       org.opencontainers.image.source="https://github.com/88plug/goose-plus"

@@ -100,7 +100,7 @@ jobs:
 
       - name: Copy binaries into Electron folder
         run: |
-          cp target/x86_64-apple-darwin/release/goosed ui/desktop/src/bin/goosed
+          cp target/x86_64-apple-darwin/release/goosed-plus ui/desktop/src/bin/goosed-plus
 
       - name: Cache pnpm dependencies
         uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8  # v6.0.0
@@ -117,7 +117,7 @@ jobs:
         working-directory: ui/desktop
 
       # Intel arch is selected by `bundle:intel` (electron-forge `make --arch=x64`,
-      # plus the goosed binary cross-compiled to x86_64-apple-darwin above). No
+      # plus the goosed-plus binary cross-compiled to x86_64-apple-darwin above). No
       # electron-builder config is involved — this project uses electron-forge.
 
       - name: Import Apple signing certificate
