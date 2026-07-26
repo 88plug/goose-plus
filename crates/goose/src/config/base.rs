@@ -833,6 +833,48 @@ impl Config {
         }
     }
 
+    /// Accept the conventional truthy spellings for an opt-in flag.
+    pub fn flag_is_truthy(raw: &str) -> bool {
+        matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    }
+
+    /// Read an opt-in boolean flag from either the environment or the config
+    /// file, accepting `1`/`true`/`yes`/`on` in both.
+    ///
+    /// [`Self::parse_env_value`] coerces a raw `1` into a number, and YAML does
+    /// the same for a bare `1` in config.yaml, so a plain `get_param::<bool>`
+    /// fails on the conventional `GOOSE_X=1` from *either* source and silently
+    /// leaves the feature off.
+    pub fn get_flag(&self, key: &str) -> bool {
+        if let Ok(raw) = env::var(key.to_uppercase()) {
+            return Self::flag_is_truthy(&raw);
+        }
+        if let Ok(value) = self.get_param::<bool>(key) {
+            return value;
+        }
+        self.get_text_param(key)
+            .map(|raw| Self::flag_is_truthy(&raw))
+            .unwrap_or(false)
+    }
+
+    /// Read a scalar parameter as text, tolerating that same numeric coercion:
+    /// an all-digit value (a numeric token or PIN) parses as a number, so
+    /// `get_param::<String>` fails on it and callers see "unset".
+    pub fn get_text_param(&self, key: &str) -> Option<String> {
+        if let Ok(raw) = env::var(key.to_uppercase()) {
+            return Some(raw);
+        }
+        match self.load().ok()?.get(key)? {
+            serde_yaml::Value::String(s) => Some(s.clone()),
+            serde_yaml::Value::Number(n) => Some(n.to_string()),
+            serde_yaml::Value::Bool(b) => Some(b.to_string()),
+            _ => None,
+        }
+    }
+
     /// Read-modify-write a configuration value atomically through the write path.
     pub fn update_param<T, V, F>(&self, key: &str, f: F) -> Result<(), ConfigError>
     where

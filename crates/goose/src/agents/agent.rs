@@ -1475,9 +1475,7 @@ impl Agent {
         }
 
         if (extension_name.is_none() || extension_name.as_deref() == Some("platform"))
-            && crate::config::Config::global()
-                .get_param::<bool>("GOOSE_A2A_CLIENT_ENABLE")
-                .unwrap_or(false)
+            && crate::config::Config::global().get_flag("GOOSE_A2A_CLIENT_ENABLE")
         {
             prefixed_tools.push(platform_tools::a2a_call_remote_agent_tool());
         }

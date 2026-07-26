@@ -21,25 +21,12 @@ fn boot_marker(message: &str) {
     eprintln!("GOOSED_BOOT: {message}");
 }
 
-fn is_truthy(raw: &str) -> bool {
-    matches!(
-        raw.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
-}
-
-/// Read an opt-in env flag tolerantly. The shared `get_param` coerces a raw
-/// `"1"` into a JSON number, so `get_param::<bool>` AND `get_param::<String>`
-/// both fail on the conventional `GOOSE_X=1` — silently disabling the feature.
-/// Read the env var raw so the usual truthy spellings work, falling back to a
-/// config-file bool when the var is unset.
+/// Read an opt-in flag tolerantly from the environment or config.yaml. The
+/// shared `get_param` coerces a raw `"1"` into a number in both sources, so a
+/// plain `get_param::<bool>` silently disables the feature; `get_flag` accepts
+/// the conventional truthy spellings from either.
 fn env_flag_enabled(key: &str) -> bool {
-    if let Ok(raw) = std::env::var(key.to_ascii_uppercase()) {
-        return is_truthy(&raw);
-    }
-    goose::config::Config::global()
-        .get_param::<bool>(key)
-        .unwrap_or(false)
+    goose::config::Config::global().get_flag(key)
 }
 
 #[cfg(unix)]
@@ -284,19 +271,19 @@ fn spawn_nats_drive_loop(app_state: Arc<state::AppState>) {
 
 #[cfg(test)]
 mod tests {
-    use super::is_truthy;
+    use goose::config::Config;
 
     #[test]
     fn truthy_accepts_conventional_spellings() {
         for v in ["1", "true", "TRUE", " yes ", "on", "On"] {
-            assert!(is_truthy(v), "{v:?} should be truthy");
+            assert!(Config::flag_is_truthy(v), "{v:?} should be truthy");
         }
     }
 
     #[test]
     fn truthy_rejects_falsey_and_garbage() {
         for v in ["0", "false", "no", "off", "", "2", "enable"] {
-            assert!(!is_truthy(v), "{v:?} should not be truthy");
+            assert!(!Config::flag_is_truthy(v), "{v:?} should not be truthy");
         }
     }
 }
