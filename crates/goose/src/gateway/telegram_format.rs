@@ -109,6 +109,54 @@ fn escape_html(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Convert generated Telegram HTML back to plain text for the fallback path
+/// used when Telegram rejects a chunk's markup. Strips the tags this module
+/// emits and reverses [`escape_html`], so the fallback never shows literal
+/// `<b>` or `&amp;`. Anchor destinations are kept, since a plain-text message
+/// that silently dropped its links would lose information.
+pub fn telegram_html_to_plain(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut tag = String::new();
+    let mut in_tag = false;
+    let mut pending_href: Option<String> = None;
+
+    for c in html.chars() {
+        match c {
+            '<' => {
+                in_tag = true;
+                tag.clear();
+            }
+            '>' if in_tag => {
+                in_tag = false;
+                if let Some(href) = tag
+                    .strip_prefix("a href=\"")
+                    .and_then(|h| h.strip_suffix('"'))
+                {
+                    pending_href = Some(href.to_string());
+                } else if tag == "/a" {
+                    if let Some(href) = pending_href.take() {
+                        if !out.ends_with(&href) {
+                            out.push_str(" (");
+                            out.push_str(&href);
+                            out.push(')');
+                        }
+                    }
+                }
+            }
+            // A chunk boundary can cut a tag in half; its partial content stays
+            // buffered in `tag` and is simply dropped.
+            _ if in_tag => tag.push(c),
+            _ => out.push(c),
+        }
+    }
+
+    // `&amp;` last so an escaped `&amp;lt;` does not decode into `<`.
+    out.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&amp;", "&")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,6 +239,32 @@ mod tests {
     #[test]
     fn strikethrough() {
         assert_eq!(markdown_to_telegram_html("~~deleted~~"), "<s>deleted</s>");
+    }
+
+    #[test]
+    fn html_to_plain_strips_tags_and_unescapes() {
+        let html = markdown_to_telegram_html("**bold** and 1 < 2 & 3");
+        assert_eq!(telegram_html_to_plain(&html), "bold and 1 < 2 & 3");
+    }
+
+    #[test]
+    fn html_to_plain_keeps_link_destination() {
+        let html = markdown_to_telegram_html("[docs](https://example.com/a?x=1&y=2)");
+        assert_eq!(
+            telegram_html_to_plain(&html),
+            "docs (https://example.com/a?x=1&y=2)"
+        );
+    }
+
+    #[test]
+    fn html_to_plain_does_not_duplicate_bare_url() {
+        let html = "<a href=\"https://example.com\">https://example.com</a>";
+        assert_eq!(telegram_html_to_plain(html), "https://example.com");
+    }
+
+    #[test]
+    fn html_to_plain_tolerates_tag_cut_by_chunk_boundary() {
+        assert_eq!(telegram_html_to_plain("done <b"), "done ");
     }
 
     #[test]
