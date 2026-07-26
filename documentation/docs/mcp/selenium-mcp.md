@@ -17,7 +17,7 @@ This tutorial covers how to add the [Selenium MCP Server](https://github.com/ang
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=%40angiejones%2Fmcp-selenium&id=selenium-mcp&name=Selenium%20MCP&description=automates%20browser%20interactions)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=%40angiejones%2Fmcp-selenium&id=selenium-mcp&name=Selenium%20MCP&description=automates%20browser%20interactions)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

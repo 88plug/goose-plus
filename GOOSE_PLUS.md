@@ -29,7 +29,7 @@ So goose-plus is two things at once:
 | **Web search** | Whatever single engine the model picks | searxng-mcp: 8 verified free providers **always run in full parallel**, HTML fallback + merge, live MCP progress/logging per provider, optional FlareSolverr last-resort fallback |
 | **Codebase packing (repomix-mcp)** | Manual `npx repomix` outside the agent | Native in-agent extension (`pack_codebase`/`pack_remote_repository`/`grep_repomix_output`/etc.), auto-installing `repomix` via npm if missing |
 | **Terminal UI** | Node/Ink shim (`node`/`npx` subprocess) | Native Rust TUI (ratatui + crossterm) talking to the agent directly over ACP |
-| **Headless/self-hosted deployment** | Electron desktop or CLI only | Dockerized headless `goosed` API server, a browser/web build of the desktop UI, and a `docker-compose` one-liner for both |
+| **Headless/self-hosted deployment** | Electron desktop or CLI only | Dockerized headless `goosed-plus` API server, a browser/web build of the desktop UI, and a `docker-compose` one-liner for both |
 | **First-prompt latency** | Cold system-prompt + tool-schema build every session | Startup pre-warming cuts first-token latency ~60% (measured 1003ms→842ms); platform extensions polled concurrently instead of serially |
 | **Dependencies** | Mixed freshness | Kept current via the `use-latest-version` pipeline; lockfiles consistent |
 | **Lint/format gate** | Default-feature clippy | Every crate inherits workspace lints; prettier wired into the gate; feature-gated code covered |
@@ -53,7 +53,7 @@ Full diff: **[compare main…goose-plus](https://github.com/88plug/goose-plus/co
 - **repomix-mcp codebase packing** — repomix's `pack_codebase`/`pack_remote_repository`/`grep_repomix_output`/etc. embedded as a native in-agent extension (not just documented as an external MCP server), auto-installing `repomix` via npm the same way `computercontroller` auto-installs peekaboo via Homebrew. See [`docs/repomix-mcp/README.md`](docs/repomix-mcp/README.md).
 - **Native Rust TUI** — `goose tui` is now a real terminal UI (ratatui + crossterm over ACP), replacing the old Node/Ink subprocess shim.
 - **Opt-in path confinement** — `GOOSE_CONFINEMENT=true` confines the developer extension's write/edit/analyze tools to the session's working directory, rejecting `..`-traversal and symlink escapes.
-- **Headless & browser deployment** — a Dockerized `goosed` API server (no Electron needed) and a browser build of the desktop UI (full `window.electron`/`window.appConfig` web shim), both one-command via `docker-compose up`.
+- **Headless & browser deployment** — a Dockerized `goosed-plus` API server (no Electron needed) and a browser build of the desktop UI (full `window.electron`/`window.appConfig` web shim), both one-command via `docker-compose up`.
 - **Faster first prompt** — session/ACP startup now pre-warms the system-prompt + tool-schema cache and polls platform extensions concurrently instead of serially, cutting measured first-token latency ~60% (1003ms→842ms). Opt out with `GOOSE_DISABLE_PREWARM=1`; live-measure any session with `GOOSE_PERF_LOG=1`.
 - **Internal security-audit sweeps** — 4 independent code-first passes across every crate found and fixed ~70 bugs, including three separate path-traversal guards (memory-tool categories, local-inference quantization filenames, scheduler job IDs) and several constant-time secret-comparison fixes (A2A/MCP-app-proxy routes, tunnel pairing) that were comparing secrets with `!=` or a non-cryptographic hash.
 - **Redacted diagnostics export** — `goose session diagnostics` scans every log, `session.json`, `config.yaml`, and scheduled-recipe file it bundles for high-entropy tokens (API keys, JWTs) and replaces them with `[REDACTED]` before zipping, so pasting a support bundle into a GitHub issue can't leak credentials.
@@ -127,7 +127,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | searxng-mcp: 8 free providers always run in full parallel | – | ✓ |
 | repomix-mcp: native in-agent codebase-packing extension | – | ✓ |
 | NATS JetStream KV claim/lease coordination bus | – | ✓ |
-| Dockerized headless `goosed` API server (no Electron) | – | ✓ |
+| Dockerized headless `goosed-plus` API server (no Electron) | – | ✓ |
 | Browser/web build of the desktop UI | – | ✓ |
 | `AfterAgentResponse` lifecycle hook | – | ✓ |
 | `goose update` tracks goose-plus's own releases | ◑ | ✓ |
@@ -142,7 +142,7 @@ No server refactor was needed — the standalone `goose-plus mcp <name>` exposur
 | `\` + Enter line continuation in interactive CLI input | – | ✓ |
 | Bounded per-instance SQLite pool (prevents SQLITE_BUSY under concurrent sessions) | – | ✓ |
 | Disabling a builtin extension (Developer) actually prevents it loading at session start | – | ✓ |
-| Configurable macOS seatbelt sandbox + egress proxy for `goosed` (opt-in) | – | ✓ |
+| Configurable macOS seatbelt sandbox + egress proxy for `goosed-plus` (opt-in) | – | ✓ |
 | Developer `search` tool (Sourcegraph code / GitHub issues / Reddit, parallel) | – | ✓ |
 
 ---

@@ -10,7 +10,7 @@ This will open goose GUI from any path you specify
 
 # Unregister Deeplink Protocols (macos only)
 
-`unregister-deeplink-protocols.js` is a script to unregister the deeplink protocol used by goose like `goose://`.
+`unregister-deeplink-protocols.js` is a script to unregister the deeplink protocol used by goose like `goose-plus://`.
 This is handy when you want to test deeplinks with the development version of Goose.
 
 # Usage

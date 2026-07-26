@@ -13,7 +13,7 @@ The [MongoDB MCP Server](https://github.com/mongodb-js/mongodb-mcp-server) exten
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=mongodb-mcp-server&arg=--connection-string&arg=mongodb://localhost:27017&id=mongodb&name=MongoDB&description=MongoDB%20database%20integration)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=mongodb-mcp-server&arg=--connection-string&arg=mongodb://localhost:27017&id=mongodb&name=MongoDB&description=MongoDB%20database%20integration)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

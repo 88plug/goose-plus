@@ -26,7 +26,7 @@ goose's architecture is designed for extensibility. Organizations can create "re
           │                │                      │
           ▼                ▼                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    goose-server (goosed)                        │
+│                    goose-server (goosed-plus)                        │
 │         REST API for all goose functionality                    │
 └─────────────────────────────────────────────────────────────────┘
           │
@@ -312,7 +312,7 @@ Use goose-server for HTTP-based integrations (web apps, simple clients):
 
 ```bash
 # Start the server
-./target/release/goosed
+./target/release/goosed-plus
 
 # API available at http://localhost:3000
 ```

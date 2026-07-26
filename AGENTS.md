@@ -44,7 +44,7 @@ crates/
 ├── goose              # core logic
 ├── goose-acp-macros   # ACP proc macros
 ├── goose-cli          # CLI entry
-├── goose-server       # backend (binary: goosed)
+├── goose-server       # backend (binary: goosed-plus)
 ├── goose-mcp          # MCP extensions
 ├── goose-test         # test utilities
 └── goose-test-support # test helpers

@@ -40,7 +40,7 @@ goose spawned multiple parallel subagents to investigate.
 **Key findings from the research:**
 
 * **OpenClaw uses its own embedded agent runtime (Pi)**, not goose. This meant there was no existing integration to copy.
-* **goose CAN be used as a backend!** The `goosed` server exposes a full HTTP API.
+* **goose CAN be used as a backend!** The `goosed-plus` server exposes a full HTTP API.
 * **Port conflicts are manageable.** We just needed to run on a different port with `GOOSE_PORT=3001`.
 * **Authentication is simple.** We could pass a secret key in the `X-Secret-Key` header.
 

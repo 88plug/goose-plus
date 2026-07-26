@@ -36,7 +36,7 @@ sudo dnf install dpkg-dev fakeroot
 
 # Building notes
 
-This is an electron forge app, using vite and react.js. `goosed` runs as multi process binaries on each window/tab similar to chrome.
+This is an electron forge app, using vite and react.js. `goosed-plus` runs as multi process binaries on each window/tab similar to chrome.
 
 ## Building for different platforms
 
@@ -65,7 +65,7 @@ cargo build --release -p goose-server
 2. Copy the server binary to the expected location:
 ```bash
 mkdir -p src/bin
-cp ../../target/release/goosed src/bin/
+cp ../../target/release/goosed-plus src/bin/
 ```
 
 3. Build the application:
@@ -90,7 +90,7 @@ The built application will be available in:
 Use the existing Windows build process as documented.
 
 
-# Running with goosed server from source
+# Running with goosed-plus server from source
 
 Set `VITE_START_EMBEDDED_SERVER=yes` to no in `.env`.
 Run `cargo run -p goose-server` from parent dir.

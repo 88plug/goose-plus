@@ -18,7 +18,7 @@ This tutorial covers how to add the [Council of Mine MCP Server](https://github.
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=uvx&arg=--from&arg=git%2Bhttps%3A%2F%2Fgithub.com%2Fblock%2Fmcp-council-of-mine&arg=mcp_council_of_mine&id=council-of-mine&name=Council%20of%20Mine&description=LLM%20Debate)
+  [Launch the installer](goose-plus://extension?cmd=uvx&arg=--from&arg=git%2Bhttps%3A%2F%2Fgithub.com%2Fblock%2Fmcp-council-of-mine&arg=mcp_council_of_mine&id=council-of-mine&name=Council%20of%20Mine&description=LLM%20Debate)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

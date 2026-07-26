@@ -268,11 +268,11 @@ Extensions can be installed using goose's deep link protocol. The URL format var
 <Tabs groupId="interface">
   <TabItem value="stdio" label="StandardIO" default>
 ```
-goose://extension?cmd=<command>&arg=<argument>&id=<id>&name=<name>&description=<description>
+goose-plus://extension?cmd=<command>&arg=<argument>&id=<id>&name=<name>&description=<description>
 ```
 
 Required parameters:
-- `cmd`: The base command to run, one of `jbang`, `npx`, `uvx`, `goosed`, or `docker`
+- `cmd`: The base command to run, one of `jbang`, `npx`, `uvx`, `goosed-plus`, or `docker`
 - `arg`: (cmd only) Command arguments (can be repeated for multiple arguments: `&arg=...&arg=...`)
 - `timeout`: Maximum time (in seconds) to wait for extension responses
 - `id`: Unique identifier for the extension
@@ -282,14 +282,14 @@ Required parameters:
 A command like `npx -y @modelcontextprotocol/server-github` would be represented as:
 
 ```
-goose://extension?cmd=npx&arg=-y&arg=%40modelcontextprotocol/server-github&timeout=<timeout>&id=<id>&name=<name>&description=<description>
+goose-plus://extension?cmd=npx&arg=-y&arg=%40modelcontextprotocol/server-github&timeout=<timeout>&id=<id>&name=<name>&description=<description>
 ```
 
 Note that each parameter to the `npx` command is passed as a separate `arg` parameter in the deeplink.
   </TabItem>
   <TabItem value="streamable_http" label="Streamable HTTP">
 ```
-goose://extension?url=<remote-streamable-http-url>&type=streamable_http&id=<id>&name=<n>&description=<description>
+goose-plus://extension?url=<remote-streamable-http-url>&type=streamable_http&id=<id>&name=<n>&description=<description>
 ```
 
 Parameters:
@@ -303,7 +303,7 @@ Parameters:
 For example, a deeplink for a URL like `https://example.com/streamable` would look like this when URL-encoded:
 
 ```
-goose://extension?url=https%3A%2F%2Fexample.com%2Fstreamable&type=streamable_http&timeout=<timeout>&id=<id>&name=<n>&description=<description>
+goose-plus://extension?url=https%3A%2F%2Fexample.com%2Fstreamable&type=streamable_http&timeout=<timeout>&id=<id>&name=<n>&description=<description>
 ```
 
   </TabItem>

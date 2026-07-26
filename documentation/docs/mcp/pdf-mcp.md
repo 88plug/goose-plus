@@ -16,7 +16,7 @@ This tutorial covers how to add the [PDF Reader MCP Server](https://github.com/m
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=uvx&arg=mcp-read-pdf&id=pdf_read&name=PDF%20Reader&description=Read%20large%20and%20complex%20PDF%20documents)
+  [Launch the installer](goose-plus://extension?cmd=uvx&arg=mcp-read-pdf&id=pdf_read&name=PDF%20Reader&description=Read%20large%20and%20complex%20PDF%20documents)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

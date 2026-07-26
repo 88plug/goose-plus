@@ -20,7 +20,7 @@ In this tutorial, you'll learn how to set up the Neighborhood extension and use 
 :::tip
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Install Neighborhood extension](goose://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fneighborhood&id=neighborhood&name=Neighborhood&description=Discover%20nearby%20restaurants%2C%20browse%20menus%2C%20and%20place%20takeout%20orders%20through%20natural%20conversation.)
+  [Install Neighborhood extension](goose-plus://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fneighborhood&id=neighborhood&name=Neighborhood&description=Discover%20nearby%20restaurants%2C%20browse%20menus%2C%20and%20place%20takeout%20orders%20through%20natural%20conversation.)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   Use `goose configure` to add a `Remote Extension (Streamable HTTP)` with:

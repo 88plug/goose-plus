@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `arg=${encodeURIComponent(server.id)}`,
                 `description=${encodeURIComponent(server.id)}`
             ].join('&');
-            return `goose://extension?${queryParams}`;
+            return `goose-plus://extension?${queryParams}`;
         }
 
         // Handle the case where the command is a URL
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ),
             ].join("&");
         
-            return `goose://extension?${queryParams}`;
+            return `goose-plus://extension?${queryParams}`;
         }
 
         const parts = server.command.split(" ");
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ),
         ].join("&");
 
-        return `goose://extension?${queryParams}`;
+        return `goose-plus://extension?${queryParams}`;
     }
 
     function displayGeneratedLink(link) {

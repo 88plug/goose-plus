@@ -8,7 +8,7 @@
 # Supported Architectures: x86_64
 #
 # Usage:
-#   Invoke-WebRequest -Uri "https://github.com/aaif-goose/goose/releases/download/stable/download_cli.ps1" -OutFile "download_cli.ps1"; .\download_cli.ps1
+#   Invoke-WebRequest -Uri "https://github.com/88plug/goose-plus/releases/download/stable/download_cli.ps1" -OutFile "download_cli.ps1"; .\download_cli.ps1
 #   Or simply: .\download_cli.ps1
 #
 # Environment variables:

@@ -4,7 +4,7 @@ This file documents goose's agent-authentication posture, for the benefit of
 agents and operators discovering this repo.
 
 goose is an **agent framework** (CLI + desktop + a localhost control-plane
-daemon, `goosed`). It authenticates **outbound** to model providers and MCP
+daemon, `goosed-plus`). It authenticates **outbound** to model providers and MCP
 servers; it is not a public website or credential-issuing identity provider, so
 the website-oriented agent-readiness checks (robots.txt, sitemaps, DNS-AID,
 x402/commerce, WebMCP, etc.) do not apply to it.

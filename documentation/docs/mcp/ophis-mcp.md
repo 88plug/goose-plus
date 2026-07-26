@@ -13,7 +13,7 @@ This tutorial covers how to add [Ophis](https://ophis.fi) as a goose extension s
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-    [Launch the installer](goose://extension?type=streamable_http&url=https%3A%2F%2Fmcp.ophis.fi%2Fmcp&id=ophis&name=Ophis&description=Natural-language%20intent%20DEX%20aggregator%20with%20a%20keyless%20MCP%20server%20for%20AI%20agents)
+    [Launch the installer](goose-plus://extension?type=streamable_http&url=https%3A%2F%2Fmcp.ophis.fi%2Fmcp&id=ophis&name=Ophis&description=Natural-language%20intent%20DEX%20aggregator%20with%20a%20keyless%20MCP%20server%20for%20AI%20agents)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
     Use `goose configure` to add a `Remote Extension (Streamable HTTP)` extension type with:

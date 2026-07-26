@@ -68,18 +68,18 @@ logged at debug, so silent loss is observable rather than invisible.
 
 ## Drive goose over NATS (inbound)
 
-The bus is bidirectional. A `goosed` instance can be **driven** over NATS:
+The bus is bidirectional. A `goosed-plus` instance can be **driven** over NATS:
 publish a command and it runs a turn and publishes the reply. Opt-in and
 **off by default**:
 
 ```bash
 export GOOSE_NATS_URL="nats://localhost:4222"
-export GOOSE_NATS_DRIVE=true          # enable the inbound subscriber (goosed)
+export GOOSE_NATS_DRIVE=true          # enable the inbound subscriber (goosed-plus)
 export GOOSE_PROVIDER=... GOOSE_MODEL=...   # used to bootstrap a turn headlessly
-goosed agent
+goosed-plus agent
 ```
 
-`goosed` queue-subscribes (group `goose-drive`, so multiple instances share the
+`goosed-plus` queue-subscribes (group `goose-drive`, so multiple instances share the
 work) to `<prefix>.cmd`. Send a JSON command — request/reply gets the answer on
 your inbox, or omit the reply subject and read `<prefix>.<session>.reply`:
 

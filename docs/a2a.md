@@ -12,7 +12,7 @@ goose-specific glue is the bridge to goose's agent and message model.
 
 ## Server — expose goose as an A2A agent
 
-Opt-in. Enable it and (re)start `goosed`:
+Opt-in. Enable it and (re)start `goosed-plus`:
 
 ```bash
 export GOOSE_A2A_ENABLE=true

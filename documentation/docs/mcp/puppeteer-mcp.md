@@ -18,7 +18,7 @@ This tutorial covers how to add the [Puppeteer MCP Server](https://www.pulsemcp.
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=%40modelcontextprotocol%2Fserver-puppeteer&id=puppeteer&name=Puppeteer&description=Headless%20browser%20automation)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=%40modelcontextprotocol%2Fserver-puppeteer&id=puppeteer&name=Puppeteer&description=Headless%20browser%20automation)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**
