@@ -27,7 +27,7 @@ You'll see it right away: *Discover nearby restaurants, browse menus, and place 
 Once installed, make sure the extension is enabled in your current chat session. You can check this by clicking the extensions icon in the chat and toggling Neighborhood on.
 
 :::tip Quick Install
-[Install the Neighborhood extension](goose://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fneighborhood&id=neighborhood&name=Neighborhood&description=Discover%20nearby%20restaurants%2C%20browse%20menus%2C%20and%20place%20takeout%20orders%20through%20natural%20conversation.) directly in goose Desktop, or use `goose configure` in the CLI to add a Remote Extension (Streamable HTTP) with the endpoint `https://connect.squareup.com/v2/mcp/neighborhood`.
+[Install the Neighborhood extension](goose-plus://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fneighborhood&id=neighborhood&name=Neighborhood&description=Discover%20nearby%20restaurants%2C%20browse%20menus%2C%20and%20place%20takeout%20orders%20through%20natural%20conversation.) directly in goose Desktop, or use `goose configure` in the CLI to add a Remote Extension (Streamable HTTP) with the endpoint `https://connect.squareup.com/v2/mcp/neighborhood`.
 :::
 
 ## Finding restaurants that actually work for you
@@ -113,7 +113,7 @@ The Neighborhood extension is a perfect example of what MCP servers can do when 
 
 Ready to order lunch with goose? Here's how to get started:
 
-1. **Install the Neighborhood extension**, [one-click install](goose://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fneighborhood&id=neighborhood&name=Neighborhood&description=Discover%20nearby%20restaurants%2C%20browse%20menus%2C%20and%20place%20takeout%20orders%20through%20natural%20conversation.) for goose Desktop, or add it via `goose configure` in the CLI
+1. **Install the Neighborhood extension**, [one-click install](goose-plus://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fneighborhood&id=neighborhood&name=Neighborhood&description=Discover%20nearby%20restaurants%2C%20browse%20menus%2C%20and%20place%20takeout%20orders%20through%20natural%20conversation.) for goose Desktop, or add it via `goose configure` in the CLI
 2. **Tell goose where you are and what you're in the mood for**, include dietary needs, what you're doing later, or any other context
 3. **Browse the menus**, click through the interactive restaurant cards and menu tabs
 4. **Build your order**, just tell goose what you want in plain English

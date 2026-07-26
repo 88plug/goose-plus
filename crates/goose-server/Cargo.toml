@@ -101,7 +101,7 @@ pem = { version = "3.0.2", default-features = false, features = ["std"] }
 winreg = { version = "0.56", default-features = false }
 
 [[bin]]
-name = "goosed"
+name = "goosed-plus"
 path = "src/main.rs"
 
 [[bin]]

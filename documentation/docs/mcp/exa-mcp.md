@@ -13,7 +13,7 @@ This tutorial covers how to add the [Exa MCP Server](https://github.com/exa-labs
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=exa-mcp-server&id=exa&name=Exa%20Search&description=AI-powered%20web%20search&env=EXA_API_KEY%3DExa%20API%20Key)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=exa-mcp-server&id=exa&name=Exa%20Search&description=AI-powered%20web%20search&env=EXA_API_KEY%3DExa%20API%20Key)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

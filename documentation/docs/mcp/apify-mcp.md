@@ -19,7 +19,7 @@ This tutorial covers how to add the [Apify MCP server](https://mcp.apify.com) as
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-   [Launch the installer](goose://extension?type=streamable_http&url=https%3A%2F%2Fmcp.apify.com&id=apify&name=Apify&description=Extract%20data%20from%20any%20website%20with%20thousands%20of%20scrapers%2C%20crawlers%2C%20and%20automations%20on%20Apify%20Store&header=Authorization%3DBearer%20YOUR_APIFY_TOKEN)
+   [Launch the installer](goose-plus://extension?type=streamable_http&url=https%3A%2F%2Fmcp.apify.com&id=apify&name=Apify&description=Extract%20data%20from%20any%20website%20with%20thousands%20of%20scrapers%2C%20crawlers%2C%20and%20automations%20on%20Apify%20Store&header=Authorization%3DBearer%20YOUR_APIFY_TOKEN)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   Add a `Remote Extension (Streaming HTTP)` extension type with:
@@ -80,7 +80,7 @@ This tutorial covers how to add the [Apify MCP server](https://mcp.apify.com) as
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=@apify/actors-mcp-server&arg=start&id=mcp_apify_local&name=Apify%20Local%20MCP%20Server&description=Run%20Apify%20MCP%20server%20locally%20using%20your%20token&env=APIFY_TOKEN%3DYour%20Apify%20Token)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=@apify/actors-mcp-server&arg=start&id=mcp_apify_local&name=Apify%20Local%20MCP%20Server&description=Run%20Apify%20MCP%20server%20locally%20using%20your%20token&env=APIFY_TOKEN%3DYour%20Apify%20Token)
   </TabItem>
 
   <TabItem value="cli" label="goose CLI">

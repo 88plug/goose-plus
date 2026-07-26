@@ -32,7 +32,7 @@ jobs:
           # The headless agent server and browser UI referenced by
           # docker-compose.yml; without these the compose stack can only ever
           # be built locally, never pulled.
-          - image: goose-plus-goosed
+          - image: goose-plus-server
             dockerfile: Dockerfile.server
           - image: goose-plus-web
             dockerfile: Dockerfile.web

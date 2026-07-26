@@ -15,7 +15,7 @@ Cash App brings local food ordering into the AI era. Discover nearby sellers, br
 :::tip
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Install Cash App extension](goose://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fcash-app&id=cash-app&name=Cash%20App&description=Cash%20App%20brings%20local%20food%20ordering%20into%20the%20AI%20era.)
+  [Install Cash App extension](goose-plus://extension?type=streamable_http&url=https%3A%2F%2Fconnect.squareup.com%2Fv2%2Fmcp%2Fcash-app&id=cash-app&name=Cash%20App&description=Cash%20App%20brings%20local%20food%20ordering%20into%20the%20AI%20era.)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   Use `goose configure` to add a `Remote Extension (Streamable HTTP)` with:

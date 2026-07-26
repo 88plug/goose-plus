@@ -12,7 +12,7 @@ image: /img/blog/goose-2-blog-cover.jpg
 
 goose started life in the terminal. The earliest versions were a Python CLI that ran the agent in-process — you typed a message, the model responded, tools executed, and everything happened in a single loop. That simplicity was a strength: it meant anyone with a terminal could start using goose immediately, no app to install, no server to run.
 
-As goose grew, so did the ways people wanted to use it. We shipped an Electron desktop app and suddenly we had two clients with two completely different integration paths. The Rust CLI talked to the agent directly in process, while the desktop app went through `goosed`, a custom REST + SSE server. Every new feature — session management, extension loading, streaming — had to be wired up in both places.
+As goose grew, so did the ways people wanted to use it. We shipped an Electron desktop app and suddenly we had two clients with two completely different integration paths. The Rust CLI talked to the agent directly in process, while the desktop app went through `goosed-plus`, a custom REST + SSE server. Every new feature — session management, extension loading, streaming — had to be wired up in both places.
 
 <!--truncate-->
 
@@ -31,7 +31,7 @@ Here's where things stand:
 | **1 — Stabilize ACP server** | Production-ready server with session persistence, extensions, streaming | ✅ Done |
 | **2 — TypeScript TUI beta** | Feature-complete terminal UI built on the ACP client | 🚧 In progress |
 | **3 — Desktop rewrite to Tauri** | Electron app being replaced with a Tauri-based desktop client on ACP | 🚧 In progress |
-| **4 — Consolidation** | Remove `goosed` and the old Rust CLI; single unified architecture | Planned |
+| **4 — Consolidation** | Remove `goosed-plus` and the old Rust CLI; single unified architecture | Planned |
 
 The work is tracked in [#6642](https://github.com/aaif-goose/goose/issues/6642).
 

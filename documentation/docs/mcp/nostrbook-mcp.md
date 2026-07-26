@@ -15,7 +15,7 @@ This tutorial covers how to add the [Nostrbook MCP Server](https://gitlab.com/so
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-    [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=%40nostrbook%2Fmcp&id=nostrbook&name=Nostrbook&description=A%20comprehensive%20registry%20of%20Nostr%20documentation%20with%20structured%20knowledge)
+    [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=%40nostrbook%2Fmcp&id=nostrbook&name=Nostrbook&description=A%20comprehensive%20registry%20of%20Nostr%20documentation%20with%20structured%20knowledge)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
     **Command**

@@ -19,7 +19,7 @@ describe('addExtensionFromDeepLink', () => {
   describe('header parsing', () => {
     it('should preserve = characters in header values', async () => {
       const url =
-        'goose://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=Authorization%3DBasic%20abc%3D%3D';
+        'goose-plus://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=Authorization%3DBasic%20abc%3D%3D';
 
       await addExtensionFromDeepLink(url, mockAddExtension, mockSetView);
 
@@ -36,7 +36,7 @@ describe('addExtensionFromDeepLink', () => {
 
     it('should handle header values without = characters', async () => {
       const url =
-        'goose://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=X-Token%3Dabc123';
+        'goose-plus://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=X-Token%3Dabc123';
 
       await addExtensionFromDeepLink(url, mockAddExtension, mockSetView);
 
@@ -52,7 +52,7 @@ describe('addExtensionFromDeepLink', () => {
 
     it('should handle multiple headers', async () => {
       const url =
-        'goose://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=Authorization%3DBearer%20tok%3D%3D&header=X-Key%3Dval';
+        'goose-plus://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=Authorization%3DBearer%20tok%3D%3D&header=X-Key%3Dval';
 
       await addExtensionFromDeepLink(url, mockAddExtension, mockSetView);
 
@@ -71,7 +71,7 @@ describe('addExtensionFromDeepLink', () => {
 
     it('should handle header with empty value', async () => {
       const url =
-        'goose://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=X-Empty%3D';
+        'goose-plus://extension?name=Remote&url=https%3A%2F%2Fexample.com%2Fmcp&header=X-Empty%3D';
 
       await addExtensionFromDeepLink(url, mockAddExtension, mockSetView);
 

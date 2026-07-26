@@ -98,7 +98,7 @@ const i18n = defineMessages({
   },
   importNostrPlaceholder: {
     id: 'sessions.importNostr.placeholder',
-    defaultMessage: 'goose://sessions/nostr?nevent=...&key=...',
+    defaultMessage: 'goose-plus://sessions/nostr?nevent=...&key=...',
   },
   importing: { id: 'sessions.importing', defaultMessage: 'Importing...' },
   chatHistoryDesc: {

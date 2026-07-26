@@ -1,8 +1,10 @@
 [Desktop Entry]
-Name=Goose
-Exec=/usr/lib/Goose/Goose %U
-Icon=/usr/share/pixmaps/Goose.png
+Name=goose-plus
+Comment=goose-plus AI agent
+Exec=/usr/lib/goose-plus/goose-plus %U
+Icon=/usr/share/pixmaps/goose-plus.png
 Terminal=false
 Type=Application
 Categories=Development;
-MimeType=x-scheme-handler/goose;
+StartupWMClass=goose-plus
+MimeType=x-scheme-handler/goose-plus;

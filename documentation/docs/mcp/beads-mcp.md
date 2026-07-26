@@ -15,7 +15,7 @@ This tutorial covers how to add the [Beads MCP Server](https://github.com/stevey
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=uvx&arg=beads-mcp&id=beads&name=Beads&description=Git-backed%20issue%20tracker%20for%20AI%20agent%20task%20management)
+  [Launch the installer](goose-plus://extension?cmd=uvx&arg=beads-mcp&id=beads&name=Beads&description=Git-backed%20issue%20tracker%20for%20AI%20agent%20task%20management)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

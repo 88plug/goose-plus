@@ -1506,10 +1506,10 @@
     "defaultMessage": "キャンセル"
   },
   "importRecipeForm.deeplinkHint": {
-    "defaultMessage": "goose://recipe?config= で始まるレシピのディープリンクを貼り付けてください"
+    "defaultMessage": "goose-plus://recipe?config= で始まるレシピのディープリンクを貼り付けてください"
   },
   "importRecipeForm.deeplinkPlaceholder": {
-    "defaultMessage": "goose://recipe?config=... のディープリンクをここに貼り付け"
+    "defaultMessage": "goose-plus://recipe?config=... のディープリンクをここに貼り付け"
   },
   "importRecipeForm.example": {
     "defaultMessage": "例"
@@ -3498,7 +3498,7 @@
     "defaultMessage": "ディープリンク"
   },
   "scheduleModal.deepLinkPlaceholder": {
-    "defaultMessage": "goose://recipe リンクをここに貼り付け..."
+    "defaultMessage": "goose-plus://recipe リンクをここに貼り付け..."
   },
   "scheduleModal.editSchedule": {
     "defaultMessage": "スケジュールを編集"
@@ -3510,7 +3510,7 @@
     "defaultMessage": "選択したファイルを読み取れませんでした。"
   },
   "scheduleModal.invalidDeepLink": {
-    "defaultMessage": "無効なディープリンクです。goose://recipe リンクを使用してください。"
+    "defaultMessage": "無効なディープリンクです。goose-plus://recipe リンクを使用してください。"
   },
   "scheduleModal.invalidFileType": {
     "defaultMessage": "無効なファイル形式です。YAMLファイル（.yaml または .yml）を選択してください"
@@ -4008,7 +4008,7 @@
     "defaultMessage": "Goose Nostr共有リンクを貼り付けて、セッションを取得・復号・インポートします。"
   },
   "sessions.importNostr.placeholder": {
-    "defaultMessage": "goose://sessions/nostr?nevent=...&key=..."
+    "defaultMessage": "goose-plus://sessions/nostr?nevent=...&key=..."
   },
   "sessions.importNostr.title": {
     "defaultMessage": "Nostrセッションをインポート"

@@ -80,7 +80,7 @@ jobs:
       - name: Install goose CLI
         run: |
           mkdir -p /home/runner/.local/bin
-          curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh \
+          curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/download_cli.sh \
             | CONFIGURE=false GOOSE_BIN_DIR=/home/runner/.local/bin bash
           echo "/home/runner/.local/bin" >> $GITHUB_PATH
           goose --version

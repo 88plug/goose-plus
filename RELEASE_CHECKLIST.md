@@ -108,7 +108,7 @@ recipe:
 #### Extension with Environment Variables
 
 - [ ] Install an extension from deeplink that needs env variables:
-  - [ ] Use: `goose://extension?cmd=npx&arg=-y&arg=%40upstash%2Fcontext7-mcp&id=context7&name=Context7&description=Use%20up-to-date%20code%20and%20docs&env=TEST_ACCESS_TOKEN`
+  - [ ] Use: `goose-plus://extension?cmd=npx&arg=-y&arg=%40upstash%2Fcontext7-mcp&id=context7&name=Context7&description=Use%20up-to-date%20code%20and%20docs&env=TEST_ACCESS_TOKEN`
   - [ ] Extension page should load with env variables modal showing
   - [ ] Allow form input and saving extension
 

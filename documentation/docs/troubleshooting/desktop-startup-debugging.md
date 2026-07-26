@@ -32,7 +32,7 @@ When reporting a desktop startup failure, share:
 - your goose version
 - your operating system and version
 
-For Windows native crashes, also attach the Windows crash report for `goosed.exe` if available.
+For Windows native crashes, also attach the Windows crash report for `goosed-plus.exe` if available.
 
 Common places to find the Windows crash report:
 
@@ -42,14 +42,14 @@ Common places to find the Windows crash report:
   - `%LOCALAPPDATA%\Microsoft\Windows\WER\ReportArchive\`
   - `%LOCALAPPDATA%\Microsoft\Windows\WER\ReportQueue\`
 
-Look for a `Report.wer` related to `goosed.exe`.
+Look for a `Report.wer` related to `goosed-plus.exe`.
 
 If you are filing a GitHub issue or asking for support, this is usually enough:
 
 - the newest `goosed-startup-*.json`
 - your goose version
 - your operating system and version
-- on Windows, `Report.wer` for `goosed.exe` if Windows created one
+- on Windows, `Report.wer` for `goosed-plus.exe` if Windows created one
 
 ## What The Startup Log Contains
 

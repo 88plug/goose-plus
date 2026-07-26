@@ -16,7 +16,7 @@ This tutorial covers how to add the [Excalidraw MCP App](https://github.com/exca
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-   [Launch the installer](goose://extension?cmd=http&id=excalidraw&name=Excalidraw&url=https%3A%2F%2Fexcalidraw-mcp-app.vercel.app%2Fmcp&description=Excalidraw%20MCP%20App%20for%20AI-powered%20diagramming)
+   [Launch the installer](goose-plus://extension?cmd=http&id=excalidraw&name=Excalidraw&url=https%3A%2F%2Fexcalidraw-mcp-app.vercel.app%2Fmcp&description=Excalidraw%20MCP%20App%20for%20AI-powered%20diagramming)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   Add a `Remote Extension (Streaming HTTP)` extension type with:

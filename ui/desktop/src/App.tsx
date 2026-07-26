@@ -308,7 +308,7 @@ const SharedSessionRouteWrapper = ({
         if (shareToken && baseUrl) {
           setIsLoadingSharedSession(true);
           try {
-            await openSharedSessionFromDeepLink(`goose://sessions/${shareToken}`, setView, baseUrl);
+            await openSharedSessionFromDeepLink(`goose-plus://sessions/${shareToken}`, setView, baseUrl);
           } catch (error) {
             console.error('Failed to retry loading shared session:', error);
           } finally {
@@ -456,7 +456,7 @@ export function AppInner() {
       setIsLoadingSharedSession(true);
       setSharedSessionError(null);
       try {
-        if (link.startsWith('goose://sessions/nostr')) {
+        if (link.startsWith('goose-plus://sessions/nostr')) {
           await importNostrSessionFromDeepLink(link);
           navigate('/sessions');
           return;
@@ -471,11 +471,11 @@ export function AppInner() {
           action: 'open_shared_session',
           recoverable: true,
         });
-        if (link.startsWith('goose://sessions/nostr')) {
+        if (link.startsWith('goose-plus://sessions/nostr')) {
           toast.error(`Failed to import Nostr session: ${errorMessage(error, 'Unknown error')}`);
           navigate('/sessions');
         } else {
-          const shareToken = link.replace('goose://sessions/', '');
+          const shareToken = link.replace('goose-plus://sessions/', '');
           const options = {
             sessionDetails: null,
             error: errorMessage(error, 'Unknown error'),

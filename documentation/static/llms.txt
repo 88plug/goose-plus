@@ -36,7 +36,7 @@ goose is available as both a desktop application and a command-line interface (C
 ### macOS/Linux/Windows (CLI)
 
 ```sh
-curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash
+curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/download_cli.sh | bash
 ```
 
 ### macOS (Homebrew)

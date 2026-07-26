@@ -6,38 +6,38 @@ sidebar_label: Remote Server
 
 # Running a Remote goose Server
 
-goose Desktop normally runs its own `goosed` server process in the background on the same machine. You can also run `goosed` separately — for example, on a remote VM or a different machine on your network — and point goose Desktop at it.
+goose Desktop normally runs its own `goosed-plus` server process in the background on the same machine. You can also run `goosed-plus` separately — for example, on a remote VM or a different machine on your network — and point goose Desktop at it.
 
 This is useful when you want goose to run somewhere with more compute, a stable IP, or shared access, while still driving it from a local Desktop UI.
 
 This guide covers:
 
-1. [Starting a `goosed` server on a remote machine](#1-start-the-goosed-server)
+1. [Starting a `goosed-plus` server on a remote machine](#1-start-the-goosed-server)
 2. [Verifying it is reachable](#2-verify-the-server-is-up)
 3. [Locating the certificate fingerprint](#3-find-the-certificate-fingerprint)
 4. [Configuring goose Desktop to connect to it](#4-configure-goose-desktop)
-5. [Running `goosed` as a background service on macOS](#running-goosed-as-a-background-service-macos)
+5. [Running `goosed-plus` as a background service on macOS](#running-goosed-as-a-background-service-macos)
 6. [Troubleshooting](#troubleshooting)
 
 :::warning TLS is required
-goose Desktop will refuse to connect to a remote `goosed` server over plain HTTP. TLS is enabled by default (`GOOSE_TLS=true`), so make sure you have not disabled it.
+goose Desktop will refuse to connect to a remote `goosed-plus` server over plain HTTP. TLS is enabled by default (`GOOSE_TLS=true`), so make sure you have not disabled it.
 :::
 
 ## Initial Setup
 
-### 1. Start the `goosed` server
+### 1. Start the `goosed-plus` server
 
-On the remote machine, launch `goosed` with the host, port, TLS, and a shared secret key:
+On the remote machine, launch `goosed-plus` with the host, port, TLS, and a shared secret key:
 
 ```bash
 GOOSE_HOST=0.0.0.0 \
 GOOSE_PORT=3000 \
 GOOSE_TLS=true \
 GOOSE_SERVER__SECRET_KEY='YOUR_SECRET' \
-/Applications/Goose.app/Contents/Resources/bin/goosed agent
+/Applications/Goose.app/Contents/Resources/bin/goosed-plus agent
 ```
 
-On Linux or Windows the path to the `goosed` binary will differ — use the one bundled with your goose installation, or a standalone `goosed` build.
+On Linux or Windows the path to the `goosed-plus` binary will differ — use the one bundled with your goose installation, or a standalone `goosed-plus` build.
 
 | Variable | Purpose |
 |----------|---------|
@@ -52,13 +52,13 @@ Pick a long, random value for `GOOSE_SERVER__SECRET_KEY` and store it in a passw
 
 ### 2. Verify the server is up
 
-First, confirm `goosed` is actually listening on the port you expect:
+First, confirm `goosed-plus` is actually listening on the port you expect:
 
 ```bash
 lsof -nP -iTCP:3000 -sTCP:LISTEN
 ```
 
-Then test the endpoints from the server itself. The `-k` flag tells `curl` to accept the self-signed TLS certificate that `goosed` generates:
+Then test the endpoints from the server itself. The `-k` flag tells `curl` to accept the self-signed TLS certificate that `goosed-plus` generates:
 
 ```bash
 # Connectivity only
@@ -77,9 +77,9 @@ If you intend to reach the server from another machine, also test from there usi
 
 ### 3. Find the certificate fingerprint
 
-Because `goosed` generates a self-signed TLS certificate, goose Desktop pins it by SHA-256 fingerprint rather than relying on a public certificate authority.
+Because `goosed-plus` generates a self-signed TLS certificate, goose Desktop pins it by SHA-256 fingerprint rather than relying on a public certificate authority.
 
-When TLS is enabled, `goosed` logs the fingerprint on startup. It looks like:
+When TLS is enabled, `goosed-plus` logs the fingerprint on startup. It looks like:
 
 ```text
 GOOSED_CERT_FINGERPRINT=AA:BB:CC:DD:EE:FF:...
@@ -87,17 +87,17 @@ GOOSED_CERT_FINGERPRINT=AA:BB:CC:DD:EE:FF:...
 
 To capture it, either:
 
-- Run `goosed` interactively and read it from the terminal output, or
-- Tail the log file you redirect to when running as a service (see [Running `goosed` as a background service](#running-goosed-as-a-background-service-macos)):
+- Run `goosed-plus` interactively and read it from the terminal output, or
+- Tail the log file you redirect to when running as a service (see [Running `goosed-plus` as a background service](#running-goosed-as-a-background-service-macos)):
 
 ```bash
-grep GOOSED_CERT_FINGERPRINT ~/Library/Logs/GooseExternal/goosed.out.log
+grep GOOSED_CERT_FINGERPRINT ~/Library/Logs/GooseExternal/goosed-plus.out.log
 ```
 
 Make a note of the fingerprint — you will paste it into goose Desktop in the next step.
 
 :::note
-The fingerprint changes whenever `goosed` regenerates its certificate (for example, if you delete the cert file). If goose Desktop suddenly refuses to connect after a server restart, re-check the fingerprint.
+The fingerprint changes whenever `goosed-plus` regenerates its certificate (for example, if you delete the cert file). If goose Desktop suddenly refuses to connect after a server restart, re-check the fingerprint.
 :::
 
 ### 4. Configure goose Desktop
@@ -111,13 +111,13 @@ On the client machine, open goose Desktop and navigate to **Settings → goose S
 | **Secret Key** | The same value you used for `GOOSE_SERVER__SECRET_KEY` |
 | **Certificate Fingerprint** | The `GOOSED_CERT_FINGERPRINT` value from the server logs |
 
-After saving, goose Desktop will route all backend requests to the remote `goosed`. If the connection fails, see [Troubleshooting](#troubleshooting).
+After saving, goose Desktop will route all backend requests to the remote `goosed-plus`. If the connection fails, see [Troubleshooting](#troubleshooting).
 
-## Running `goosed` as a Background Service (macOS)
+## Running `goosed-plus` as a Background Service (macOS)
 
-Running `goosed` in a terminal session is fine for testing, but for everyday use you probably want it managed as a background service so it starts at login and restarts on failure. On macOS, this is done with `launchd`.
+Running `goosed-plus` in a terminal session is fine for testing, but for everyday use you probably want it managed as a background service so it starts at login and restarts on failure. On macOS, this is done with `launchd`.
 
-Create a LaunchAgent plist at `~/Library/LaunchAgents/com.goose.goosed.external.plist`:
+Create a LaunchAgent plist at `~/Library/LaunchAgents/com.goose.goosed-plus.external.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -125,11 +125,11 @@ Create a LaunchAgent plist at `~/Library/LaunchAgents/com.goose.goosed.external.
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.goose.goosed.external</string>
+    <string>com.goose.goosed-plus.external</string>
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Applications/Goose.app/Contents/Resources/bin/goosed</string>
+      <string>/Applications/Goose.app/Contents/Resources/bin/goosed-plus</string>
       <string>agent</string>
     </array>
 
@@ -145,9 +145,9 @@ Create a LaunchAgent plist at `~/Library/LaunchAgents/com.goose.goosed.external.
     <key>KeepAlive</key><true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/YOUR_USERNAME/Library/Logs/GooseExternal/goosed.out.log</string>
+    <string>/Users/YOUR_USERNAME/Library/Logs/GooseExternal/goosed-plus.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USERNAME/Library/Logs/GooseExternal/goosed.err.log</string>
+    <string>/Users/YOUR_USERNAME/Library/Logs/GooseExternal/goosed-plus.err.log</string>
   </dict>
 </plist>
 ```
@@ -161,27 +161,27 @@ mkdir -p ~/Library/Logs/GooseExternal
 Then load and start the service:
 
 ```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.goose.goosed.external.plist
-launchctl kickstart -k gui/$(id -u)/com.goose.goosed.external
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.goose.goosed-plus.external.plist
+launchctl kickstart -k gui/$(id -u)/com.goose.goosed-plus.external
 ```
 
 To stop or remove it later:
 
 ```bash
-launchctl bootout gui/$(id -u)/com.goose.goosed.external
+launchctl bootout gui/$(id -u)/com.goose.goosed-plus.external
 ```
 
 :::tip
-Because the secret key is stored in plain text in the plist, the file should be readable only by your user. macOS LaunchAgents under `~/Library/LaunchAgents/` are already user-scoped, but you can tighten further with `chmod 600 ~/Library/LaunchAgents/com.goose.goosed.external.plist`.
+Because the secret key is stored in plain text in the plist, the file should be readable only by your user. macOS LaunchAgents under `~/Library/LaunchAgents/` are already user-scoped, but you can tighten further with `chmod 600 ~/Library/LaunchAgents/com.goose.goosed-plus.external.plist`.
 :::
 
 ## Troubleshooting
 
 ### Server only accepts local connections
 
-If `curl` works from the server but the client machine times out or gets "connection refused", check what interface `goosed` is bound to. If `GOOSE_HOST` is `localhost` or `127.0.0.1`, only loopback connections are accepted.
+If `curl` works from the server but the client machine times out or gets "connection refused", check what interface `goosed-plus` is bound to. If `GOOSE_HOST` is `localhost` or `127.0.0.1`, only loopback connections are accepted.
 
-Set `GOOSE_HOST=0.0.0.0` to accept connections on all interfaces, then restart `goosed`. You can verify with:
+Set `GOOSE_HOST=0.0.0.0` to accept connections on all interfaces, then restart `goosed-plus`. You can verify with:
 
 ```bash
 lsof -nP -iTCP:3000 -sTCP:LISTEN
@@ -193,7 +193,7 @@ The output should show the address as `*:3000` or the specific external IP, not 
 
 In the server's startup logs:
 
-- If you see `listening on http://...`, TLS is **not** enabled. goose Desktop will not connect. Set `GOOSE_TLS=true` and restart `goosed`.
+- If you see `listening on http://...`, TLS is **not** enabled. goose Desktop will not connect. Set `GOOSE_TLS=true` and restart `goosed-plus`.
 - If you see `listening on https://...`, TLS is enabled and you are good to go.
 
 The startup logs also contain the `GOOSED_CERT_FINGERPRINT=...` line you need for the goose Desktop configuration. Search the server's stdout (or log file, if running under `launchd`) for `GOOSED_CERT_FINGERPRINT` to find it.

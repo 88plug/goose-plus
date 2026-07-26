@@ -16,7 +16,7 @@ This tutorial covers how to add the Playwright MCP Server as a goose extension, 
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=@playwright/mcp@latest&id=playwright&name=Playwright&description=Modern%20web%20testing%20and%20automation)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=@playwright/mcp@latest&id=playwright&name=Playwright&description=Modern%20web%20testing%20and%20automation)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

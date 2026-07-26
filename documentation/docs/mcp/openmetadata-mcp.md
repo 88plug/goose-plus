@@ -13,7 +13,7 @@ The [OpenMetadata MCP Server](https://open-metadata.org/mcp) extension allows go
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=mcp-remote&arg=http%3A%2F%2Flocalhost%3A8585%2Fmcp&arg=--auth-server-url%3Dhttp%3A%2F%2Flocalhost%3A8585%2Fmcp&arg=--client-id%3Dopenmetadata&arg=--verbose&arg=--clean&arg=--header&arg=Authorization%3A%24%7BAUTH_HEADER%7D&id=openmetadata&name=OpenMetadata&description=Intelligent%20data%20management%20and%20automated%20data%20operations&env=AUTH_HEADER%3DBearer%20YOUR_OPENMETADATA_PAT)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=mcp-remote&arg=http%3A%2F%2Flocalhost%3A8585%2Fmcp&arg=--auth-server-url%3Dhttp%3A%2F%2Flocalhost%3A8585%2Fmcp&arg=--client-id%3Dopenmetadata&arg=--verbose&arg=--clean&arg=--header&arg=Authorization%3A%24%7BAUTH_HEADER%7D&id=openmetadata&name=OpenMetadata&description=Intelligent%20data%20management%20and%20automated%20data%20operations&env=AUTH_HEADER%3DBearer%20YOUR_OPENMETADATA_PAT)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

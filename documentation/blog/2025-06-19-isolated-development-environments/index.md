@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/dagger/container-use/main/install.s
 
 Click this link to automatically add the extension:
 
-**[🚀 Add Container Use to Goose](goose://extension?cmd=cu&arg=stdio&id=container-use&name=container%20use&description=use%20containers%20with%20dagger%20and%20git%20for%20isolated%20environments)**
+**[🚀 Add Container Use to Goose](goose-plus://extension?cmd=cu&arg=stdio&id=container-use&name=container%20use&description=use%20containers%20with%20dagger%20and%20git%20for%20isolated%20environments)**
 
 Or manually add to `~/.config/goose/config.yaml`:
 

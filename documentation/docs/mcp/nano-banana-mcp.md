@@ -18,7 +18,7 @@ This tutorial covers how to add the [Nano Banana MCP Server](https://github.com/
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=nano-banana-mcp&id=nano-banana&name=Nano%20Banana&description=Image%20generation%20with%20Gemini)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=nano-banana-mcp&id=nano-banana&name=Nano%20Banana&description=Image%20generation%20with%20Gemini)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

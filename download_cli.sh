@@ -11,7 +11,7 @@ set -eu
 # Supported Architectures: x86_64, arm64
 #
 # Usage:
-#   curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash
+#   curl -fsSL https://github.com/88plug/goose-plus/releases/download/stable/download_cli.sh | bash
 #
 # Environment variables:
 #   GOOSE_BIN_DIR  - Directory to which goose will be installed (default: $HOME/.local/bin)
@@ -175,7 +175,7 @@ echo "Detected OS: $OS with ARCH $ARCH"
 
 # Build the filename and URL for the stable release
 if [ "$OS" = "darwin" ]; then
-  FILE="goose-$ARCH-apple-darwin.tar.bz2"
+  FILE="goose-plus-$ARCH-apple-darwin.tar.bz2"
   EXTRACT_CMD="tar"
 elif [ "$OS" = "windows" ]; then
   case "$GOOSE_WINDOWS_VARIANT" in
@@ -190,9 +190,9 @@ elif [ "$OS" = "windows" ]; then
     echo "Error: Windows currently only supports x86_64 architecture."
     exit 1
   fi
-  FILE="goose-$ARCH-pc-windows-msvc.zip"
+  FILE="goose-plus-$ARCH-pc-windows-msvc.zip"
   if [ "$GOOSE_WINDOWS_VARIANT" = "cuda" ]; then
-    FILE="goose-$ARCH-pc-windows-msvc-cuda.zip"
+    FILE="goose-plus-$ARCH-pc-windows-msvc-cuda.zip"
   fi
   EXTRACT_CMD="unzip"
   OUT_FILE="goose-plus.exe"
@@ -204,11 +204,11 @@ else
       exit 1
       ;;
   esac
-  FILE="goose-$ARCH-unknown-linux-gnu.tar.bz2"
+  FILE="goose-plus-$ARCH-unknown-linux-gnu.tar.bz2"
   if [ "$GOOSE_LINUX_VARIANT" = "vulkan" ]; then
-    FILE="goose-$ARCH-unknown-linux-gnu-vulkan.tar.bz2"
+    FILE="goose-plus-$ARCH-unknown-linux-gnu-vulkan.tar.bz2"
   elif [ "$GOOSE_LINUX_VARIANT" = "musl" ]; then
-    FILE="goose-$ARCH-unknown-linux-musl.tar.bz2"
+    FILE="goose-plus-$ARCH-unknown-linux-musl.tar.bz2"
   fi
   EXTRACT_CMD="tar"
 fi
@@ -331,23 +331,23 @@ else
 fi
 
 # Install the agent server daemon alongside the CLI. docs/nats.md and
-# docs/a2a.md tell users to run `goosed agent` for the NATS drive loop and the
+# docs/a2a.md tell users to run `goosed-plus agent` for the NATS drive loop and the
 # A2A server, so it has to land on PATH too. Tolerate its absence so this
-# script still works against release archives built before goosed was shipped.
+# script still works against release archives built before goosed-plus was shipped.
 if [ "$OS" = "windows" ]; then
-  DAEMON_OUT="goosed.exe"
+  DAEMON_OUT="goosed-plus.exe"
 else
-  DAEMON_OUT="goosed"
+  DAEMON_OUT="goosed-plus"
 fi
 DAEMON_SRC="$EXTRACT_DIR/$DAEMON_OUT"
 
 if [ -f "$DAEMON_SRC" ]; then
   chmod +x "$DAEMON_SRC"
-  echo "Moving goosed to $GOOSE_BIN_DIR/$DAEMON_OUT"
+  echo "Moving goosed-plus to $GOOSE_BIN_DIR/$DAEMON_OUT"
   if [ -f "$GOOSE_BIN_DIR/$DAEMON_OUT" ]; then
     mv "$GOOSE_BIN_DIR/$DAEMON_OUT" "$GOOSE_BIN_DIR/$DAEMON_OUT.old"
     if ! mv "$DAEMON_SRC" "$GOOSE_BIN_DIR/$DAEMON_OUT"; then
-      echo "Error: failed to install goosed, restoring previous version"
+      echo "Error: failed to install goosed-plus, restoring previous version"
       mv "$GOOSE_BIN_DIR/$DAEMON_OUT.old" "$GOOSE_BIN_DIR/$DAEMON_OUT"
       exit 1
     fi
@@ -356,7 +356,7 @@ if [ -f "$DAEMON_SRC" ]; then
     mv "$DAEMON_SRC" "$GOOSE_BIN_DIR/$DAEMON_OUT"
   fi
 else
-  echo "Note: goosed is not present in this package; skipping it."
+  echo "Note: goosed-plus is not present in this package; skipping it."
 fi
 
 # Copy Windows runtime DLLs if they exist

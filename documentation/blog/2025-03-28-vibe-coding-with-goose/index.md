@@ -72,7 +72,7 @@ To try the Speech MCP server yourself:
    apt-get install portaudio  # or dnf install portaudio
    ```
 
-2. Install the extension directly using the one-click [deep link install](goose://extension?cmd=uvx&&arg=-p&arg=3.10.14&arg=speech-mcp@latest&id=speech_mcp&name=Speech%20Interface&description=Voice%20interaction%20with%20audio%20visualization%20for%20Goose) in Goose
+2. Install the extension directly using the one-click [deep link install](goose-plus://extension?cmd=uvx&&arg=-p&arg=3.10.14&arg=speech-mcp@latest&id=speech_mcp&name=Speech%20Interface&description=Voice%20interaction%20with%20audio%20visualization%20for%20Goose) in Goose
 
 
 ## Join the Development

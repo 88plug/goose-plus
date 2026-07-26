@@ -81,6 +81,63 @@ if ! grep -q 'cargo check -p goose-cli --features vulkan' .github/workflows/rele
   error "release-plus.yml preflight missing Vulkan CLI check"
 fi
 
+# --- Coexistence with an upstream goose install ---
+# Both forks can be installed side by side, so nothing we ship may claim a name,
+# path, URL scheme or release-asset filename that upstream also claims.
+
+DAEMON_NAME="goosed-plus"
+
+if ! grep -q "name = \"$DAEMON_NAME\"" crates/goose-server/Cargo.toml; then
+  error "goose-server does not build a [[bin]] named $DAEMON_NAME"
+fi
+if ! grep -q "'$DAEMON_NAME'" ui/desktop/src/goosed.ts; then
+  error "ui/desktop/src/goosed.ts does not spawn $DAEMON_NAME"
+fi
+
+# The deb/rpm launchers are copied verbatim (no template vars), so a wrong Exec
+# path ships a menu entry that cannot start the app -- the plus-v1.39.24 bug.
+for tmpl in ui/desktop/forge.deb.desktop ui/desktop/forge.rpm.desktop; do
+  if ! grep -q "^Exec=/usr/lib/$BUNDLE_NAME/$BUNDLE_NAME " "$tmpl"; then
+    error "$tmpl Exec does not point at the installed /usr/lib/$BUNDLE_NAME/$BUNDLE_NAME"
+  fi
+  if ! grep -q "^Icon=/usr/share/pixmaps/$BUNDLE_NAME.png" "$tmpl"; then
+    error "$tmpl Icon does not point at the installed pixmap"
+  fi
+  if ! grep -q "^Name=$BUNDLE_NAME" "$tmpl"; then
+    error "$tmpl Name is not $BUNDLE_NAME (would be indistinguishable from upstream)"
+  fi
+  if ! grep -q "^MimeType=x-scheme-handler/$BUNDLE_NAME;" "$tmpl"; then
+    error "$tmpl does not register the $BUNDLE_NAME:// scheme"
+  fi
+done
+
+if grep -qE "setAsDefaultProtocolClient\('goose'\)" ui/desktop/src/main.ts; then
+  error "main.ts still claims the bare goose:// scheme (steals it from upstream)"
+fi
+if grep -qE "schemes: \['goose'\]" ui/desktop/forge.config.ts; then
+  error "forge.config.ts still registers the bare goose:// scheme"
+fi
+
+# CLI archives must not collide with upstream's identically-named assets.
+if grep -qE '"goose-\$\{TARGET\}' .github/workflows/build-cli.yml; then
+  error "build-cli.yml still packages archives as goose-<target> (collides with upstream)"
+fi
+if grep -qE 'FILE="goose-\$ARCH-' download_cli.sh; then
+  error "download_cli.sh still fetches goose-<arch> archives"
+fi
+if ! grep -q "$DAEMON_NAME" download_cli.sh; then
+  error "download_cli.sh does not install $DAEMON_NAME alongside the CLI"
+fi
+
+# Overlapping globs upload the same file twice (~430MB of duplicates a release).
+if grep -qE '^\s+goose-\*\.zip\s*$' .github/workflows/release-plus.yml; then
+  error "release-plus.yml goose-*.zip glob overlaps goose-plus*.zip"
+fi
+
+if git grep -q 'aaif-goose/goose/releases/download' -- . ':!scripts/release-plus-preflight.sh'; then
+  error "install instructions still download upstream release assets"
+fi
+
 # --- Rust preflight (same feature surface as CI, minus local-inference) ---
 echo "== Cargo preflight (CI-equivalent) =="
 source ./bin/activate-hermit

@@ -1506,10 +1506,10 @@
     "defaultMessage": "Отмена"
   },
   "importRecipeForm.deeplinkHint": {
-    "defaultMessage": "Вставьте диплинк рецепта, начинающийся с «goose://recipe?config=»"
+    "defaultMessage": "Вставьте диплинк рецепта, начинающийся с «goose-plus://recipe?config=»"
   },
   "importRecipeForm.deeplinkPlaceholder": {
-    "defaultMessage": "Вставьте сюда ваш диплинк goose://recipe?config=..."
+    "defaultMessage": "Вставьте сюда ваш диплинк goose-plus://recipe?config=..."
   },
   "importRecipeForm.example": {
     "defaultMessage": "пример"
@@ -3498,7 +3498,7 @@
     "defaultMessage": "Диплинк"
   },
   "scheduleModal.deepLinkPlaceholder": {
-    "defaultMessage": "Вставьте ссылку goose://recipe сюда..."
+    "defaultMessage": "Вставьте ссылку goose-plus://recipe сюда..."
   },
   "scheduleModal.editSchedule": {
     "defaultMessage": "Изменить расписание"
@@ -3510,7 +3510,7 @@
     "defaultMessage": "Не удалось прочитать выбранный файл."
   },
   "scheduleModal.invalidDeepLink": {
-    "defaultMessage": "Неверный диплинк. Используйте ссылку goose://recipe."
+    "defaultMessage": "Неверный диплинк. Используйте ссылку goose-plus://recipe."
   },
   "scheduleModal.invalidFileType": {
     "defaultMessage": "Неверный тип файла: выберите YAML-файл (.yaml или .yml)"
@@ -4008,7 +4008,7 @@
     "defaultMessage": "Вставьте ссылку общего доступа Goose Nostr, чтобы получить, расшифровать и импортировать сеанс."
   },
   "sessions.importNostr.placeholder": {
-    "defaultMessage": "goose://sessions/nostr?nevent=...&key=..."
+    "defaultMessage": "goose-plus://sessions/nostr?nevent=...&key=..."
   },
   "sessions.importNostr.title": {
     "defaultMessage": "Импортировать сеанс Nostr"

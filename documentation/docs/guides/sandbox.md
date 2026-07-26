@@ -32,7 +32,7 @@ When the app starts with sandboxing enabled, it will:
 
 1. Generate a seatbelt sandbox profile
 2. Start a local HTTP CONNECT proxy on localhost
-3. Launch the `goosed` backend for goose Desktop inside `sandbox-exec`, forcing all traffic through the proxy
+3. Launch the `goosed-plus` backend for goose Desktop inside `sandbox-exec`, forcing all traffic through the proxy
 
 The sandbox remains active until you quit goose Desktop. To disable it, quit the app and relaunch normally (or set `GOOSE_SANDBOX=false` when opening from the terminal).
 
@@ -70,7 +70,7 @@ The [seatbelt sandbox profile](https://github.com/aaif-goose/goose/blob/main/ui/
 
 The seatbelt sandbox denies all direct network access, forcing traffic through the proxy. The only allowed connections are:
 
-- **Localhost** — Allows the `goosed` process to reach the egress proxy and its own server port
+- **Localhost** — Allows the `goosed-plus` process to reach the egress proxy and its own server port
 - **Unix sockets** — For local inter-process communication (IPC)
 - **mDNSResponder** — For DNS resolution
 

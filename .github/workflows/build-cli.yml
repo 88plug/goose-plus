@@ -188,12 +188,12 @@ jobs:
             cargo build --release --target ${TARGET} -p goose-cli --bin goose-plus \
               --no-default-features \
               --features portable-default
-            cargo build --release --target ${TARGET} -p goose-server --bin goosed \
+            cargo build --release --target ${TARGET} -p goose-server --bin goosed-plus \
               --no-default-features \
               --features portable-default
           else
             cargo build --release --target ${TARGET} -p goose-cli "${FEATURE_ARGS[@]}"
-            cargo build --release --target ${TARGET} -p goose-server --bin goosed "${FEATURE_ARGS[@]}"
+            cargo build --release --target ${TARGET} -p goose-server --bin goosed-plus "${FEATURE_ARGS[@]}"
           fi
 
       - name: Build CLI (manylinux container)
@@ -216,7 +216,7 @@ jobs:
             --component rustc,cargo --target "$TARGET"
           rustup show
           cargo build --release --target "$TARGET" -p goose-cli
-          cargo build --release --target "$TARGET" -p goose-server --bin goosed
+          cargo build --release --target "$TARGET" -p goose-server --bin goosed-plus
 
       - name: Setup Rust (Windows)
         if: matrix.platform == 'windows'
@@ -260,13 +260,13 @@ jobs:
           Write-Output "Building Windows CLI executable..."
           if ("${{ matrix.variant }}" -eq "cuda") {
             cargo build --release --target x86_64-pc-windows-msvc -p goose-cli --features cuda
-            cargo build --release --target x86_64-pc-windows-msvc -p goose-server --bin goosed --features cuda
+            cargo build --release --target x86_64-pc-windows-msvc -p goose-server --bin goosed-plus --features cuda
           } else {
             cargo build --release --target x86_64-pc-windows-msvc -p goose-cli
-            cargo build --release --target x86_64-pc-windows-msvc -p goose-server --bin goosed
+            cargo build --release --target x86_64-pc-windows-msvc -p goose-server --bin goosed-plus
           }
 
-          foreach ($bin in @("goose-plus.exe", "goosed.exe")) {
+          foreach ($bin in @("goose-plus.exe", "goosed-plus.exe")) {
             if (-not (Test-Path "./target/x86_64-pc-windows-msvc/release/$bin")) {
               Write-Error "Windows binary $bin not found."
               Get-ChildItem ./target/x86_64-pc-windows-msvc/release/ -ErrorAction SilentlyContinue
@@ -293,17 +293,17 @@ jobs:
           mkdir -p "target/${TARGET}/release/goose-package"
 
           # Copy the CLI (named goose-plus inside the package) and the agent
-          # server daemon. goosed is what `docs/nats.md` and `docs/a2a.md` tell
+          # server daemon. goosed-plus is what `docs/nats.md` and `docs/a2a.md` tell
           # users to run for the NATS drive loop and the A2A server, so it has
           # to ship alongside the CLI, not only inside the desktop bundle.
           cp "target/${TARGET}/release/goose-plus" "target/${TARGET}/release/goose-package/"
-          cp "target/${TARGET}/release/goosed" "target/${TARGET}/release/goose-package/"
+          cp "target/${TARGET}/release/goosed-plus" "target/${TARGET}/release/goose-package/"
 
           cd "target/${TARGET}/release"
-          tar -cjf "goose-${TARGET}${VARIANT_SUFFIX}.tar.bz2" -C goose-package .
-          tar -czf "goose-${TARGET}${VARIANT_SUFFIX}.tar.gz" -C goose-package .
-          echo "ARTIFACT_BZ2=target/${TARGET}/release/goose-${TARGET}${VARIANT_SUFFIX}.tar.bz2" >> $GITHUB_ENV
-          echo "ARTIFACT_GZ=target/${TARGET}/release/goose-${TARGET}${VARIANT_SUFFIX}.tar.gz" >> $GITHUB_ENV
+          tar -cjf "goose-plus-${TARGET}${VARIANT_SUFFIX}.tar.bz2" -C goose-package .
+          tar -czf "goose-plus-${TARGET}${VARIANT_SUFFIX}.tar.gz" -C goose-package .
+          echo "ARTIFACT_BZ2=target/${TARGET}/release/goose-plus-${TARGET}${VARIANT_SUFFIX}.tar.bz2" >> $GITHUB_ENV
+          echo "ARTIFACT_GZ=target/${TARGET}/release/goose-plus-${TARGET}${VARIANT_SUFFIX}.tar.gz" >> $GITHUB_ENV
 
       - name: Package CLI (Windows)
         if: matrix.platform == 'windows'
@@ -318,11 +318,11 @@ jobs:
           mkdir -p "target/${TARGET}/release/goose-package"
 
           cp "target/${TARGET}/release/goose-plus.exe" "target/${TARGET}/release/goose-package/"
-          cp "target/${TARGET}/release/goosed.exe" "target/${TARGET}/release/goose-package/"
+          cp "target/${TARGET}/release/goosed-plus.exe" "target/${TARGET}/release/goose-package/"
 
           cd "target/${TARGET}/release"
-          7z a -tzip "goose-${TARGET}${VARIANT_SUFFIX}.zip" goose-package/
-          echo "ARTIFACT_ZIP=target/${TARGET}/release/goose-${TARGET}${VARIANT_SUFFIX}.zip" >> $GITHUB_ENV
+          7z a -tzip "goose-plus-${TARGET}${VARIANT_SUFFIX}.zip" goose-package/
+          echo "ARTIFACT_ZIP=target/${TARGET}/release/goose-plus-${TARGET}${VARIANT_SUFFIX}.zip" >> $GITHUB_ENV
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

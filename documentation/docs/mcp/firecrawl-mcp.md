@@ -17,7 +17,7 @@ This tutorial will get you started with the [Firecrawl MCP Server](https://githu
 :::tip Quick Install
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
-  [Launch the installer](goose://extension?cmd=npx&arg=-y&arg=firecrawl-mcp&id=firecrawl&name=Firecrawl&description=Web%20scraping%20and%20crawling%20capabilities&env=FIRECRAWL_API_KEY%3DYour%20API%20Key)
+  [Launch the installer](goose-plus://extension?cmd=npx&arg=-y&arg=firecrawl-mcp&id=firecrawl&name=Firecrawl&description=Web%20scraping%20and%20crawling%20capabilities&env=FIRECRAWL_API_KEY%3DYour%20API%20Key)
   </TabItem>
   <TabItem value="cli" label="goose CLI">
   **Command**

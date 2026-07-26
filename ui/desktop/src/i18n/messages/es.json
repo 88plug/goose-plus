@@ -1506,10 +1506,10 @@
     "defaultMessage": "Cancelar"
   },
   "importRecipeForm.deeplinkHint": {
-    "defaultMessage": "Pega un deeplink de receta que empiece por \"goose://recipe?config=\""
+    "defaultMessage": "Pega un deeplink de receta que empiece por \"goose-plus://recipe?config=\""
   },
   "importRecipeForm.deeplinkPlaceholder": {
-    "defaultMessage": "Pega aquí tu deeplink goose://recipe?config=..."
+    "defaultMessage": "Pega aquí tu deeplink goose-plus://recipe?config=..."
   },
   "importRecipeForm.example": {
     "defaultMessage": "ejemplo"
@@ -3498,7 +3498,7 @@
     "defaultMessage": "Deep link"
   },
   "scheduleModal.deepLinkPlaceholder": {
-    "defaultMessage": "Pega aquí el enlace goose://recipe..."
+    "defaultMessage": "Pega aquí el enlace goose-plus://recipe..."
   },
   "scheduleModal.editSchedule": {
     "defaultMessage": "Editar programación"
@@ -3510,7 +3510,7 @@
     "defaultMessage": "No se pudo leer el archivo seleccionado."
   },
   "scheduleModal.invalidDeepLink": {
-    "defaultMessage": "Deep link no válido. Usa un enlace goose://recipe."
+    "defaultMessage": "Deep link no válido. Usa un enlace goose-plus://recipe."
   },
   "scheduleModal.invalidFileType": {
     "defaultMessage": "Tipo de archivo no válido: selecciona un archivo YAML (.yaml o .yml)"
@@ -4008,7 +4008,7 @@
     "defaultMessage": "Pega un enlace de Goose para compartir por Nostr para obtener, descifrar e importar la sesión."
   },
   "sessions.importNostr.placeholder": {
-    "defaultMessage": "goose://sessions/nostr?nevent=...&key=..."
+    "defaultMessage": "goose-plus://sessions/nostr?nevent=...&key=..."
   },
   "sessions.importNostr.title": {
     "defaultMessage": "Importar sesión de Nostr"

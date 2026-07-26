@@ -1506,10 +1506,10 @@
     "defaultMessage": "取消"
   },
   "importRecipeForm.deeplinkHint": {
-    "defaultMessage": "粘贴以“goose://recipe?config=”开头的配方深层链接"
+    "defaultMessage": "粘贴以“goose-plus://recipe?config=”开头的配方深层链接"
   },
   "importRecipeForm.deeplinkPlaceholder": {
-    "defaultMessage": "在此粘贴你的 goose://recipe?config=... 深层链接"
+    "defaultMessage": "在此粘贴你的 goose-plus://recipe?config=... 深层链接"
   },
   "importRecipeForm.example": {
     "defaultMessage": "示例"
@@ -3498,7 +3498,7 @@
     "defaultMessage": "深层链接"
   },
   "scheduleModal.deepLinkPlaceholder": {
-    "defaultMessage": "在此粘贴 goose://recipe 链接…"
+    "defaultMessage": "在此粘贴 goose-plus://recipe 链接…"
   },
   "scheduleModal.editSchedule": {
     "defaultMessage": "编辑计划"
@@ -3510,7 +3510,7 @@
     "defaultMessage": "读取所选文件失败。"
   },
   "scheduleModal.invalidDeepLink": {
-    "defaultMessage": "深层链接无效。请使用 goose://recipe 链接。"
+    "defaultMessage": "深层链接无效。请使用 goose-plus://recipe 链接。"
   },
   "scheduleModal.invalidFileType": {
     "defaultMessage": "文件类型无效：请选择 YAML 文件（.yaml 或 .yml）"
@@ -4008,7 +4008,7 @@
     "defaultMessage": "粘贴 Goose Nostr 分享链接以获取、解密并导入会话。"
   },
   "sessions.importNostr.placeholder": {
-    "defaultMessage": "goose://sessions/nostr?nevent=...&key=..."
+    "defaultMessage": "goose-plus://sessions/nostr?nevent=...&key=..."
   },
   "sessions.importNostr.title": {
     "defaultMessage": "导入 Nostr 会话"

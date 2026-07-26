@@ -1506,10 +1506,10 @@
     "defaultMessage": "रद्द करें"
   },
   "importRecipeForm.deeplinkHint": {
-    "defaultMessage": "\"goose://recipe?config=\" से शुरू होने वाली रेसिपी डीपलिंक चिपकाएँ"
+    "defaultMessage": "\"goose-plus://recipe?config=\" से शुरू होने वाली रेसिपी डीपलिंक चिपकाएँ"
   },
   "importRecipeForm.deeplinkPlaceholder": {
-    "defaultMessage": "अपना goose://recipe?config=... डीपलिंक यहां पेस्ट करें"
+    "defaultMessage": "अपना goose-plus://recipe?config=... डीपलिंक यहां पेस्ट करें"
   },
   "importRecipeForm.example": {
     "defaultMessage": "उदाहरण"
@@ -3498,7 +3498,7 @@
     "defaultMessage": "डीप लिंक"
   },
   "scheduleModal.deepLinkPlaceholder": {
-    "defaultMessage": "goose://recipe लिंक यहां चिपकाएं..."
+    "defaultMessage": "goose-plus://recipe लिंक यहां चिपकाएं..."
   },
   "scheduleModal.editSchedule": {
     "defaultMessage": "शेड्यूल संपादित करें"
@@ -3510,7 +3510,7 @@
     "defaultMessage": "चयनित फ़ाइल को पढ़ने में विफल."
   },
   "scheduleModal.invalidDeepLink": {
-    "defaultMessage": "अमान्य डीप लिंक। कृपया goose://recipe लिंक का उपयोग करें।"
+    "defaultMessage": "अमान्य डीप लिंक। कृपया goose-plus://recipe लिंक का उपयोग करें।"
   },
   "scheduleModal.invalidFileType": {
     "defaultMessage": "अमान्य फ़ाइल प्रकार: कृपया YAML file (.yaml या .yml) चुनें"
@@ -4008,7 +4008,7 @@
     "defaultMessage": "सत्र लाने, डिक्रिप्ट करने और आयात करने के लिए Goose नॉस्ट्र शेयर लिंक चिपकाएँ।"
   },
   "sessions.importNostr.placeholder": {
-    "defaultMessage": "goose://sessions/nostr?nevent=...&key=..."
+    "defaultMessage": "goose-plus://sessions/nostr?nevent=...&key=..."
   },
   "sessions.importNostr.title": {
     "defaultMessage": "नोस्ट्र सत्र आयात करें"

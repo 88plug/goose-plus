@@ -101,7 +101,7 @@ Server logs are stored in:
 
 Logs are organized into date-based subdirectories (e.g., `server/2025-11-13/`) and subdirectories older than two weeks are automatically deleted.
 
-The Server logs contain information about the goose daemon (`goosed`), which is a local server process that runs on your computer. This server component manages communication between the CLI, extensions, and LLMs. 
+The Server logs contain information about the goose daemon (`goosed-plus`), which is a local server process that runs on your computer. This server component manages communication between the CLI, extensions, and LLMs. 
 
 Server logs include:
 * Server initialization details
