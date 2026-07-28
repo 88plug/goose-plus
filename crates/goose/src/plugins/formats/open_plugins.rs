@@ -11,9 +11,14 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
-const MANIFESTS: [&str; 3] = [
+const MANIFESTS: [&str; 4] = [
     ".goose-plugin/plugin.json",
     ".plugin/plugin.json",
+    // Claude Code's plugin layout. Its manifest is a superset of the fields
+    // read here (name/version/skills/mcpServers), so it parses directly.
+    // Without it these repos still install via COMPONENT_MARKERS, but with no
+    // name or version -- every one reported itself as "unknown".
+    ".claude-plugin/plugin.json",
     "plugin.json",
 ];
 const FORMAT: &str = "open-plugins";
@@ -605,6 +610,45 @@ mod tests {
         assert!(installed.skills.is_empty());
         assert!(installed.directory.join("hooks/hooks.json").is_file());
         assert!(installed.directory.join("plugin.json").is_file());
+    }
+
+    #[test]
+    fn installs_claude_plugin_manifest_with_name_and_skills() {
+        let install_root = tempfile::tempdir().unwrap();
+        let repo = tempfile::tempdir().unwrap();
+
+        // Shape used by Claude Code plugins: manifest under .claude-plugin/,
+        // `skills` as a relative path string, and extra keys goose ignores.
+        fs::create_dir_all(repo.path().join(".claude-plugin")).unwrap();
+        fs::write(
+            repo.path().join(".claude-plugin/plugin.json"),
+            r#"{"name":"ooda","version":"1.2.3","skills":"./skills","author":"x","keywords":[]}"#,
+        )
+        .unwrap();
+        let skill_dir = repo.path().join("skills").join("ooda");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: ooda\ndescription: loop\n---\n",
+        )
+        .unwrap();
+
+        let installed = install_from_manifest(
+            "https://example.invalid/ooda.git",
+            repo.path(),
+            install_root.path(),
+            &PluginInstallOptions::default(),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(installed.name, "ooda");
+        assert_eq!(installed.version, "1.2.3");
+        assert_eq!(installed.skills.len(), 1);
+        assert!(installed
+            .directory
+            .join(".claude-plugin/plugin.json")
+            .is_file());
     }
 
     #[test]
