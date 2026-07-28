@@ -228,7 +228,7 @@ export default function ExtensionsManager({
       } else {
         await client.goose.sessionExtensionsAdd_unstable({
           sessionId,
-          config: sel as any,
+          extension: toGooseExtension(sel),
         });
       }
     });
@@ -244,7 +244,7 @@ export default function ExtensionsManager({
         });
         await client.goose.sessionExtensionsAdd_unstable({
           sessionId,
-          config: config as any,
+          extension: toGooseExtension(config),
         });
       });
     },

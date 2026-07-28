@@ -389,8 +389,8 @@ importers:
   text:
     dependencies:
       '@aaif/goose-sdk':
-        specifier: 0.20.2
-        version: 0.20.2(@agentclientprotocol/sdk@0.19.0(zod@4.4.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: workspace:*
+        version: link:../sdk
       '@agentclientprotocol/sdk':
         specifier: ^0.19.0
         version: 0.19.0(zod@4.4.3)
@@ -436,41 +436,6 @@ importers:
         version: 5.9.3
 
 packages:
-
-  '@aaif/goose-binary-darwin-arm64@0.20.2':
-    resolution: {integrity: sha512-0wv6UcYxg/dZXRuIUBTL+64Hz0D50PfUA2mJiUEBhWkBmiBCgS/Iymore0gYuayxVV7MzQhKrHqdDPBoo0lqIg==}
-    cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
-  '@aaif/goose-binary-darwin-x64@0.20.2':
-    resolution: {integrity: sha512-dZG6H1QF/lv/kVc1YmHVKRGJCZtoe9o0N2q4vgvDK0Lz+ZJp/ehKcIxUSqE/zebXDqLb4yWByDGelq5Ud2rnCw==}
-    cpu: [x64]
-    os: [darwin]
-    hasBin: true
-
-  '@aaif/goose-binary-linux-arm64@0.20.2':
-    resolution: {integrity: sha512-DLbm8r21v4c39dGbLepjXDmXNLsdWw0PFFpRbQtBd2m5Q+xIBgYOx1jNm3EygDQT9yGV9R3WS6SW3LvMJLA3xw==}
-    cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
-  '@aaif/goose-binary-linux-x64@0.20.2':
-    resolution: {integrity: sha512-+TgB2+MKj18kbw5PBnDMAWvuy8ZijNxXQL4qRBeMebcx07W3dIf6zoy9xD5mSyce61ugG9vsLt9a+3Pm8qZaRw==}
-    cpu: [x64]
-    os: [linux]
-    hasBin: true
-
-  '@aaif/goose-binary-win32-x64@0.20.2':
-    resolution: {integrity: sha512-P0GrtagS0U/98XW4VuzQ77Fy02bw4wFhzyRWWbR9LDVwY+lLG+AkE5m0Ml/KGKgDWS6gd8BtkAqRxdFw3PM9RQ==}
-    cpu: [x64]
-    os: [win32]
-    hasBin: true
-
-  '@aaif/goose-sdk@0.20.2':
-    resolution: {integrity: sha512-HhsspN1OycRqgKgnUBWC/5xOpJ8zuKWmABax0Br0ZfND94AKKZbsBlya8e+pSM+CvztWLXHRz2KxPQuXYoGyBQ==}
-    peerDependencies:
-      '@agentclientprotocol/sdk': ^0.19.0
 
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
@@ -7858,39 +7823,6 @@ packages:
 
 snapshots:
 
-  '@aaif/goose-binary-darwin-arm64@0.20.2':
-    optional: true
-
-  '@aaif/goose-binary-darwin-x64@0.20.2':
-    optional: true
-
-  '@aaif/goose-binary-linux-arm64@0.20.2':
-    optional: true
-
-  '@aaif/goose-binary-linux-x64@0.20.2':
-    optional: true
-
-  '@aaif/goose-binary-win32-x64@0.20.2':
-    optional: true
-
-  '@aaif/goose-sdk@0.20.2(@agentclientprotocol/sdk@0.19.0(zod@4.4.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
-    dependencies:
-      '@agentclientprotocol/sdk': 0.19.0(zod@4.4.3)
-      '@modelcontextprotocol/ext-apps': 0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
-      zod: 3.25.76
-    optionalDependencies:
-      '@aaif/goose-binary-darwin-arm64': 0.20.2
-      '@aaif/goose-binary-darwin-x64': 0.20.2
-      '@aaif/goose-binary-linux-arm64': 0.20.2
-      '@aaif/goose-binary-linux-x64': 0.20.2
-      '@aaif/goose-binary-win32-x64': 0.20.2
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - react
-      - react-dom
-      - supports-color
-
   '@adobe/css-tools@4.4.4': {}
 
   '@agentclientprotocol/sdk@0.19.0(zod@3.25.76)':
@@ -9299,31 +9231,6 @@ snapshots:
   '@modelcontextprotocol/ext-apps@0.3.1(@modelcontextprotocol/sdk@1.27.1(zod@3.25.76))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.27.1(zod@3.25.76)
-      zod: 3.25.76
-    optionalDependencies:
-      '@oven/bun-darwin-aarch64': 1.3.10
-      '@oven/bun-darwin-x64': 1.3.10
-      '@oven/bun-darwin-x64-baseline': 1.3.10
-      '@oven/bun-linux-aarch64': 1.3.10
-      '@oven/bun-linux-aarch64-musl': 1.3.10
-      '@oven/bun-linux-x64': 1.3.10
-      '@oven/bun-linux-x64-baseline': 1.3.10
-      '@oven/bun-linux-x64-musl': 1.3.10
-      '@oven/bun-linux-x64-musl-baseline': 1.3.10
-      '@oven/bun-windows-x64': 1.3.10
-      '@oven/bun-windows-x64-baseline': 1.3.10
-      '@rollup/rollup-darwin-arm64': 4.59.0
-      '@rollup/rollup-darwin-x64': 4.59.0
-      '@rollup/rollup-linux-arm64-gnu': 4.59.0
-      '@rollup/rollup-linux-x64-gnu': 4.59.0
-      '@rollup/rollup-win32-arm64-msvc': 4.59.0
-      '@rollup/rollup-win32-x64-msvc': 4.59.0
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
-
-  '@modelcontextprotocol/ext-apps@0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)':
-    dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
       zod: 3.25.76
     optionalDependencies:
       '@oven/bun-darwin-aarch64': 1.3.10
