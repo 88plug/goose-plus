@@ -1215,6 +1215,9 @@ export type RecipeSettingsDto = {
     goose_model?: string | null;
     temperature?: number | null;
     max_turns?: number | null;
+    request_params?: {
+        [key: string]: unknown;
+    } | null;
 };
 
 export type RecipeAuthorDto = {

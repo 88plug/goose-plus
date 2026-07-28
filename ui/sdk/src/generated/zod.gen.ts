@@ -1248,6 +1248,10 @@ export const zRecipeSettingsDto = z.object({
     max_turns: z.union([
         z.number().int().gte(0),
         z.null()
+    ]).optional(),
+    request_params: z.union([
+        z.record(z.unknown()),
+        z.null()
     ]).optional()
 });
 
