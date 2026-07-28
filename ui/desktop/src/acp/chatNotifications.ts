@@ -1,4 +1,4 @@
-import type { GooseSessionNotification_unstable } from '@aaif/goose-sdk';
+import type { GooseSessionNotification_unstable } from '@88plug/goose-plus-sdk';
 import type { SessionNotification } from '@agentclientprotocol/sdk';
 import { USE_ACP_CHAT } from '../acpChatFeatureFlag';
 import { AppEvents } from '../constants/events';

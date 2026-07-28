@@ -1058,16 +1058,10 @@ enum Command {
     #[cfg(feature = "tui")]
     #[command(
         about = "Launch the goose terminal UI",
-        long_about = "Launch the goose terminal UI (the @aaif/goose npm package).\n\
+        long_about = "Launch the goose terminal UI.\n\
                       \n\
-                      Resolution order:\n  \
-                      1. GOOSE_TUI_SCRIPT, if set to an existing dist/tui.js\n  \
-                      2. A local checkout's ui/text/dist/tui.js (dev workflow)\n  \
-                      3. `npx --yes --package <spec> -- goose-tui` (deployed installs)\n\
-                      \n\
-                      Override the npm spec via GOOSE_TUI_NPM_SPEC (default: @aaif/goose@latest).\n\
-                      Local script mode requires `node` on PATH; npx mode requires `npx` on PATH.\n\
-                      Any extra arguments are passed through to the TUI."
+                      The TUI is built into this binary; it needs no Node.js, npx\n\
+                      or npm package. Any extra arguments are passed through to it."
     )]
     Tui {
         /// Arguments forwarded to the TUI

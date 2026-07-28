@@ -1,4 +1,4 @@
-import type { Stream } from '@aaif/goose-sdk';
+import type { Stream } from '@88plug/goose-plus-sdk';
 
 export function createWebSocketStream(wsUrl: string): Stream {
   const ws = new window.WebSocket(wsUrl);

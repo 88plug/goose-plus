@@ -5,7 +5,7 @@ import type {
   NewSessionRequest,
   SessionInfo,
 } from '@agentclientprotocol/sdk';
-import type { GooseExtension } from '@aaif/goose-sdk';
+import type { GooseExtension } from '@88plug/goose-plus-sdk';
 import { getAcpClient } from './acpConnection';
 import { DEFAULT_CHAT_TITLE } from '../contexts/ChatContext';
 import type { ExtensionLoadResult, Session } from '../api';

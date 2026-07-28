@@ -1,4 +1,4 @@
-# @aaif/goose-sdk
+# @88plug/goose-plus-sdk
 
 TypeScript client library for the Goose Agent Client Protocol (ACP).
 
@@ -9,7 +9,7 @@ This package provides:
 ## Installation
 
 ```bash
-npm install @aaif/goose-sdk
+npm install @88plug/goose-plus-sdk
 ```
 
 The native `goose` binaries are distributed as optional dependencies
@@ -44,7 +44,7 @@ npm run build:native:all
 
 ### Local Development with npm link
 
-To use this package locally in another project (e.g., `@aaif/goose`):
+To use this package locally in another project (e.g., `@88plug/goose-plus-tui`):
 
 ```bash
 # In ui/sdk
@@ -52,7 +52,7 @@ npm run build
 npm link
 
 # In ui/text (or another project)
-npm link @aaif/goose-sdk
+npm link @88plug/goose-plus-sdk
 ```
 
 ### Schema Generation
@@ -98,14 +98,14 @@ For manual publishing:
 ```
 
 This will:
-1. Build and publish `@aaif/goose-sdk`
+1. Build and publish `@88plug/goose-plus-sdk`
 2. Publish all native binary packages
-3. Publish `@aaif/goose` (which depends on the above)
+3. Publish `@88plug/goose-plus-tui` (which depends on the above)
 
 ## Usage
 
 ```typescript
-import { GooseClient } from "@aaif/goose-sdk";
+import { GooseClient } from "@88plug/goose-plus-sdk";
 
 const client = new GooseClient({
   // ... configuration

@@ -9,7 +9,7 @@
 //   GOOSE_BINARY=/path/to/goose node ui/sdk/scripts/check-binary-compat.mjs
 //
 // Or via package script:
-//   GOOSE_BINARY=/path/to/goose pnpm --filter @aaif/goose-sdk run check:compat
+//   GOOSE_BINARY=/path/to/goose pnpm --filter @88plug/goose-plus-sdk run check:compat
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, existsSync, statSync } from "node:fs";

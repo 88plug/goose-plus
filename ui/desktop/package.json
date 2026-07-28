@@ -9,7 +9,7 @@
   },
   "main": ".vite/build/main.js",
   "scripts": {
-    "postinstall": "pnpm --filter @aaif/goose-sdk run build",
+    "postinstall": "pnpm --filter @88plug/goose-plus-sdk run build",
     "typecheck": "tsc --noEmit",
     "generate-api": "openapi-ts",
     "build:web": "vite build --config vite.web.config.mts",
@@ -50,7 +50,7 @@
     "i18n:validate-locale": "node scripts/i18n-validate-locale.js"
   },
   "dependencies": {
-    "@aaif/goose-sdk": "workspace:*",
+    "@88plug/goose-plus-sdk": "workspace:*",
     "@agentclientprotocol/sdk": "^0.19.0",
     "@mcp-ui/client": "^7.1.1",
     "@modelcontextprotocol/ext-apps": "^1.7.4",

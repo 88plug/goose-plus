@@ -46,7 +46,7 @@ Here's what's happening and how to get started.
 The new TypeScript-based TUI is in beta. It already supports messages, tool calling, syntax-highlighted code, and rendered markdown. Give it a spin:
 
 ```bash
-npx @aaif/goose
+npx @88plug/goose-plus-tui
 ```
 
 That's it — one command, no install. It pulls down the latest beta and starts an interactive session.
@@ -72,7 +72,7 @@ We will follow up with another post when the desktop is ready for beta testing.
 This is all happening in the open. Follow along or jump in:
 
 - **Tracking issue:** [#6642](https://github.com/aaif-goose/goose/issues/6642)
-- **Try the TUI:** `npx @aaif/goose`
+- **Try the TUI:** `npx @88plug/goose-plus-tui`
 - **Discord:** Follow along and give feedback in [#goose-2-dev](https://discord.gg/goose-oss).
 - **Feedback?** Open an issue or drop a comment on #6642 — we'd love to hear from you.
 

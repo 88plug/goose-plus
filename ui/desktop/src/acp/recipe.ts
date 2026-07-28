@@ -3,7 +3,7 @@ import type {
   SaveRecipeResponse_unstable,
   ScanRecipeResponse_unstable,
   RecipeListEntryDto,
-} from '@aaif/goose-sdk';
+} from '@88plug/goose-plus-sdk';
 import { getAcpClient } from './acpConnection';
 
 let inFlightListRecipes: Promise<RecipeListEntryDto[]> | null = null;

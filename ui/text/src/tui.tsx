@@ -21,8 +21,8 @@ import type {
   RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
 import { PROTOCOL_VERSION, ndJsonStream } from "@agentclientprotocol/sdk";
-import { GooseClient } from "@aaif/goose-sdk";
-import { resolveGooseBinary } from "@aaif/goose-sdk/node";
+import { GooseClient } from "@88plug/goose-plus-sdk";
+import { resolveGooseBinary } from "@88plug/goose-plus-sdk/node";
 import Onboarding from "./onboarding.js";
 import ConfigureScreen, { ConfigureIntent } from "./configure.js";
 import ExtensionsManager from "./extensions.js";

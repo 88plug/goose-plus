@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
-import type { GooseClient, ProviderInventoryEntryDto } from "@aaif/goose-sdk";
+import type { GooseClient, ProviderInventoryEntryDto } from "@88plug/goose-plus-sdk";
 import {
   CRANBERRY,
   TEAL,

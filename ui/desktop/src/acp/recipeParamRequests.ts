@@ -2,7 +2,7 @@ import type {
   RecipeParameterDto,
   RecipeParamsResponse_unstable,
   RequestRecipeParams_unstable,
-} from '@aaif/goose-sdk';
+} from '@88plug/goose-plus-sdk';
 import { v7 as uuidv7 } from 'uuid';
 import { USE_ACP_CHAT } from '../acpChatFeatureFlag';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@aaif/goose",
+  "name": "@88plug/goose-plus-tui",
   "version": "0.20.1",
   "description": "Goose - an open-source AI agent",
   "license": "Apache-2.0",
@@ -27,7 +27,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@aaif/goose-sdk": "workspace:*",
+    "@88plug/goose-plus-sdk": "workspace:*",
     "@agentclientprotocol/sdk": "^0.19.0",
     "@inkjs/ui": "^2.0.0",
     "ink": "^6.8.0",

@@ -1,5 +1,5 @@
 import type { ExtensionConfig, ExtensionEntry } from '../api';
-import type { GooseExtension, GooseExtensionEntry } from '@aaif/goose-sdk';
+import type { GooseExtension, GooseExtensionEntry } from '@88plug/goose-plus-sdk';
 import { getAcpClient } from './acpConnection';
 
 export type ConfiguredExtensionEntry = ExtensionEntry & { configKey?: string };

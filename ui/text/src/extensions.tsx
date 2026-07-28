@@ -6,7 +6,7 @@ import type {
   GooseExtension,
   GooseExtensionEntry,
   McpServerStdio,
-} from "@aaif/goose-sdk";
+} from "@88plug/goose-plus-sdk";
 import {
   CRANBERRY,
   GOLD,

@@ -7,18 +7,18 @@ https://github.com/aaif-goose/goose/discussions/7309
 
 ## Running
 
-The TUI launches the goose ACP server by spawning `goose acp`. Which binary it spawns is resolved by `@aaif/goose-sdk`:
+The TUI launches the goose ACP server by spawning `goose acp`. Which binary it spawns is resolved by `@88plug/goose-plus-sdk`:
 
 1. the `GOOSE_BINARY` environment variable, if set, otherwise
-2. the platform's prebuilt `@aaif/goose-binary-*` package (an optional dependency of the pinned `@aaif/goose-sdk`).
+2. the platform's prebuilt `@88plug/goose-plus-tui-binary-*` package (an optional dependency of the pinned `@88plug/goose-plus-sdk`).
 
 ```bash
 cd ui/text
-pnpm install   # pulls the pinned @aaif/goose-sdk and its matching @aaif/goose-binary-* package
+pnpm install   # pulls the pinned @88plug/goose-plus-sdk and its matching @88plug/goose-plus-tui-binary-* package
 pnpm start     # tsx src/tui.tsx — runs against the released binary, no Rust build
 ```
 
-The TUI pins a specific `@aaif/goose-sdk` version, so `pnpm start` always runs against a goose binary that matches the SDK.
+The TUI pins a specific `@88plug/goose-plus-sdk` version, so `pnpm start` always runs against a goose binary that matches the SDK.
 
 ### Building goose from local source
 
@@ -28,7 +28,7 @@ To test local Rust changes, run the dev launcher directly. It builds a debug bin
 node scripts/dev-start.mjs
 ```
 
-If your changes touch the ACP schema, also point the TUI at the in-repo SDK so the two stay matched: set `@aaif/goose-sdk` to `workspace:*` in `package.json` and re-run `pnpm install`. Otherwise the locally built binary may not match the pinned published SDK's schema. Revert that change before committing — the TUI is meant to stay frozen on its pinned SDK version.
+If your changes touch the ACP schema, also point the TUI at the in-repo SDK so the two stay matched: set `@88plug/goose-plus-sdk` to `workspace:*` in `package.json` and re-run `pnpm install`. Otherwise the locally built binary may not match the pinned published SDK's schema. Revert that change before committing — the TUI is meant to stay frozen on its pinned SDK version.
 
 To run any other prebuilt binary, set `GOOSE_BINARY=/path/to/goose` and use `pnpm start`.
 

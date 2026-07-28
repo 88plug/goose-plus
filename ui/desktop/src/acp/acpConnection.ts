@@ -2,7 +2,7 @@ import {
   DEFAULT_GOOSE_MCP_HOST_CAPABILITIES,
   GooseClient,
   type GooseClientCallbacks,
-} from '@aaif/goose-sdk';
+} from '@88plug/goose-plus-sdk';
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import packageJson from '../../package.json';
 import {

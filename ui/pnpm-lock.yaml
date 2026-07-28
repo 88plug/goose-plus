@@ -23,7 +23,7 @@ importers:
 
   desktop:
     dependencies:
-      '@aaif/goose-sdk':
+      '@88plug/goose-plus-sdk':
         specifier: workspace:*
         version: link:../sdk
       '@agentclientprotocol/sdk':
@@ -388,7 +388,7 @@ importers:
 
   text:
     dependencies:
-      '@aaif/goose-sdk':
+      '@88plug/goose-plus-sdk':
         specifier: workspace:*
         version: link:../sdk
       '@agentclientprotocol/sdk':

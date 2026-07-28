@@ -1,6 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { updateSessionUserRecipeValues, type Message, type Session } from '../api';
-import type { GooseExtension } from '@aaif/goose-sdk';
+import type { GooseExtension } from '@88plug/goose-plus-sdk';
 import { AppEvents } from '../constants/events';
 import { ChatState } from '../types/chatState';
 import { errorMessage } from '../utils/conversionUtils';

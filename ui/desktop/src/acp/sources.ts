@@ -1,4 +1,4 @@
-import type { SourceEntry, SourceType } from '@aaif/goose-sdk';
+import type { SourceEntry, SourceType } from '@88plug/goose-plus-sdk';
 import { getAcpClient } from './acpConnection';
 
 const SKILL_SOURCE_TYPES: SourceType[] = ['skill', 'builtinSkill'];

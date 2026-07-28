@@ -1,4 +1,4 @@
-import type { RequestRecipeParams_unstable } from '@aaif/goose-sdk';
+import type { RequestRecipeParams_unstable } from '@88plug/goose-plus-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   cancelAcpRecipeParamRequest,

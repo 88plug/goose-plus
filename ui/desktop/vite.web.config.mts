@@ -17,11 +17,11 @@ export default defineConfig({
 
   publicDir: 'web-public',
 
-  // Vite caches a copy of @aaif/goose-sdk and doesn't notice when we rebuild it
+  // Vite caches a copy of @88plug/goose-plus-sdk and doesn't notice when we rebuild it
   // locally, so it serves stale code until you clear node_modules/.vite by hand.
   // Excluding it makes Vite always read the latest ui/sdk/dist build.
   optimizeDeps: {
-    exclude: ['@aaif/goose-sdk'],
+    exclude: ['@88plug/goose-plus-sdk'],
   },
 
   build: {
