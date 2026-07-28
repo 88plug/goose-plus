@@ -74,17 +74,6 @@ npm run build:schema
 ## Native Binary Packages
 
 Platform-specific npm packages for the `goose` binary are located in
-`ui/goose-binary/`:
-
-| Package | Platform |
-|---------|----------|
-| `@aaif/goose-binary-darwin-arm64` | macOS Apple Silicon |
-| `@aaif/goose-binary-darwin-x64` | macOS Intel |
-| `@aaif/goose-binary-linux-arm64` | Linux ARM64 |
-| `@aaif/goose-binary-linux-x64` | Linux x64 |
-| `@aaif/goose-binary-win32-x64` | Windows x64 |
-
-These are published separately from `@aaif/goose-sdk`.
 
 ### Building Native Binaries
 
@@ -96,7 +85,6 @@ npm run build:native
 npm run build:native:all
 
 # Build for specific platform(s)
-npx tsx scripts/build-native.ts darwin-arm64 linux-x64
 ```
 
 ## Publishing
@@ -107,7 +95,6 @@ For manual publishing:
 
 ```bash
 # From repository root
-./ui/scripts/publish.sh --real
 ```
 
 This will:

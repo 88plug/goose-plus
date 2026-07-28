@@ -1,20 +1,23 @@
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { accessSync, constants } from "node:fs";
+import { delimiter, join } from "node:path";
 
-const PLATFORMS: Record<string, string> = {
-  "darwin-arm64": "@aaif/goose-binary-darwin-arm64",
-  "darwin-x64": "@aaif/goose-binary-darwin-x64",
-  "linux-arm64": "@aaif/goose-binary-linux-arm64",
-  "linux-x64": "@aaif/goose-binary-linux-x64",
-  "win32-x64": "@aaif/goose-binary-win32-x64",
-};
+const BINARY = process.platform === "win32" ? "goose-plus.exe" : "goose-plus";
+
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Resolves the path to the goose binary.
+ * Resolves the path to the goose-plus binary.
  *
  * Resolution order:
  *   1. `GOOSE_BINARY` environment variable (explicit override)
- *   2. Platform-specific `@aaif/goose-binary-*` optional dependency
+ *   2. `goose-plus` on PATH, where download_cli.sh installs it
  *
  * @throws if no binary can be found
  */
@@ -22,22 +25,14 @@ export function resolveGooseBinary(): string {
   const envBinary = process.env.GOOSE_BINARY;
   if (envBinary) return envBinary;
 
-  const key = `${process.platform}-${process.arch}`;
-  const pkg = PLATFORMS[key];
-  if (!pkg) {
-    throw new Error(
-      `No goose binary available for ${key}. Set GOOSE_BINARY to the path of a goose binary.`,
-    );
+  const searchPath = process.env.PATH ?? "";
+  for (const dir of searchPath.split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, BINARY);
+    if (isExecutable(candidate)) return candidate;
   }
 
-  try {
-    const require = createRequire(import.meta.url);
-    const pkgDir = dirname(require.resolve(`${pkg}/package.json`));
-    const binName = process.platform === "win32" ? "goose.exe" : "goose";
-    return join(pkgDir, "bin", binName);
-  } catch {
-    throw new Error(
-      `goose binary package ${pkg} is not installed. Set GOOSE_BINARY or install the native package.`,
-    );
-  }
+  throw new Error(
+    `${BINARY} was not found on PATH. Install it, or set GOOSE_BINARY to the path of a ${BINARY} binary.`,
+  );
 }
