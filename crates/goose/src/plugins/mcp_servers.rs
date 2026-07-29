@@ -20,13 +20,32 @@ struct McpServersDocument {
 
 #[derive(Debug, Deserialize)]
 struct McpServerConfig {
-    command: String,
+    /// Transport discriminator. Absent means stdio, which is what plugins
+    /// carrying only `command` rely on.
+    #[serde(default, rename = "type")]
+    transport: Option<String>,
+    #[serde(default)]
+    command: Option<String>,
     #[serde(default)]
     args: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
     #[serde(default)]
     cwd: Option<String>,
+    /// Endpoint for remote (`http`/`sse`) servers.
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    headers: HashMap<String, String>,
+}
+
+impl McpServerConfig {
+    fn is_remote(&self) -> bool {
+        matches!(
+            self.transport.as_deref(),
+            Some("http") | Some("streamable_http") | Some("sse")
+        ) || (self.command.is_none() && self.url.is_some())
+    }
 }
 
 pub fn enabled_plugin_mcp_servers(project_root: Option<&Path>) -> Vec<ExtensionConfig> {
@@ -138,6 +157,7 @@ fn server_to_extension_config(
     server: McpServerConfig,
 ) -> ExtensionConfig {
     let root = plugin_root.to_string_lossy();
+    let is_remote = server.is_remote();
     let mut env = HashMap::from([("PLUGIN_ROOT".to_string(), root.to_string())]);
     env.extend(
         server
@@ -146,10 +166,30 @@ fn server_to_extension_config(
             .map(|(key, value)| (key, expand_plugin_root(&value, &root))),
     );
 
+    if is_remote {
+        return ExtensionConfig::StreamableHttp {
+            name: format!("{plugin_name}:{server_name}"),
+            description: DEFAULT_EXTENSION_DESCRIPTION.to_string(),
+            uri: expand_plugin_root(server.url.as_deref().unwrap_or_default(), &root),
+            envs: Envs::new(env),
+            env_keys: Vec::new(),
+            headers: server
+                .headers
+                .into_iter()
+                .map(|(key, value)| (key, expand_plugin_root(&value, &root)))
+                .collect(),
+            timeout: Some(DEFAULT_EXTENSION_TIMEOUT),
+            socket: None,
+            bundled: Some(false),
+            available_tools: Vec::new(),
+            blocked_tools: Vec::new(),
+        };
+    }
+
     ExtensionConfig::Stdio {
         name: format!("{plugin_name}:{server_name}"),
         description: DEFAULT_EXTENSION_DESCRIPTION.to_string(),
-        cmd: expand_plugin_root(&server.command, &root),
+        cmd: expand_plugin_root(server.command.as_deref().unwrap_or_default(), &root),
         args: server
             .args
             .into_iter()
@@ -186,7 +226,19 @@ pub fn validate_mcp_server_document(value: &serde_json::Value) -> Result<()> {
 
 fn validate_servers(servers: HashMap<String, McpServerConfig>) -> Result<()> {
     for (name, server) in servers {
-        if server.command.trim().is_empty() {
+        if server.is_remote() {
+            if server.url.as_deref().unwrap_or_default().trim().is_empty() {
+                bail!("Open Plugins MCP server '{}' url must not be empty", name);
+            }
+            continue;
+        }
+        if server
+            .command
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
             bail!(
                 "Open Plugins MCP server '{}' command must not be empty",
                 name
@@ -200,6 +252,37 @@ fn validate_servers(servers: HashMap<String, McpServerConfig>) -> Result<()> {
 mod tests {
     use super::*;
     use crate::agents::extension::ExtensionConfig;
+
+    #[test]
+    fn loads_remote_http_mcp_server() {
+        let plugin = tempfile::tempdir().unwrap();
+        // Shape shipped by plugins in the official marketplace: no `command`.
+        fs::write(
+            plugin.path().join(DEFAULT_MCP_CONFIG),
+            r#"{"mcpServers":{"remote":{"type":"http","url":"https://api.example.invalid/mcp"}}}"#,
+        )
+        .unwrap();
+
+        let configs = plugin_mcp_servers("demo", plugin.path()).unwrap();
+        assert_eq!(configs.len(), 1);
+        let ExtensionConfig::StreamableHttp { name, uri, .. } = &configs[0] else {
+            panic!("expected StreamableHttp, got {:?}", configs[0]);
+        };
+        assert_eq!(name, "demo:remote");
+        assert_eq!(uri, "https://api.example.invalid/mcp");
+    }
+
+    #[test]
+    fn remote_server_without_a_url_is_rejected() {
+        let value = serde_json::json!({"mcpServers":{"r":{"type":"http"}}});
+        assert!(validate_mcp_server_document(&value).is_err());
+    }
+
+    #[test]
+    fn stdio_server_still_requires_a_command() {
+        let value = serde_json::json!({"mcpServers":{"s":{"command":""}}});
+        assert!(validate_mcp_server_document(&value).is_err());
+    }
 
     #[test]
     fn loads_default_mcp_json_with_plugin_root_expansion() {

@@ -138,12 +138,11 @@ fn install_plugin_with_options_at_root(
 
     // A bare name is resolved through the default marketplaces, so
     // `plugin install ooda` works without knowing which repo hosts it.
-    let source = if looks_like_git_source(source) {
-        source.to_string()
-    } else {
-        resolve_from_default_marketplaces(source)?
-    };
+    if !looks_like_git_source(source) {
+        return install_named_from_marketplaces(source, options, install_root);
+    }
 
+    let source = source.to_string();
     let temp_dir = tempfile::tempdir()?;
     let checkout_dir = temp_dir.path().join("checkout");
     clone_git_repo(&source, &checkout_dir)?;
@@ -184,26 +183,64 @@ fn looks_like_git_source(source: &str) -> bool {
         || source.contains('/')
 }
 
-fn resolve_from_default_marketplaces(name: &str) -> Result<String> {
+/// Resolve `name` through the default marketplaces and install what it points
+/// at. A relative source lives inside the marketplace checkout, so the checkout
+/// has to outlive resolution — hence installing here rather than returning a URL.
+fn install_named_from_marketplaces(
+    name: &str,
+    options: PluginInstallOptions,
+    install_root: &Path,
+) -> Result<PluginInstall> {
+    use crate::marketplaces::{read_marketplace, resolve_entry, ResolvedSource};
+
     let mut errors = Vec::new();
 
     for marketplace_url in crate::marketplaces::DEFAULT_MARKETPLACES {
         let temp_dir = tempfile::tempdir()?;
-        let checkout_dir = temp_dir.path().join("marketplace");
-        if let Err(err) = clone_git_repo(marketplace_url, &checkout_dir) {
+        let marketplace_dir = temp_dir.path().join("marketplace");
+        if let Err(err) = clone_git_repo(marketplace_url, &marketplace_dir) {
             errors.push(format!("{marketplace_url}: {err}"));
             continue;
         }
 
-        let Some(marketplace) = crate::marketplaces::read_marketplace(&checkout_dir) else {
+        let Some(marketplace) = read_marketplace(&marketplace_dir) else {
             errors.push(format!("{marketplace_url}: no marketplace manifest"));
             continue;
         };
 
-        match crate::marketplaces::resolve_entry_url(&marketplace, name) {
-            Ok(url) => return Ok(url),
-            Err(err) => errors.push(err.to_string()),
-        }
+        let resolved = match resolve_entry(&marketplace, name) {
+            Ok(resolved) => resolved,
+            Err(err) => {
+                errors.push(err.to_string());
+                continue;
+            }
+        };
+
+        let (source, plugin_dir, _clone_guard) = match resolved {
+            ResolvedSource::Git { url, subdir } => {
+                let clone_dir = tempfile::tempdir()?;
+                let checkout = clone_dir.path().join("checkout");
+                clone_git_repo(&url, &checkout)?;
+                let dir = match &subdir {
+                    Some(path) => join_subdir(&checkout, path)?,
+                    None => checkout,
+                };
+                (url, dir, Some(clone_dir))
+            }
+            ResolvedSource::Local { path } => (
+                marketplace_url.to_string(),
+                join_subdir(&marketplace_dir, &path)?,
+                None,
+            ),
+        };
+
+        return install_from_checkout_at_root(
+            &source,
+            &plugin_dir,
+            install_root,
+            &options,
+            options.auto_update.then_some(Utc::now()),
+        );
     }
 
     bail!(
@@ -211,6 +248,31 @@ fn resolve_from_default_marketplaces(name: &str) -> Result<String> {
         name,
         errors.join("\n")
     )
+}
+
+/// Join a marketplace-supplied relative path, refusing anything that escapes
+/// the checkout.
+fn join_subdir(root: &Path, relative: &str) -> Result<PathBuf> {
+    let trimmed = relative.trim_start_matches("./");
+    let candidate = root.join(trimmed);
+    if trimmed.is_empty()
+        || Path::new(trimmed).is_absolute()
+        || Path::new(trimmed)
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        bail!(
+            "Marketplace source path '{}' escapes the checkout",
+            relative
+        );
+    }
+    if !candidate.is_dir() {
+        bail!(
+            "Marketplace source path '{}' does not exist in the repository",
+            relative
+        );
+    }
+    Ok(candidate)
 }
 
 pub fn update_plugin(name: &str) -> Result<PluginInstall> {
