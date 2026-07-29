@@ -18,7 +18,11 @@ use goose_mcp::{
 use crate::commands::configure::configure_telemetry_consent_dialog;
 use crate::commands::configure::handle_configure;
 use crate::commands::info::handle_info;
-use crate::commands::plugin::{handle_plugin_install, handle_plugin_update};
+use crate::commands::plugin::{
+    handle_marketplace_add, handle_marketplace_list, handle_marketplace_remove,
+    handle_marketplace_update, handle_plugin_install, handle_plugin_list, handle_plugin_uninstall,
+    handle_plugin_update,
+};
 use crate::commands::project::{handle_project_default, handle_projects_interactive};
 use crate::commands::recipe::{handle_deeplink, handle_list, handle_open, handle_validate};
 use crate::commands::term::{
@@ -692,8 +696,8 @@ enum GatewayCommand {
 
 #[derive(Subcommand)]
 enum PluginCommand {
-    /// Install a plugin from a git repository URL
-    #[command(about = "Install a plugin from a git repository URL")]
+    /// Install a plugin by name or from a git repository URL
+    #[command(about = "Install a plugin by name, name@marketplace, or git URL")]
     Install {
         #[arg(
             long,
@@ -701,7 +705,10 @@ enum PluginCommand {
         )]
         auto_update: bool,
 
-        #[arg(help = "URL to a git repository containing a supported plugin")]
+        #[arg(
+            help = "Plugin name, name@marketplace, or a git repository URL",
+            value_name = "PLUGIN"
+        )]
         url: String,
     },
 
@@ -709,6 +716,52 @@ enum PluginCommand {
     #[command(about = "Update an installed git-backed plugin")]
     Update {
         #[arg(help = "Name of the installed plugin to update")]
+        name: String,
+    },
+
+    /// List installed plugins
+    #[command(about = "List installed plugins")]
+    List,
+
+    /// Remove an installed plugin
+    #[command(about = "Remove an installed plugin")]
+    Uninstall {
+        #[arg(help = "Name of the installed plugin to remove")]
+        name: String,
+    },
+
+    /// Manage plugin marketplaces
+    #[command(about = "Manage plugin marketplaces", subcommand)]
+    Marketplace(MarketplaceCommand),
+}
+
+#[derive(Subcommand)]
+enum MarketplaceCommand {
+    /// Add a marketplace from a GitHub repo, git URL, or local path
+    #[command(about = "Add a plugin marketplace")]
+    Add {
+        #[arg(help = "owner/repo, a git URL, or a local directory path")]
+        source: String,
+    },
+
+    /// List registered marketplaces
+    #[command(about = "List registered marketplaces")]
+    List {
+        #[arg(long, help = "Also list the plugins each marketplace offers")]
+        plugins: bool,
+    },
+
+    /// Remove a registered marketplace
+    #[command(about = "Remove a registered marketplace")]
+    Remove {
+        #[arg(help = "Name of the marketplace to remove")]
+        name: String,
+    },
+
+    /// Refresh a registered marketplace
+    #[command(about = "Refresh a registered marketplace")]
+    Update {
+        #[arg(help = "Name of the marketplace to refresh")]
         name: String,
     },
 }
@@ -1936,6 +1989,14 @@ fn handle_plugin_subcommand(command: PluginCommand) -> Result<()> {
     match command {
         PluginCommand::Install { url, auto_update } => handle_plugin_install(&url, auto_update),
         PluginCommand::Update { name } => handle_plugin_update(&name),
+        PluginCommand::List => handle_plugin_list(),
+        PluginCommand::Uninstall { name } => handle_plugin_uninstall(&name),
+        PluginCommand::Marketplace(command) => match command {
+            MarketplaceCommand::Add { source } => handle_marketplace_add(&source),
+            MarketplaceCommand::List { plugins } => handle_marketplace_list(plugins),
+            MarketplaceCommand::Remove { name } => handle_marketplace_remove(&name),
+            MarketplaceCommand::Update { name } => handle_marketplace_update(&name),
+        },
     }
 }
 

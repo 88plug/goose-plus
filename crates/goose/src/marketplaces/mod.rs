@@ -5,9 +5,11 @@
 //! do. Installing from one therefore means resolving a name through the catalog
 //! and then installing the repository it names.
 
+use crate::config::Config;
 use anyhow::{bail, Result};
 use fs_err as fs;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 pub const DEFAULT_MARKETPLACES: &[&str] = &[
@@ -125,6 +127,73 @@ impl Marketplace {
         names.sort_unstable();
         names
     }
+}
+
+/// Registered marketplaces, keyed by marketplace name, stored under
+/// `marketplaces` in config.yaml alongside the existing `plugins` map.
+const MARKETPLACES_CONFIG_KEY: &str = "marketplaces";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketplaceRecord {
+    /// The source as given, after shorthand expansion.
+    pub source: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub plugin_count: usize,
+}
+
+/// Expand the shorthands Claude Code accepts: `owner/repo` means GitHub, and a
+/// URL or filesystem path is used as given.
+pub fn normalize_source(source: &str) -> String {
+    let source = source.trim();
+    if source.contains("://")
+        || source.starts_with("git@")
+        || source.starts_with('.')
+        || source.starts_with('/')
+        || source.starts_with('~')
+    {
+        return source.to_string();
+    }
+    // `owner/repo` or `owner/repo@ref`
+    if source.matches('/').count() == 1 {
+        return format!("https://github.com/{source}");
+    }
+    source.to_string()
+}
+
+pub fn registered() -> HashMap<String, MarketplaceRecord> {
+    Config::global()
+        .get_param(MARKETPLACES_CONFIG_KEY)
+        .unwrap_or_default()
+}
+
+pub fn register(name: &str, record: MarketplaceRecord) -> Result<()> {
+    let mut all = registered();
+    all.insert(name.to_string(), record);
+    Config::global().set_param(MARKETPLACES_CONFIG_KEY, all)?;
+    Ok(())
+}
+
+pub fn unregister(name: &str) -> Result<bool> {
+    let mut all = registered();
+    let removed = all.remove(name).is_some();
+    if removed {
+        Config::global().set_param(MARKETPLACES_CONFIG_KEY, all)?;
+    }
+    Ok(removed)
+}
+
+/// Every marketplace source to search: those registered by the user first, then
+/// the built-in defaults that are not already registered.
+pub fn search_sources() -> Vec<String> {
+    let mut sources: Vec<String> = registered().values().map(|r| r.source.clone()).collect();
+    for default in DEFAULT_MARKETPLACES {
+        if !sources.iter().any(|s| s == default) {
+            sources.push((*default).to_string());
+        }
+    }
+    sources
 }
 
 /// Read the catalog from a checked-out marketplace repository.

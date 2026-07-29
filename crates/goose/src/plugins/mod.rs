@@ -136,10 +136,13 @@ fn install_plugin_with_options_at_root(
         bail!("Plugin source URL must not be empty");
     }
 
-    // A bare name is resolved through the default marketplaces, so
-    // `plugin install ooda` works without knowing which repo hosts it.
+    // `name@marketplace` and a bare `name` both resolve through marketplaces,
+    // matching `claude plugin install <plugin>@<marketplace>`.
+    if let Some((name, marketplace)) = split_qualified_name(source) {
+        return install_named_from_marketplaces(name, Some(marketplace), options, install_root);
+    }
     if !looks_like_git_source(source) {
-        return install_named_from_marketplaces(source, options, install_root);
+        return install_named_from_marketplaces(source, None, options, install_root);
     }
 
     let source = source.to_string();
@@ -173,6 +176,125 @@ fn install_plugin_with_options_at_root(
     )
 }
 
+/// Clone a marketplace and register it, mirroring `claude plugin marketplace add`.
+pub fn marketplace_add(source: &str) -> Result<(String, crate::marketplaces::MarketplaceRecord)> {
+    use crate::marketplaces as mkt;
+
+    let normalized = mkt::normalize_source(source);
+    let temp_dir = tempfile::tempdir()?;
+    let checkout = temp_dir.path().join("marketplace");
+    clone_marketplace(&normalized, &checkout)?;
+
+    let Some(marketplace) = mkt::read_marketplace(&checkout) else {
+        bail!(
+            "{} does not publish a {}",
+            normalized,
+            mkt::MARKETPLACE_MANIFEST
+        );
+    };
+
+    let name = marketplace
+        .name
+        .clone()
+        .unwrap_or_else(|| infer_marketplace_name(&normalized));
+    let record = mkt::MarketplaceRecord {
+        source: normalized,
+        description: marketplace.description.clone(),
+        plugin_count: marketplace.plugins.len(),
+    };
+    mkt::register(&name, record.clone())?;
+    Ok((name, record))
+}
+
+pub fn marketplace_remove(name: &str) -> Result<bool> {
+    crate::marketplaces::unregister(name)
+}
+
+/// Re-read a registered marketplace so its cached counts reflect the remote.
+pub fn marketplace_update(name: &str) -> Result<crate::marketplaces::MarketplaceRecord> {
+    let Some(existing) = crate::marketplaces::registered().get(name).cloned() else {
+        bail!("Marketplace '{}' is not registered", name);
+    };
+    let (_, record) = marketplace_add(&existing.source)?;
+    Ok(record)
+}
+
+/// List every plugin offered by a marketplace, or by all registered ones.
+pub fn marketplace_plugins(
+    name: Option<&str>,
+) -> Result<Vec<(String, crate::marketplaces::Marketplace)>> {
+    use crate::marketplaces as mkt;
+
+    let sources: Vec<(String, String)> = match name {
+        Some(name) => {
+            let Some(record) = mkt::registered().get(name).cloned() else {
+                bail!("Marketplace '{}' is not registered", name);
+            };
+            vec![(name.to_string(), record.source)]
+        }
+        None => mkt::registered()
+            .into_iter()
+            .map(|(n, r)| (n, r.source))
+            .chain(
+                mkt::DEFAULT_MARKETPLACES
+                    .iter()
+                    .map(|s| ((*s).to_string(), (*s).to_string())),
+            )
+            .collect(),
+    };
+
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for (label, source) in sources {
+        if !seen.insert(source.clone()) {
+            continue;
+        }
+        let temp_dir = tempfile::tempdir()?;
+        let checkout = temp_dir.path().join("marketplace");
+        if clone_marketplace(&source, &checkout).is_err() {
+            continue;
+        }
+        if let Some(marketplace) = crate::marketplaces::read_marketplace(&checkout) {
+            let label = marketplace.name.clone().unwrap_or(label);
+            out.push((label, marketplace));
+        }
+    }
+    Ok(out)
+}
+
+/// A marketplace may be a git remote or a local directory.
+fn clone_marketplace(source: &str, destination: &Path) -> Result<()> {
+    let local = Path::new(source);
+    if local.is_dir() {
+        copy_dir_all(local, destination)?;
+        return Ok(());
+    }
+    clone_git_repo(source, destination)
+}
+
+fn infer_marketplace_name(source: &str) -> String {
+    source
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .rsplit('/')
+        .find(|s| !s.is_empty())
+        .unwrap_or("marketplace")
+        .to_string()
+}
+
+/// Split `plugin@marketplace`. A URL is never split, so `git@host:repo` and
+/// `https://…` sources are unaffected.
+fn split_qualified_name(source: &str) -> Option<(&str, &str)> {
+    if source.contains("://") || source.starts_with("git@") {
+        return None;
+    }
+    let (name, marketplace) = source.rsplit_once('@')?;
+    if name.is_empty() || marketplace.is_empty() {
+        return None;
+    }
+    Some((name, marketplace))
+}
+
 /// Anything that looks like a URL or a local path is used verbatim; everything
 /// else is treated as a marketplace plugin name.
 fn looks_like_git_source(source: &str) -> bool {
@@ -188,17 +310,31 @@ fn looks_like_git_source(source: &str) -> bool {
 /// has to outlive resolution — hence installing here rather than returning a URL.
 fn install_named_from_marketplaces(
     name: &str,
+    from_marketplace: Option<&str>,
     options: PluginInstallOptions,
     install_root: &Path,
 ) -> Result<PluginInstall> {
     use crate::marketplaces::{read_marketplace, resolve_entry, ResolvedSource};
 
+    let sources = match from_marketplace {
+        Some(wanted) => {
+            let registered = crate::marketplaces::registered();
+            match registered.get(wanted) {
+                Some(record) => vec![record.source.clone()],
+                // Not registered: accept it as a source directly, so
+                // `name@owner/repo` works without an explicit add.
+                None => vec![crate::marketplaces::normalize_source(wanted)],
+            }
+        }
+        None => crate::marketplaces::search_sources(),
+    };
+
     let mut errors = Vec::new();
 
-    for marketplace_url in crate::marketplaces::DEFAULT_MARKETPLACES {
+    for marketplace_url in &sources {
         let temp_dir = tempfile::tempdir()?;
         let marketplace_dir = temp_dir.path().join("marketplace");
-        if let Err(err) = clone_git_repo(marketplace_url, &marketplace_dir) {
+        if let Err(err) = clone_marketplace(marketplace_url, &marketplace_dir) {
             errors.push(format!("{marketplace_url}: {err}"));
             continue;
         }
@@ -228,7 +364,7 @@ fn install_named_from_marketplaces(
                 (url, dir, Some(clone_dir))
             }
             ResolvedSource::Local { path } => (
-                marketplace_url.to_string(),
+                marketplace_url.clone(),
                 join_subdir(&marketplace_dir, &path)?,
                 None,
             ),
@@ -273,6 +409,49 @@ fn join_subdir(root: &Path, relative: &str) -> Result<PathBuf> {
         );
     }
     Ok(candidate)
+}
+
+#[derive(Debug, Clone)]
+pub struct InstalledPlugin {
+    pub name: String,
+    pub source: String,
+    pub directory: PathBuf,
+}
+
+/// Every plugin present in the install directory, with the source it came from.
+pub fn installed_plugins() -> Result<Vec<InstalledPlugin>> {
+    let root = plugin_install_dir();
+    let Ok(entries) = fs::read_dir(&root) else {
+        return Ok(Vec::new());
+    };
+
+    let mut plugins: Vec<InstalledPlugin> = entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| {
+            let directory = entry.path();
+            let source = read_install_metadata(&directory)
+                .map(|m| m.source)
+                .unwrap_or_else(|_| "<unknown source>".to_string());
+            InstalledPlugin {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                source,
+                directory,
+            }
+        })
+        .collect();
+
+    plugins.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(plugins)
+}
+
+pub fn uninstall_plugin(name: &str) -> Result<()> {
+    let directory = plugin_install_dir().join(name);
+    if !directory.is_dir() {
+        bail!("Plugin '{}' is not installed", name);
+    }
+    fs::remove_dir_all(&directory)?;
+    Ok(())
 }
 
 pub fn update_plugin(name: &str) -> Result<PluginInstall> {
