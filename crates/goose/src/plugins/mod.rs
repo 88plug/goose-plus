@@ -131,20 +131,85 @@ fn install_plugin_with_options_at_root(
     options: PluginInstallOptions,
     install_root: &Path,
 ) -> Result<PluginInstall> {
-    if source.trim().is_empty() {
+    let source = source.trim();
+    if source.is_empty() {
         bail!("Plugin source URL must not be empty");
     }
 
+    // A bare name is resolved through the default marketplaces, so
+    // `plugin install ooda` works without knowing which repo hosts it.
+    let source = if looks_like_git_source(source) {
+        source.to_string()
+    } else {
+        resolve_from_default_marketplaces(source)?
+    };
+
     let temp_dir = tempfile::tempdir()?;
     let checkout_dir = temp_dir.path().join("checkout");
-    clone_git_repo(source, &checkout_dir)?;
+    clone_git_repo(&source, &checkout_dir)?;
+
+    // A marketplace repo has no plugin of its own; installing it would
+    // otherwise fail with an opaque "no supported plugin format".
+    if crate::marketplaces::is_marketplace(&checkout_dir)
+        && !formats::has_installable_plugin(&checkout_dir)
+    {
+        let marketplace = crate::marketplaces::read_marketplace(&checkout_dir)
+            .expect("is_marketplace checked the manifest parses");
+        bail!(
+            "{} is a plugin marketplace, not a plugin. Install one of its {} plugins by name, \
+             e.g. `goose plugin install {}`.\n\nAvailable: {}",
+            source,
+            marketplace.plugins.len(),
+            marketplace.names().first().unwrap_or(&"<name>"),
+            marketplace.names().join(", ")
+        );
+    }
 
     install_from_checkout_at_root(
-        source,
+        &source,
         &checkout_dir,
         install_root,
         &options,
         options.auto_update.then_some(Utc::now()),
+    )
+}
+
+/// Anything that looks like a URL or a local path is used verbatim; everything
+/// else is treated as a marketplace plugin name.
+fn looks_like_git_source(source: &str) -> bool {
+    source.contains("://")
+        || source.starts_with("git@")
+        || source.starts_with('.')
+        || source.starts_with('/')
+        || source.contains('/')
+}
+
+fn resolve_from_default_marketplaces(name: &str) -> Result<String> {
+    let mut errors = Vec::new();
+
+    for marketplace_url in crate::marketplaces::DEFAULT_MARKETPLACES {
+        let temp_dir = tempfile::tempdir()?;
+        let checkout_dir = temp_dir.path().join("marketplace");
+        if let Err(err) = clone_git_repo(marketplace_url, &checkout_dir) {
+            errors.push(format!("{marketplace_url}: {err}"));
+            continue;
+        }
+
+        let Some(marketplace) = crate::marketplaces::read_marketplace(&checkout_dir) else {
+            errors.push(format!("{marketplace_url}: no marketplace manifest"));
+            continue;
+        };
+
+        match crate::marketplaces::resolve_entry_url(&marketplace, name) {
+            Ok(url) => return Ok(url),
+            Err(err) => errors.push(err.to_string()),
+        }
+    }
+
+    bail!(
+        "Could not resolve plugin '{}' from any marketplace.\n{}",
+        name,
+        errors.join("\n")
     )
 }
 

@@ -43,6 +43,11 @@ struct SkillCandidate {
     relative_directory: PathBuf,
 }
 
+/// True when this adapter would accept the checkout as a plugin.
+pub(in crate::plugins) fn has_plugin(checkout_dir: &Path) -> bool {
+    manifest_path(checkout_dir).is_some() || has_component_marker(checkout_dir)
+}
+
 pub(in crate::plugins) fn try_install_from_manifest_at_root(
     source: &str,
     checkout_dir: &Path,
