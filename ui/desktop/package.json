@@ -119,7 +119,7 @@
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
     "@electron/fuses": "^2.1.2",
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^10.0.1",
     "@formatjs/cli": "^6.16.11",
     "@formatjs/icu-messageformat-parser": "3.5.11",
     "@hey-api/openapi-ts": "^0.99.0",
