@@ -98,7 +98,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ inputs.ref }}
 
@@ -152,7 +152,7 @@ jobs:
         # Host runners only. In the manylinux container rustup isn't installed
         # until the build step, so rust-cache's `rustc -vV` probe errors here.
         if: matrix.platform != 'windows' && matrix.container == ''
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
         with:
           key: ${{ matrix.architecture }}-${{ matrix.target-suffix }}-${{ matrix.build-on }}-${{ matrix.container || 'native' }}-macos-deployment-target-12
           # Persist the dep cache (incl. llama-cpp's cmake/C++ build) even when
@@ -161,7 +161,7 @@ jobs:
 
       - name: Cache Cargo artifacts (Windows)
         if: matrix.platform == 'windows'
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
         with:
           key: windows-msvc-cli-${{ matrix.variant }}
           cache-on-failure: true
@@ -227,7 +227,7 @@ jobs:
 
       - name: Install CUDA toolkit (Windows CUDA)
         if: ${{ matrix.platform == 'windows' && matrix.variant == 'cuda' }}
-        uses: Jimver/cuda-toolkit@v0.2.35
+        uses: Jimver/cuda-toolkit@v0.2.36
         with:
           cuda: '12.9.1'
           method: 'local'

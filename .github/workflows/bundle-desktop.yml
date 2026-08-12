@@ -79,7 +79,7 @@ jobs:
         run: df -h
 
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Only pass ref if it's explicitly set, otherwise let checkout action use its default behavior
           ref: ${{ inputs.ref != '' && inputs.ref || '' }}
@@ -115,7 +115,7 @@ jobs:
           npm pkg set "version=${VERSION}"
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
         with:
           key: macos-deployment-target-12
           cache-on-failure: true
@@ -142,7 +142,7 @@ jobs:
           cp target/release/goosed-plus ui/desktop/src/bin/goosed-plus
 
       - name: Cache pnpm dependencies
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8  # v6.0.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
             ui/desktop/node_modules
